@@ -72,7 +72,7 @@ export function NoteStakeholdersSection({
     }
   }
 
-  const noteStakeholders = assignedStakeholders.filter(s => noteStakeholderIds.includes(s.id))
+  const noteStakeholders = allWorkspaceStakeholders.filter(s => noteStakeholderIds.includes(s.id))
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">

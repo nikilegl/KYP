@@ -484,36 +484,34 @@ export function NoteCreateForm({
           </div>
           
           <div className="space-y-2 overflow-y-auto">
-            {assignedStakeholders.map(stakeholder => {
-              const isSelected = selectedStakeholderIds.includes(stakeholder.id)
-              const userRole = userRoles?.find(role => role.id === stakeholder.user_role_id)
-              
-              return (
-                <div
-                  key={stakeholder.id}
-                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => toggleStakeholder(stakeholder.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <StakeholderAvatar userRole={userRole} size="md" />
-                      <div className="font-medium text-gray-900">{stakeholder.name}</div>
+            {allWorkspaceStakeholders
+              .filter(stakeholder => selectedStakeholderIds.includes(stakeholder.id))
+              .map(stakeholder => {
+                const userRole = userRoles?.find(role => role.id === stakeholder.user_role_id)
+                
+                return (
+                  <div
+                    key={stakeholder.id}
+                    className="p-3 border border-blue-500 bg-blue-50 rounded-lg"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <StakeholderAvatar userRole={userRole} size="md" />
+                        <div className="font-medium text-gray-900">{stakeholder.name}</div>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={() => toggleStakeholder(stakeholder.id)}
+                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Remove from note"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                    
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleStakeholder(stakeholder.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
           </div>
         </div>
 
