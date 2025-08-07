@@ -160,6 +160,7 @@ export function WorkspaceDataFetcher({
   useEffect(() => {
     console.log('🔵 WorkspaceDataFetcher: useEffect triggered with pathname:', pathname)
     console.log('🔵 WorkspaceDataFetcher: routeParams:', routeParams)
+    console.log('🔵 WorkspaceDataFetcher: routeParams.shortId:', routeParams.shortId)
     
     const handleRouteNavigation = async () => {
       console.log('🔵 WorkspaceDataFetcher: handleRouteNavigation called with pathname:', pathname)
@@ -408,7 +409,7 @@ export function WorkspaceDataFetcher({
     }
 
     handleRouteNavigation()
-  }, [pathname, routeParams.shortId])
+  }, [pathname, routeParams])
 
   const fetchAllData = async () => {
     try {

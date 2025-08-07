@@ -232,6 +232,7 @@ export function MainContentRenderer({
         initialSelectedUserStory={selectedUserStory}
         initialSelectedUserJourney={selectedUserJourney}
         initialUserStoryRoleIds={userStoryRoleIds}
+        initialSelectedDesign={selectedDesign}
         workspaceUsers={workspaceUsers}
         onBack={onBackToWorkspace}
         onThemeCreate={onThemeCreate}
