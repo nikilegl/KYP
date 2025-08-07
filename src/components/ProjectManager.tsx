@@ -152,7 +152,7 @@ export function ProjectManager({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Projects</h2>
-          <p className="text-gray-600">Manage your design and research projects</p>
+          <p className="text-gray-600">Manage all of your design and research projects</p>
         </div>
         <button
           onClick={() => setShowProjectForm(true)}
