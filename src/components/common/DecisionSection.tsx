@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Edit, Save, X, CheckCircle, Plus, Trash2 } from 'lucide-react'
 
 interface DecisionSectionProps {
@@ -12,10 +12,16 @@ interface DecisionSectionProps {
 export function DecisionSection({ entity, onSave, saving }: DecisionSectionProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValues, setEditValues] = useState<string[]>([])
+  const [currentDecisions, setCurrentDecisions] = useState<string[]>([])
+
+  // Update currentDecisions when entity.decision_text changes
+  useEffect(() => {
+    setCurrentDecisions(entity.decision_text || [])
+  }, [entity.decision_text])
 
   const handleEdit = () => {
-    const currentDecisions = entity.decision_text || []
-    setEditValues(currentDecisions.length > 0 ? [...currentDecisions] : [''])
+    const decisions = entity.decision_text || []
+    setEditValues(decisions.length > 0 ? [...decisions] : [''])
     setIsEditing(true)
   }
 
@@ -23,6 +29,8 @@ export function DecisionSection({ entity, onSave, saving }: DecisionSectionProps
     try {
       const filteredDecisions = editValues.filter(decision => decision.trim() !== '')
       await onSave(filteredDecisions)
+      // Immediately update local state with the saved decisions
+      setCurrentDecisions(filteredDecisions)
       setIsEditing(false)
     } catch (error) {
       console.error('Error saving decisions:', error)
@@ -57,7 +65,7 @@ export function DecisionSection({ entity, onSave, saving }: DecisionSectionProps
         <div className="flex items-center gap-2">
           <CheckCircle className="w-5 h-5 text-green-600" />
           <h2 className="text-lg font-semibold text-gray-900">
-            Decisions ({(entity.decision_text || []).length})
+            Decisions ({currentDecisions.length})
           </h2>
         </div>
         
@@ -130,8 +138,8 @@ export function DecisionSection({ entity, onSave, saving }: DecisionSectionProps
         </div>
       ) : (
         <div className="space-y-3">
-          {(entity.decision_text || []).length > 0 ? (
-            (entity.decision_text || []).map((decision, index) => (
+          {currentDecisions.length > 0 ? (
+            currentDecisions.map((decision, index) => (
               <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-green-800 font-medium">{decision}</p>
               </div>

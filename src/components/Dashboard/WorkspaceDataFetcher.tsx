@@ -73,7 +73,8 @@ import type {
   Theme,
   NoteTemplate,
   ProjectProgressStatus,
-  Design
+  Design,
+  UserStoryComment
 } from '../../lib/supabase'
 
 interface WorkspaceDataFetcherProps {
@@ -464,6 +465,18 @@ export function WorkspaceDataFetcher({
       setAllUserStories(allUserStoriesData)
       setAllUserJourneys(allUserJourneysData)
       setAllDesigns(allDesignsData)
+      
+      // Debug: Log workspaceUsers data
+      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData:', workspaceUsersData)
+      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData length:', workspaceUsersData.length)
+      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData type:', typeof workspaceUsersData)
+      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData is array:', Array.isArray(workspaceUsersData))
+      
+      // Debug: Check state after setting
+      setTimeout(() => {
+        console.log('🔵 WorkspaceDataFetcher: workspaceUsers state after setState:', workspaceUsers)
+        console.log('🔵 WorkspaceDataFetcher: workspaceUsers state length:', workspaceUsers.length)
+      }, 100)
       
       // Calculate stakeholder notes count
       const stakeholderNotesCount: Record<string, number> = {}
@@ -898,6 +911,10 @@ export function WorkspaceDataFetcher({
       console.log('Task deleted for user story:', taskId)
     }
   }
+
+  // Debug: Log workspaceUsers before passing to MainContentRenderer
+  console.log('🔵 WorkspaceDataFetcher: About to pass workspaceUsers to MainContentRenderer:', workspaceUsers)
+  console.log('🔵 WorkspaceDataFetcher: workspaceUsers length before MainContentRenderer:', workspaceUsers.length)
 
   return (
     <MainContentRenderer
