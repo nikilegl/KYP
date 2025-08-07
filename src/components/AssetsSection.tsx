@@ -163,9 +163,23 @@ export function DesignsSection({ projectId, onSelectDesign }: DesignsSectionProp
         {designs.map((design) => (
           <div 
             key={design.id} 
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-md transition-all cursor-pointer"
+            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-md transition-all cursor-pointer group relative"
             onClick={() => onSelectDesign ? onSelectDesign(design) : window.location.href = `/design/${design.short_id}`}
           >
+            {/* Delete Icon (top right, only visible on hover) */}
+            <button
+              className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
+              title="Delete design"
+              onClick={e => {
+                e.stopPropagation();
+                console.log('Delete button clicked');
+                if (window.confirm('Are you sure you want to delete this design?')) {
+                  handleDeleteDesign(design.id);
+                }
+              }}
+            >
+              <Trash2 size={18} />
+            </button>
             <div className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{design.name}</h3>

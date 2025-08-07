@@ -53,6 +53,7 @@ export const createAsset = async (
     // Local storage fallback
     try {
       const assets = JSON.parse(localStorage.getItem('kyp_assets') || '[]')
+      const nextShortId = Math.max(0, ...assets.map((a: Asset) => a.short_id || 0)) + 1;
       const newAsset: Asset = {
         id: `asset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         project_id: projectId,
@@ -60,6 +61,7 @@ export const createAsset = async (
         snapshot_image_url: snapshotImageUrl || undefined,
         description: description || undefined,
         link_url: linkUrl || undefined,
+        short_id: nextShortId, // <-- assign short_id here!
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
