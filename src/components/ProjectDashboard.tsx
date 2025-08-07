@@ -1,6 +1,6 @@
 import React from 'react'
 import { ProjectDataFetcher } from './ProjectDashboard/ProjectDataFetcher'
-import type { Project, ResearchNote, UserStory, UserJourney, WorkspaceUser, Design } from '../lib/supabase'
+import type { Project, ResearchNote, UserStory, UserJourney, WorkspaceUser } from '../lib/supabase'
 
 interface ProjectDashboardProps {
   project: Project
@@ -11,7 +11,6 @@ interface ProjectDashboardProps {
   initialSelectedUserJourney?: UserJourney | null
   initialUserStoryRoleIds?: string[]
   initialSelectedDesign?: Design | null
-  initialProjectView?: string
   workspaceUsers: WorkspaceUser[]
   onNavigateToWorkspace?: (view: string) => void
   onSignOut?: () => void
@@ -26,7 +25,6 @@ export function ProjectDashboard({
   initialSelectedUserJourney = null,
   initialUserStoryRoleIds = [],
   initialSelectedDesign = null,
-  initialProjectView = 'dashboard',
   workspaceUsers,
   onNavigateToWorkspace, 
   onSignOut 
@@ -40,7 +38,6 @@ export function ProjectDashboard({
       initialSelectedUserJourney={initialSelectedUserJourney}
       initialUserStoryRoleIds={initialUserStoryRoleIds}
       initialSelectedDesign={initialSelectedDesign}
-      initialProjectView={initialProjectView}
       workspaceUsers={workspaceUsers}
       onBack={onBack}
       onNavigateToWorkspace={onNavigateToWorkspace}

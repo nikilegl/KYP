@@ -50,8 +50,7 @@ import type {
   NoteTemplate,
   ProjectProgressStatus,
   Task,
-  UserStoryComment,
-  Design
+  UserStoryComment
 } from '../../lib/supabase'
 
 interface ProjectDataFetcherProps {
@@ -62,7 +61,6 @@ interface ProjectDataFetcherProps {
   initialSelectedUserJourney?: UserJourney | null
   initialUserStoryRoleIds?: string[]
   initialSelectedDesign?: Design | null
-  initialProjectView?: string
   workspaceUsers: WorkspaceUser[]
   onCreateTask?: (name: string, description: string, status: string, assignedToUserId?: string, userStoryId?: string) => Promise<void>
   onUpdateTask?: (taskId: string, updates: { name?: string; description?: string; status?: string; user_story_id?: string }) => Promise<void>
@@ -80,7 +78,6 @@ export function ProjectDataFetcher({
   initialSelectedUserJourney = null,
   initialUserStoryRoleIds = [],
   initialSelectedDesign = null,
-  initialProjectView = 'dashboard',
   workspaceUsers,
   onCreateTask,
   onUpdateTask,
@@ -694,7 +691,6 @@ export function ProjectDataFetcher({
       initialSelectedUserJourney={initialSelectedUserJourney}
       initialUserStoryRoleIds={initialUserStoryRoleIds}
       initialSelectedDesign={initialSelectedDesign}
-      initialProjectView={initialProjectView}
       workspaceUsers={workspaceUsers}
       user={user}
       userStoryComments={userStoryComments}
