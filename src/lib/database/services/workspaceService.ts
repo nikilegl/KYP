@@ -29,26 +29,87 @@ export const getWorkspaces = async (): Promise<Workspace[]> => {
 
 // Workspace Users functions
 export const getWorkspaceUsers = async (): Promise<WorkspaceUser[]> => {
+  console.log('🔵 getWorkspaceUsers: Starting to fetch workspace users')
+  
   if (!isSupabaseConfigured || !supabase) {
+    console.log('🔵 getWorkspaceUsers: Using local storage fallback')
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_workspace_users')
-      return stored ? JSON.parse(stored) : []
+      let result = stored ? JSON.parse(stored) : []
+      
+      // If no users exist, create some sample users for testing
+      if (result.length === 0) {
+        console.log('🔵 getWorkspaceUsers: No users found, creating sample users')
+        const sampleUsers: WorkspaceUser[] = [
+          {
+            id: 'wu-sample-1',
+            workspace_id: 'default-workspace',
+            user_id: 'user-1',
+            user_email: 'john.doe@example.com',
+            role: 'admin',
+            full_name: 'John Doe',
+            team: 'Product',
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          },
+          {
+            id: 'wu-sample-2',
+            workspace_id: 'default-workspace',
+            user_id: 'user-2',
+            user_email: 'jane.smith@example.com',
+            role: 'member',
+            full_name: 'Jane Smith',
+            team: 'Design',
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          },
+          {
+            id: 'wu-sample-3',
+            workspace_id: 'default-workspace',
+            user_id: 'user-3',
+            user_email: 'bob.wilson@example.com',
+            role: 'member',
+            full_name: 'Bob Wilson',
+            team: 'Engineering',
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ]
+        
+        localStorage.setItem('kyp_workspace_users', JSON.stringify(sampleUsers))
+        result = sampleUsers
+        console.log('🔵 getWorkspaceUsers: Created sample users:', sampleUsers)
+      }
+      
+      console.log('🔵 getWorkspaceUsers: Local storage result:', result)
+      return result
     } catch {
+      console.log('🔵 getWorkspaceUsers: Local storage error, returning empty array')
       return []
     }
   }
 
   try {
+    console.log('🔵 getWorkspaceUsers: Fetching from Supabase')
     const { data, error } = await supabase
       .from('workspace_users')
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      console.error('🔵 getWorkspaceUsers: Supabase error:', error)
+      throw error
+    }
+    
+    console.log('🔵 getWorkspaceUsers: Supabase result:', data)
+    console.log('🔵 getWorkspaceUsers: Returning data length:', data?.length || 0)
     return data || []
   } catch (error) {
-    console.error('Error fetching workspace users:', error)
+    console.error('🔵 getWorkspaceUsers: Error fetching workspace users:', error)
     return []
   }
 }

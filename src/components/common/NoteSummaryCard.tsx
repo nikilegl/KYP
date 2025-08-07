@@ -79,7 +79,7 @@ export function NoteSummaryCard({
         {note.decision_text && note.decision_text.length > 0 && (
           <div className="mb-4">
             {note.decision_text.map((decision, index) => (
-              <div key={index} className="bg-green-100 border border-green-300 rounded-lg p-3">
+              <div key={index} className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
                 <p className="text-green-800 font-medium">{decision}</p>
               </div>
             ))}

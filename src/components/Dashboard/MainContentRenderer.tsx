@@ -303,6 +303,8 @@ export function MainContentRenderer({
   }
 
   if (currentView === 'user-story-detail' && selectedUserStory) {
+    console.log('🔵 MainContentRenderer: workspaceUsers being passed to UserStoryDetail:', workspaceUsers)
+    console.log('🔵 MainContentRenderer: workspaceUsers length:', workspaceUsers.length)
     return (
       <UserStoryDetail
         userStory={selectedUserStory}

@@ -3,7 +3,7 @@ import { X, Save } from 'lucide-react'
 import { getPriorityTagStyles } from '../../utils/priorityTagStyles'
 import { StakeholderAvatar } from '../common/StakeholderAvatar'
 import { updateUserStory } from '../../lib/database'
-import type { UserStory, UserRole, WorkspaceUser } from '../../lib/supabase'
+import type { UserStory, UserRole, WorkspaceUser, UserPermission } from '../../lib/supabase'
 
 interface UserStoryEditDetailsModalProps {
   userStory: UserStory
@@ -37,8 +37,14 @@ export function UserStoryEditDetailsModal({
   )
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(initialSelectedRoleIds)
   const [selectedUserPermissionId, setSelectedUserPermissionId] = useState<string>(initialSelectedPermissionId)
-  const [assignedToUserId, setAssignedToUserId] = useState<string>(userStory.assigned_to_user_id || '')
+  const [assignedToUserId, setAssignedToUserId] = useState<string | null>(userStory.assigned_to_user_id || null)
   const [saving, setSaving] = useState(false)
+
+  // Debug: Log availableUsers to see what's being passed
+  React.useEffect(() => {
+    console.log('🔵 UserStoryEditDetailsModal: availableUsers:', availableUsers)
+    console.log('🔵 UserStoryEditDetailsModal: filtered users:', (availableUsers || []).filter(user => user.status === 'active' && user.user_id))
+  }, [availableUsers])
 
   const toggleRole = (roleId: string) => {
     // Clear user permission when selecting a role
@@ -72,7 +78,7 @@ export function UserStoryEditDetailsModal({
         priority_rating: priorityRating,
         status,
         user_permission_id: selectedUserPermissionId || undefined,
-        assigned_to_user_id: assignedToUserId || null
+        assigned_to_user_id: assignedToUserId || undefined
       }, selectedRoleIds)
       
       if (updatedStory) {
@@ -271,8 +277,8 @@ export function UserStoryEditDetailsModal({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Assign a user</h3>
               <select
-                value={assignedToUserId}
-                onChange={(e) => setAssignedToUserId(e.target.value)}
+                value={assignedToUserId || ''}
+                onChange={(e) => setAssignedToUserId(e.target.value === '' ? null : e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={saving}
               >
@@ -280,7 +286,7 @@ export function UserStoryEditDetailsModal({
                 {(availableUsers || [])
                   .filter(user => user.status === 'active' && user.user_id)
                   .map((user) => (
-                    <option key={user.id} value={user.user_id}>
+                    <option key={user.id} value={user.user_id || ''}>
                       {user.full_name || user.user_email}
                     </option>
                   ))}
