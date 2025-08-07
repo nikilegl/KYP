@@ -217,7 +217,7 @@ export function WorkspaceDashboard({ workspaceUsers, onSignOut }: WorkspaceDashb
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Workspace Dashboard</h2>
-        <p className="text-gray-600">Overview of all of your tasks and user stories across your workspace</p>
+        <p className="text-gray-600">Overview of all tasks and user stories across your workspace</p>
       </div>
 
       {/* User Filter */}
