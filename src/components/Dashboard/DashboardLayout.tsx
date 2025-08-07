@@ -76,7 +76,10 @@ export function DashboardLayout({
         {/* Logout Button */}
         <div className="p-2 border-t border-gray-200">
           <button
-            onClick={onSignOut}
+            onClick={() => {
+              console.log('🔵 DashboardLayout: Logout button clicked')
+              onSignOut()
+            }}
             className="group relative w-12 h-12 flex items-center justify-center rounded-lg transition-all text-gray-700 hover:bg-red-50 hover:text-red-600"
             title={user?.email ? `Logout of ${user.email}` : "Logout"}
           >

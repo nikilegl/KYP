@@ -9,6 +9,10 @@ function App() {
   const params = useParams()
   const location = useLocation()
 
+  // Debug: Log user state changes
+  console.log('🔵 App: user state:', user)
+  console.log('🔵 App: loading state:', loading)
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -21,9 +25,11 @@ function App() {
   }
 
   if (!user) {
+    console.log('🔵 App: No user, showing LoginForm')
     return <LoginForm />
   }
 
+  console.log('🔵 App: User exists, showing Dashboard')
   return <Dashboard routeParams={params} pathname={location.pathname} />
 }
 

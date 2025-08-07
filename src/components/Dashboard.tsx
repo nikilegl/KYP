@@ -44,7 +44,11 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
   }, [pathname])
 
   const handleSignOut = async () => {
+    console.log('🔵 Dashboard: handleSignOut called')
     await signOut()
+    console.log('🔵 Dashboard: signOut completed, reloading page')
+    // Force a page reload to ensure the user is properly logged out
+    window.location.reload()
   }
 
   const handleTopLevelNavigation = (viewId: string) => {
