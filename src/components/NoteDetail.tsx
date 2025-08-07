@@ -137,6 +137,9 @@ export function NoteDetail({
   const handleSaveBasicInfo = async (updates: { name: string; note_date: string; is_decision: boolean }) => {
     if (!note) return
     
+    console.log('🔵 NoteDetail: handleSaveBasicInfo called with updates:', updates)
+    console.log('🔵 NoteDetail: Current note before update:', note)
+    
     setSaving(true)
     try {
       const updatedNote = await updateResearchNote(
@@ -146,8 +149,13 @@ export function NoteDetail({
         noteThemes.map(t => t.id)
       )
       
+      console.log('🔵 NoteDetail: updateResearchNote returned:', updatedNote)
+      
       if (updatedNote) {
+        console.log('✅ NoteDetail: Calling onUpdate with updated note:', updatedNote)
         onUpdate(updatedNote)
+      } else {
+        console.error('❌ NoteDetail: updateResearchNote returned null')
       }
     } catch (error) {
       console.error('Error updating note basic info:', error)
