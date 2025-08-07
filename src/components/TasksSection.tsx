@@ -61,11 +61,14 @@ export function TasksSection({
     assigned_to_user_id?: string
   }) => {
     try {
-      await onUpdateTask(taskId, {
-        name: updates.name,
-        description: updates.description,
-        status: updates.status
-      })
+      // Only pass the fields that are actually being updated
+      const updateData: any = {}
+      if (updates.name !== undefined) updateData.name = updates.name
+      if (updates.description !== undefined) updateData.description = updates.description
+      if (updates.status !== undefined) updateData.status = updates.status
+      if (updates.assigned_to_user_id !== undefined) updateData.assigned_to_user_id = updates.assigned_to_user_id
+      
+      await onUpdateTask(taskId, updateData)
     } catch (error) {
       console.error('Error updating task:', error)
       throw error

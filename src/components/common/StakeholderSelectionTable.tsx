@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Search, Users, Star } from 'lucide-react'
 import { StakeholderAvatar } from './StakeholderAvatar'
 import { getStructureTagStyles } from '../../utils/structureTagStyles'
-import type { Stakeholder, UserRole, LawFirm } from '../../lib/supabase'
+import type { Stakeholder, UserRole, LawFirm, UserPermission } from '../../lib/supabase'
 
 interface StakeholderSelectionTableProps {
   stakeholders: Stakeholder[]
@@ -230,7 +230,10 @@ export function StakeholderSelectionTable({
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => onStakeholderToggle(stakeholder.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onStakeholderToggle(stakeholder.id)
+                        }}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
                     </td>
