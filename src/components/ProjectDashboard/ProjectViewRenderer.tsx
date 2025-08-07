@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft, 
   Loader2, 
@@ -46,8 +47,11 @@ import type {
   UserPermission,
   NoteTemplate,
   ProjectProgressStatus,
-  Task
+  Task,
+  Design,
+  UserStoryComment
 } from '../../lib/supabase'
+import type { User } from '@supabase/supabase-js'
 
 interface ProjectViewRendererProps {
   project: Project
@@ -185,6 +189,8 @@ export function ProjectViewRenderer({
   onUpdateTask,
   onDeleteTask
 }: ProjectViewRendererProps) {
+  const navigate = useNavigate()
+  
   const [currentView, setCurrentView] = useState(() => {
     if (initialView !== 'dashboard') return initialView
     if (initialSelectedNote) return 'note-detail'
@@ -204,6 +210,15 @@ export function ProjectViewRenderer({
   const [selectedUserJourney, setSelectedUserJourney] = useState<UserJourney | null>(initialSelectedUserJourney)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(initialSelectedDesign)
   const [refreshingStakeholders, setRefreshingStakeholders] = useState(false)
+
+  // Handle changes to initialSelectedDesign after component mount
+  useEffect(() => {
+    if (initialSelectedDesign) {
+      console.log('🔵 ProjectViewRenderer: initialSelectedDesign changed to:', initialSelectedDesign)
+      setSelectedDesign(initialSelectedDesign)
+      setCurrentView('design-detail')
+    }
+  }, [initialSelectedDesign])
 
   const handleProjectNavigation = (viewId: string) => {
     // Clear all selected detail states when navigating to a new section
@@ -537,8 +552,9 @@ export function ProjectViewRenderer({
           <DesignsSection 
             projectId={project.id}
             onSelectDesign={(design) => {
-              setSelectedDesign(design)
-              setCurrentView('design-detail')
+              console.log('🔵 ProjectViewRenderer: onSelectDesign called with design:', design)
+              console.log('🔵 ProjectViewRenderer: Navigating to:', `/design/${design.short_id}`)
+              navigate(`/design/${design.short_id}`)
             }}
           />
         )
