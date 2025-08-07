@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft, 
@@ -190,6 +190,7 @@ export function ProjectViewRenderer({
   onDeleteTask
 }: ProjectViewRendererProps) {
   const navigate = useNavigate()
+  const mainContentRef = useRef<HTMLElement>(null)
   
   const [currentView, setCurrentView] = useState(() => {
     if (initialView !== 'dashboard') return initialView
@@ -219,6 +220,13 @@ export function ProjectViewRenderer({
       setCurrentView('design-detail')
     }
   }, [initialSelectedDesign])
+
+  // Scroll to top when view changes
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo(0, 0)
+    }
+  }, [currentView])
 
   const handleProjectNavigation = (viewId: string) => {
     // Clear all selected detail states when navigating to a new section
@@ -449,6 +457,7 @@ export function ProjectViewRenderer({
             onSaveProblemOverview={onSaveProblemOverview}
             projectTasks={projectTasks}
             onNavigateToStakeholders={() => setCurrentView('stakeholders')}
+            onViewNote={handleViewNote}
           />
         )
       case 'problem-overview':
@@ -575,6 +584,7 @@ export function ProjectViewRenderer({
             onSaveProblemOverview={onSaveProblemOverview}
             projectTasks={projectTasks}
             onNavigateToStakeholders={() => setCurrentView('stakeholders')}
+            onViewNote={handleViewNote}
           />
         )
     }
@@ -657,7 +667,7 @@ export function ProjectViewRenderer({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto" ref={mainContentRef}>
         <div className={currentView === 'stakeholder-detail' && selectedStakeholder || currentView === 'user-story-detail' || currentView === 'user-story-create' || (selectedUserStory && currentView !== 'user-stories') || currentView === 'design-detail' ? '' : 'p-6'}>
           {renderContent()}
         </div>

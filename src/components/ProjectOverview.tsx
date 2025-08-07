@@ -21,6 +21,7 @@ interface ProjectOverviewProps {
   onSaveProblemOverview?: (updates?: Partial<ProblemOverview>) => Promise<void>
   projectTasks: Task[]
   onNavigateToStakeholders?: () => void
+  onViewNote?: (note: ResearchNote) => void
 }
 
 export function ProjectOverview({ 
@@ -35,7 +36,8 @@ export function ProjectOverview({
   projectTasks,
   onProblemOverviewChange,
   onSaveProblemOverview,
-  onNavigateToStakeholders
+  onNavigateToStakeholders,
+  onViewNote
 }: ProjectOverviewProps) {
   const [originalUnderstandingRating, setOriginalUnderstandingRating] = React.useState(problemOverview.understanding_rating)
   const [showUnderstandingButtons, setShowUnderstandingButtons] = React.useState(false)
@@ -420,7 +422,11 @@ export function ProjectOverview({
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Notes & Calls</h3>
         <div className="space-y-3">
           {notes.slice(0, 3).map((note) => (
-            <div key={note.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div 
+              key={note.id} 
+              className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+              onClick={() => onViewNote?.(note)}
+            >
               <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
                 <FileText size={16} className="text-indigo-600" />
               </div>
