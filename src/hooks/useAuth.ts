@@ -117,8 +117,14 @@ const addUserToLeglWorkspace = async (userId: string, userEmail: string): Promis
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasInitialized, setHasInitialized] = useState(false)
 
   useEffect(() => {
+    // Prevent re-initialization if we've already initialized
+    if (hasInitialized) {
+      return
+    }
+
     const initAuth = async () => {
       if (isSupabaseConfigured && supabase) {
         try {
@@ -136,6 +142,7 @@ export function useAuth() {
           )
 
           setLoading(false)
+          setHasInitialized(true)
           return () => subscription.unsubscribe()
         } catch (error) {
           if (error instanceof SupabaseAuthError) {
@@ -145,6 +152,7 @@ export function useAuth() {
           }
           setUser(null)
           setLoading(false)
+          setHasInitialized(true)
         }
       } else {
         initLocalAuth()
@@ -152,20 +160,26 @@ export function useAuth() {
     }
 
     const initLocalAuth = () => {
+      console.log('🔵 useAuth: initLocalAuth called')
       try {
         const storedUser = localStorage.getItem(LOCAL_USER_KEY)
+        console.log('🔵 useAuth: storedUser from localStorage:', storedUser)
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser)
+          console.log('🔵 useAuth: Setting user from localStorage:', parsedUser)
           setUser(parsedUser)
+        } else {
+          console.log('🔵 useAuth: No stored user found')
         }
       } catch (error) {
         console.error('Failed to load stored user:', error)
       }
       setLoading(false)
+      setHasInitialized(true)
     }
 
     initAuth()
-  }, [])
+  }, [hasInitialized])
 
   const signIn = async (email: string, password: string) => {
     if (isSupabaseConfigured && supabase) {
@@ -263,15 +277,25 @@ export function useAuth() {
   }
 
   const signOut = async () => {
+    console.log('🔵 useAuth: signOut called')
     if (isSupabaseConfigured && supabase) {
+      console.log('🔵 useAuth: Using Supabase signOut')
       // Use forceSignOut to aggressively clear session without server call
       await forceSignOut()
       setUser(null)
+      console.log('🔵 useAuth: Supabase user set to null')
       return { error: null }
     } else {
-      // Local authentication
-      setUser(null)
+      console.log('🔵 useAuth: Using local signOut')
+      // Local authentication - clear localStorage FIRST
       localStorage.removeItem(LOCAL_USER_KEY)
+      console.log('🔵 useAuth: localStorage cleared')
+      
+      // Then set user to null and reset initialization flag
+      setUser(null)
+      setHasInitialized(false)
+      console.log('🔵 useAuth: Local user set to null and hasInitialized reset')
+      
       return { error: null }
     }
   }
