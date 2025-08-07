@@ -14,6 +14,35 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
   const navigate = useNavigate()
   const [currentDashboardView, setCurrentDashboardView] = useState('projects')
 
+  // Update currentDashboardView based on pathname
+  useEffect(() => {
+    console.log('🔵 Dashboard: pathname changed to:', pathname)
+    
+    if (pathname === '/') {
+      setCurrentDashboardView('projects')
+    } else if (pathname === '/workspace-dashboard') {
+      setCurrentDashboardView('workspace-dashboard')
+    } else if (pathname === '/law-firms') {
+      setCurrentDashboardView('law-firms')
+    } else if (pathname === '/themes') {
+      setCurrentDashboardView('themes')
+    } else if (pathname === '/stakeholders') {
+      setCurrentDashboardView('stakeholders')
+    } else if (pathname === '/settings') {
+      setCurrentDashboardView('settings')
+    } else if (pathname.startsWith('/project/') || 
+               pathname.startsWith('/note/') || 
+               pathname.startsWith('/user-story/') || 
+               pathname.startsWith('/user-journey/') || 
+               pathname.startsWith('/design/') || 
+               pathname.startsWith('/stakeholder/') || 
+               pathname.startsWith('/theme/')) {
+      // For entity detail pages, we don't need to set a specific view
+      // The WorkspaceDataFetcher will handle the routing
+      console.log('🔵 Dashboard: Entity detail route detected')
+    }
+  }, [pathname])
+
   const handleSignOut = async () => {
     await signOut()
   }
