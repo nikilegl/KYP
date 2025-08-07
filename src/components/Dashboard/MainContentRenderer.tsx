@@ -65,6 +65,7 @@ interface MainContentRendererProps {
   selectedNoteTemplate: NoteTemplate | null
   selectedDesign: Design | null
   selectedDesignForProject: Design | null
+  initialProjectView: string
   allProjectProgressStatus: ProjectProgressStatus[]
   allUserStories: UserStory[]
   allUserJourneys: UserJourney[]
@@ -162,6 +163,7 @@ export function MainContentRenderer({
   selectedNoteTemplate,
   selectedDesign,
   selectedDesignForProject,
+  initialProjectView,
   allProjectProgressStatus,
   allUserStories,
   allUserJourneys,
@@ -233,6 +235,7 @@ export function MainContentRenderer({
         initialSelectedUserJourney={selectedUserJourney}
         initialUserStoryRoleIds={userStoryRoleIds}
         initialSelectedDesign={selectedDesign}
+        initialProjectView={initialProjectView}
         workspaceUsers={workspaceUsers}
         onBack={onBackToWorkspace}
         onThemeCreate={onThemeCreate}
