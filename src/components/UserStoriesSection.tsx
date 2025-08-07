@@ -9,14 +9,14 @@ import {
   DragOverlay,
   DragStartEvent,
   DragEndEvent,
-  DragOverEvent
+  DragOverEvent,
+  useDroppable
 } from '@dnd-kit/core'
 import {
   SortableContext,
   verticalListSortingStrategy,
   arrayMove
 } from '@dnd-kit/sortable'
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { PriorityTag, getPriorityTagStyles } from '../utils/priorityTagStyles.tsx'
 import { UserRoleTag } from './common/UserRoleTag'
 import { UserStoryCard } from './UserStoryCard'
@@ -30,7 +30,7 @@ import {
 } from '../lib/database'
 import { UserStoryDetail } from './UserStoryDetail'
 import { UserStoryCreate } from './UserStoryCreate'
-import type { UserStory, Stakeholder, UserRole, LawFirm } from '../lib/supabase'
+import type { UserStory, Stakeholder, UserRole, LawFirm, UserPermission } from '../lib/supabase'
 import type { Theme } from '../lib/supabase'
 import type { WorkspaceUser } from '../lib/supabase'
 
@@ -115,6 +115,33 @@ const getStatusColor = (status: string) => {
   }
 }
 
+// DroppableColumn component for handling column drops
+interface DroppableColumnProps {
+  id: string
+  children: React.ReactNode
+  isHovered: boolean
+  className?: string
+}
+
+function DroppableColumn({ id, children, isHovered, className = '' }: DroppableColumnProps) {
+  const { setNodeRef } = useDroppable({
+    id: id,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className} transition-all duration-200 ${
+        isHovered 
+          ? 'border-blue-400 bg-blue-50 shadow-lg' 
+          : 'border-gray-200 bg-gray-50'
+      }`}
+    >
+      {children}
+    </div>
+  )
+}
+
 interface UserStoriesSectionProps {
   projectId: string
   userStories: UserStory[]
@@ -137,7 +164,7 @@ interface UserStoriesSectionProps {
     themeIds?: string[]
     status?: string
   }) => Promise<void>
-  onUpdateUserStory: (story: UserStory, updates: Partial<UserStory>, updatedRoleIds?: string[]) => Promise<void>
+  onUpdateUserStory: (storyId: string, updates: Partial<UserStory>, updatedRoleIds?: string[]) => Promise<void>
   onDeleteUserStory: (storyId: string) => Promise<void>
   onSelectUserStory?: (userStory: UserStory) => void
   onThemeCreate: (theme: Theme) => void
@@ -173,6 +200,7 @@ export function UserStoriesSection({
   const [organizationType, setOrganizationType] = useState<OrganizationType>('status')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draggedStory, setDraggedStory] = useState<UserStory | null>(null)
+  const [hoveredColumnId, setHoveredColumnId] = useState<string | null>(null)
 
   // Track if we're currently performing a drag operation to prevent conflicts
   const [isDragging, setIsDragging] = useState(false)
@@ -251,12 +279,31 @@ export function UserStoriesSection({
     setDraggedStory(story || null)
   }
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event
+    
+    if (over) {
+      const overId = over.id as string
+      const isStatusColumn = STATUS_COLUMNS.some(col => col.id === overId)
+      const isPriorityColumn = PRIORITY_COLUMNS.some(col => col.id === overId)
+      
+      if (isStatusColumn || isPriorityColumn) {
+        setHoveredColumnId(overId)
+      } else {
+        setHoveredColumnId(null)
+      }
+    } else {
+      setHoveredColumnId(null)
+    }
+  }
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     
     setActiveId(null)
     setDraggedStory(null)
     setIsDragging(false)
+    setHoveredColumnId(null)
     
     if (!over) return
     
@@ -284,8 +331,9 @@ export function UserStoriesSection({
     if (isStatusColumnDrop) {
       const targetColumn = STATUS_COLUMNS.find(col => col.id === overId)
       if (targetColumn && targetColumn.primaryStatus !== activeStory.status) {
-        updatedStory.status = targetColumn.primaryStatus
-        propertyUpdates.status = targetColumn.primaryStatus
+        const newStatus = targetColumn.primaryStatus as 'Not planned' | 'Not started' | 'Design in progress' | 'Design complete' | 'Build in progress' | 'Released'
+        updatedStory.status = newStatus
+        propertyUpdates.status = newStatus
         needsPropertyUpdate = true
       }
     } else if (isPriorityColumnDrop) {
@@ -351,7 +399,7 @@ export function UserStoriesSection({
     try {
       // Update story properties if needed
       if (needsPropertyUpdate) {
-        await onUpdateUserStory(activeStory, propertyUpdates)
+        await onUpdateUserStory(activeStory.id, propertyUpdates, [])
       }
       
       // Update weighting for all stories
@@ -418,6 +466,11 @@ export function UserStoriesSection({
     }
   }
 
+  // Wrapper function to match UserStoryCard interface
+  const handleUpdateUserStory = async (story: UserStory, updates: Partial<UserStory>, updatedRoleIds?: string[]) => {
+    await onUpdateUserStory(story.id, updates, updatedRoleIds || [])
+  }
+
   // Use local state for rendering (already sorted by weighting from database)
   const sortedUserStories = localUserStories
 
@@ -443,7 +496,7 @@ export function UserStoriesSection({
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      modifiers={[restrictToVerticalAxis]}
+      onDragOver={handleDragOver}
     >
       <div className="space-y-6">
       {/* Header */}
@@ -488,7 +541,7 @@ export function UserStoriesSection({
                 userRoles={userRoles}
                 userPermissions={userPermissions}
                 availableUsers={availableUsers}
-                onUpdate={onUpdateUserStory}
+                onUpdate={handleUpdateUserStory}
                 onDelete={onDeleteUserStory}
                 onSelect={onSelectUserStory}
                 showDeleteButton={true}
@@ -502,6 +555,7 @@ export function UserStoriesSection({
           {STATUS_COLUMNS.map((column) => {
             const groupedStories = groupStoriesByStatus(sortedUserStories)
             const columnStories = groupedStories[column.id] || []
+            const isHovered = hoveredColumnId === column.id
             
             return (
               <div key={column.id} className="flex-shrink-0 w-80">
@@ -509,9 +563,10 @@ export function UserStoriesSection({
                   <h3 className="font-semibold text-gray-900 mb-4">{column.title} ({columnStories.length})</h3>
                   
                   <SortableContext items={[column.id, ...columnStories.map(s => s.id)]} strategy={verticalListSortingStrategy}>
-                    <div 
+                    <DroppableColumn 
                       id={column.id}
-                      className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed border-gray-200 p-4 bg-gray-50"
+                      isHovered={isHovered}
+                      className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed p-4"
                     >
                       {columnStories.map((story) => (
                         <UserStoryCard
@@ -521,7 +576,7 @@ export function UserStoriesSection({
                           userRoles={userRoles}
                           userPermissions={userPermissions}
                           availableUsers={availableUsers}
-                          onUpdate={onUpdateUserStory}
+                          onUpdate={handleUpdateUserStory}
                           onDelete={onDeleteUserStory}
                           onSelect={onSelectUserStory}
                           showDeleteButton={true}
@@ -533,7 +588,7 @@ export function UserStoriesSection({
                         <p className="text-sm">No stories</p>
                       </div>
                     )}
-                    </div>
+                    </DroppableColumn>
                   </SortableContext>
                 </div>
               </div>
@@ -547,6 +602,7 @@ export function UserStoriesSection({
             const groupedStories = groupStoriesByPriority(sortedUserStories)
             const columnStories = groupedStories[column.id] || []
             const priorityStyles = getPriorityTagStyles(column.priority as 'must' | 'should' | 'could' | 'would')
+            const isHovered = hoveredColumnId === column.id
             
             return (
               <div key={column.id} className="flex-shrink-0 w-80">
@@ -560,9 +616,10 @@ export function UserStoriesSection({
                   </div>
                   
                   <SortableContext items={[column.id, ...columnStories.map(s => s.id)]} strategy={verticalListSortingStrategy}>
-                    <div 
+                    <DroppableColumn 
                       id={column.id}
-                      className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed border-gray-200 p-4 bg-gray-50"
+                      isHovered={isHovered}
+                      className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed p-4"
                     >
                       {columnStories.map((story) => (
                         <UserStoryCard
@@ -572,7 +629,7 @@ export function UserStoriesSection({
                           userRoles={userRoles}
                           userPermissions={userPermissions}
                           availableUsers={availableUsers}
-                          onUpdate={onUpdateUserStory}
+                          onUpdate={handleUpdateUserStory}
                           onDelete={onDeleteUserStory}
                           onSelect={onSelectUserStory}
                           showDeleteButton={true}
@@ -584,7 +641,7 @@ export function UserStoriesSection({
                         <p className="text-sm">No stories</p>
                       </div>
                     )}
-                    </div>
+                    </DroppableColumn>
                   </SortableContext>
                 </div>
               </div>
