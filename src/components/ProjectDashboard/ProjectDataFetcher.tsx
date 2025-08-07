@@ -395,7 +395,8 @@ export function ProjectDataFetcher({
         noteData.summary,
         noteData.nativeNotes,
         Array.isArray(noteData.stakeholderIds) ? noteData.stakeholderIds : [],
-        noteData.decision_text
+        noteData.decision_text,
+        noteData.note_date
       )
       if (note) {
         // Assign stakeholders to project after note creation
@@ -442,11 +443,23 @@ export function ProjectDataFetcher({
   }
 
   const handleUpdateNote = React.useCallback((updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => {
+    console.log('�� ProjectDataFetcher: handleUpdateNote called with:', updatedNote)
+    console.log('�� ProjectDataFetcher: Current selectedNote:', selectedNote)
+    console.log(' ProjectDataFetcher: Updated note note_date:', updatedNote.note_date)
+    
     setNotes(notes.map(note => note.id === updatedNote.id ? updatedNote : note))
     
-    // Update selectedNote if it matches the updated note
+    // Update selectedNote if it matches the updated note OR if selectedNote is null but we're updating a note
     if (selectedNote && selectedNote.id === updatedNote.id) {
+      console.log('✅ ProjectDataFetcher: Updating selectedNote with:', updatedNote)
       setSelectedNote(updatedNote)
+    } else if (!selectedNote) {
+      // If selectedNote is null, check if this is the note we should be viewing
+      // This handles the case where the note detail view is open but selectedNote wasn't properly set
+      console.log('✅ ProjectDataFetcher: selectedNote was null, setting it to updated note:', updatedNote)
+      setSelectedNote(updatedNote)
+    } else {
+      console.log('⚠️ ProjectDataFetcher: selectedNote not updated - IDs don\'t match')
     }
     
     // Update noteStakeholders if stakeholder IDs are provided

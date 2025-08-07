@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { ArrowLeft, Edit, Calendar, Share, Check } from 'lucide-react'
 import { CopyLinkButton } from '../common/CopyLinkButton'
 import type { ResearchNote } from '../../lib/supabase'
@@ -14,13 +14,43 @@ interface NoteHeaderProps {
 }
 
 export function NoteHeader({ note, onBack, onEdit, onShareToSlack, sharingToSlack, slackShareStatus, setSlackShareStatus }: NoteHeaderProps) {
+  // Local state for display values
+  const [displayName, setDisplayName] = useState(note.name)
+  const [displayDate, setDisplayDate] = useState(note.note_date || note.created_at)
+  
+  // Use ref to track previous values and avoid unnecessary updates
+  const prevNoteRef = useRef<{ name: string; note_date: string | null }>({
+    name: note.name,
+    note_date: note.note_date
+  })
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'No date set'
     return new Date(dateString).toLocaleDateString('en-GB')
   }
 
-  // Use note_date if available, otherwise fall back to created_at
-  const displayDate = note.note_date || note.created_at
+  // Synchronize local state when note changes, but only when actual values change
+  useEffect(() => {
+    const prevNote = prevNoteRef.current
+    const currentName = note.name
+    const currentDate = note.note_date || note.created_at
+    
+    // Only update if the values have actually changed
+    if (prevNote.name !== currentName || prevNote.note_date !== note.note_date) {
+      console.log(' NoteHeader: Values changed, updating state')
+      console.log('🔵 NoteHeader: Previous name:', prevNote.name, 'Current name:', currentName)
+      console.log('🔵 NoteHeader: Previous date:', prevNote.note_date, 'Current date:', note.note_date)
+      
+      setDisplayName(currentName)
+      setDisplayDate(currentDate)
+      
+      // Update the ref with current values
+      prevNoteRef.current = {
+        name: currentName,
+        note_date: note.note_date
+      }
+    }
+  }, [note.name, note.note_date, note.created_at])
 
   // Automatically clear success message after 5 seconds
   useEffect(() => {
@@ -80,7 +110,7 @@ export function NoteHeader({ note, onBack, onEdit, onShareToSlack, sharingToSlac
 
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">{note.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{displayName}</h1>
           
           <div className="flex items-center space-x-4 text-sm text-gray-600">
             <div className="flex items-center">
