@@ -12,15 +12,6 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<App />} />
         <Route path="/reset-password" element={<ResetPasswordForm />} />
         <Route path="/project/:shortId" element={<App />} />
-        <Route path="/project/:shortId/user-stories" element={<App />} />
-        <Route path="/project/:shortId/notes" element={<App />} />
-        <Route path="/project/:shortId/designs" element={<App />} />
-        <Route path="/project/:shortId/user-flows" element={<App />} />
-        <Route path="/project/:shortId/problem-overview" element={<App />} />
-        <Route path="/project/:shortId/stakeholders" element={<App />} />
-        <Route path="/project/:shortId/project-tasks" element={<App />} />
-        <Route path="/project/:shortId/project-progress" element={<App />} />
-        <Route path="/project/:shortId/prompt-builder" element={<App />} />
         <Route path="/stakeholder/:shortId" element={<App />} />
         <Route path="/note/:shortId" element={<App />} />
         <Route path="/user-journey/:shortId" element={<App />} />
