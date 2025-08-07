@@ -1,0 +1,101 @@
+import React, { useEffect, useState } from 'react'
+import { ArrowLeft, Edit, Calendar, Share, Check } from 'lucide-react'
+import { CopyLinkButton } from '../common/CopyLinkButton'
+import type { ResearchNote } from '../../lib/supabase'
+
+interface NoteHeaderProps {
+  note: ResearchNote
+  onBack: () => void
+  onEdit: () => void
+  onShareToSlack?: () => Promise<void>
+  sharingToSlack?: boolean
+  slackShareStatus?: { type: 'success' | 'error', message: string } | null
+  setSlackShareStatus?: React.Dispatch<React.SetStateAction<{ type: 'success' | 'error', message: string } | null>>
+}
+
+export function NoteHeader({ note, onBack, onEdit, onShareToSlack, sharingToSlack, slackShareStatus, setSlackShareStatus }: NoteHeaderProps) {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'No date set'
+    return new Date(dateString).toLocaleDateString('en-GB')
+  }
+
+  // Use note_date if available, otherwise fall back to created_at
+  const displayDate = note.note_date || note.created_at
+
+  // Automatically clear success message after 5 seconds
+  useEffect(() => {
+    if (slackShareStatus?.type === 'success' && setSlackShareStatus) {
+      const timer = setTimeout(() => setSlackShareStatus(null), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [slackShareStatus, setSlackShareStatus])
+
+  return (
+    <div className="bg-white border-b border-gray-200 p-6 -mx-6 -mt-6 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={onBack}
+          className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Notes & Calls
+        </button>
+        
+        <div className="flex items-center gap-2">
+          {onShareToSlack && (
+            <div className="relative inline-block">
+              <button
+                onClick={onShareToSlack}
+                disabled={sharingToSlack || slackShareStatus?.type === 'success'}
+                className={`flex items-center gap-1 px-3 py-1 text-sm rounded-lg transition-all disabled:opacity-50 ${
+                  slackShareStatus?.type === 'success'
+                    ? 'bg-green-100 text-green-700'
+                    : 'text-green-600 hover:bg-green-50'
+                }`}
+              >
+                {slackShareStatus?.type === 'success' ? (
+                  <Check size={14} />
+                ) : (
+                  <Share size={14} />
+                )}
+                {slackShareStatus?.type === 'success' ? 'Shared successfully' : (sharingToSlack ? 'Sharing...' : 'Share to Slack')}
+              </button>
+              {slackShareStatus?.type === 'error' && (
+                <div className="absolute top-full left-0 mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap z-10 min-w-max">
+                  {slackShareStatus.message}
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+          >
+            <Edit size={14} />
+            Edit
+          </button>
+          <CopyLinkButton entityType="note" shortId={note.short_id} />
+        </div>
+      </div>
+
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{note.name}</h1>
+          
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <div className="flex items-center">
+              <Calendar className="w-4 h-4 mr-1" />
+              {formatDate(displayDate)}
+            </div>
+            
+            {note.is_decision && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Decision
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

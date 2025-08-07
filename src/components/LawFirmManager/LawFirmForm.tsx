@@ -1,0 +1,129 @@
+import React from 'react'
+import { X, Loader2, Star } from 'lucide-react'
+import type { LawFirm } from '../../lib/supabase'
+
+interface LawFirmFormProps {
+  isEditing: boolean
+  lawFirm: {
+    name: string
+    structure: 'centralised' | 'decentralised'
+    status: 'active' | 'inactive'
+    top_4: boolean
+  }
+  loading: boolean
+  onUpdate: (updates: Partial<{ name: string; structure: 'centralised' | 'decentralised'; status: 'active' | 'inactive'; top_4: boolean }>) => void
+  onSubmit: (e: React.FormEvent) => void
+  onClose: () => void
+}
+
+export function LawFirmForm({
+  isEditing,
+  lawFirm,
+  loading,
+  onUpdate,
+  onSubmit,
+  onClose
+}: LawFirmFormProps) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {isEditing ? 'Edit Law Firm' : 'Add New Law Firm'}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <X size={20} className="text-gray-500" />
+          </button>
+        </div>
+        
+        {/* Modal Content */}
+        <div className="p-6">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Firm Name</label>
+              <input
+                type="text"
+                value={lawFirm.name}
+                onChange={(e) => onUpdate({ name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                disabled={loading}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Structure</label>
+              <select
+                value={lawFirm.structure}
+                onChange={(e) => onUpdate({ structure: e.target.value as 'centralised' | 'decentralised' })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+              >
+                <option value="decentralised">Decentralised</option>
+                <option value="centralised">Centralised</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <Star size={16} className="text-yellow-500" />
+                  Law firm is top 4
+                </div>
+              </label>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="top_4"
+                    checked={lawFirm.top_4 === true}
+                    onChange={() => onUpdate({ top_4: true })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                  <span className="text-sm text-gray-700">Yes</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="top_4"
+                    checked={lawFirm.top_4 === false}
+                    onChange={() => onUpdate({ top_4: false })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                  <span className="text-sm text-gray-700">No</span>
+                </label>
+              </div>
+            </div>
+
+            
+
+            <div className="flex items-center gap-3">
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+              >
+                {loading && <Loader2 size={16} className="animate-spin" />}
+                {isEditing ? 'Update Law Firm' : 'Add Law Firm'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
