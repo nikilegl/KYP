@@ -92,6 +92,9 @@ export function WorkspaceDataFetcher({
   const navigate = useNavigate()
   const { user } = useAuth()
   
+  // Debug initial props
+  console.log('🔵 WorkspaceDataFetcher: Initial props - pathname:', pathname, 'routeParams:', routeParams)
+  
   // Local state for current view - managed based on URL
   const [currentView, setCurrentView] = useState('projects')
   
@@ -109,6 +112,7 @@ export function WorkspaceDataFetcher({
   const [themesWithCounts, setThemesWithCounts] = useState<Array<Theme & { contentCounts: { userStories: number; userJourneys: number; researchNotes: number; assets: number } }>>([])
   const [selectedNoteTemplate, setSelectedNoteTemplate] = useState<NoteTemplate | null>(null)
   const [selectedDesignForProject, setSelectedDesignForProject] = useState<Design | null>(null)
+  const [selectedDesign, setSelectedDesign] = useState<Design | null>(null)
   
   // Data states
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -138,20 +142,39 @@ export function WorkspaceDataFetcher({
     }
   }, [selectedUserStory])
 
+  // Debug currentView changes
+  useEffect(() => {
+    console.log('🔵 WorkspaceDataFetcher: currentView changed to:', currentView)
+  }, [currentView])
+
+  // Debug pathname changes
+  useEffect(() => {
+    console.log('🔵 WorkspaceDataFetcher: pathname changed to:', pathname)
+  }, [pathname])
+
   useEffect(() => {
     fetchAllData()
   }, [])
 
   // Handle route-based navigation
   useEffect(() => {
+    console.log('🔵 WorkspaceDataFetcher: useEffect triggered with pathname:', pathname)
+    console.log('🔵 WorkspaceDataFetcher: routeParams:', routeParams)
+    
     const handleRouteNavigation = async () => {
+      console.log('🔵 WorkspaceDataFetcher: handleRouteNavigation called with pathname:', pathname)
+      console.log('🔵 WorkspaceDataFetcher: routeParams:', routeParams)
+      console.log('🔵 WorkspaceDataFetcher: current currentView:', currentView)
+      
       // If this is a back navigation, skip the default route handling
       if (isNavigatingBack) {
+        console.log('🔵 WorkspaceDataFetcher: Skipping route navigation due to back navigation')
         setIsNavigatingBack(false)
         return
       }
 
       if (pathname === '/') {
+        console.log('🔵 WorkspaceDataFetcher: Processing root path')
         setCurrentView('projects')
         onViewChange('projects')
         setSelectedProject(null)
@@ -165,6 +188,7 @@ export function WorkspaceDataFetcher({
 
       // Handle top-level navigation paths
       if (pathname === '/law-firms') {
+        console.log('🔵 WorkspaceDataFetcher: Processing law-firms path')
         setCurrentView('law-firms')
         onViewChange('law-firms')
         setSelectedProject(null)
@@ -177,6 +201,7 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/themes') {
+        console.log('🔵 WorkspaceDataFetcher: Processing themes path')
         setCurrentView('themes')
         onViewChange('themes')
         setSelectedProject(null)
@@ -189,6 +214,7 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/stakeholders') {
+        console.log('🔵 WorkspaceDataFetcher: Processing stakeholders path')
         setCurrentView('stakeholders')
         onViewChange('stakeholders')
         setSelectedProject(null)
@@ -201,6 +227,7 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/settings') {
+        console.log('🔵 WorkspaceDataFetcher: Processing settings path')
         setCurrentView('settings')
         onViewChange('settings')
         setSelectedProject(null)
@@ -213,6 +240,7 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/workspace-dashboard') {
+        console.log('🔵 WorkspaceDataFetcher: Processing workspace-dashboard path')
         setCurrentView('workspace-dashboard')
         onViewChange('workspace-dashboard')
         setSelectedProject(null)
@@ -225,7 +253,11 @@ export function WorkspaceDataFetcher({
       }
 
       const shortId = routeParams.shortId ? parseInt(routeParams.shortId) : null
-      if (!shortId) return
+      console.log('🔵 WorkspaceDataFetcher: Extracted shortId:', shortId, 'from routeParams:', routeParams)
+      if (!shortId) {
+        console.log('🔵 WorkspaceDataFetcher: No shortId found, returning')
+        return
+      }
 
       if (pathname.startsWith('/project/')) {
         const project = await getProjectByShortId(shortId)
@@ -333,41 +365,50 @@ export function WorkspaceDataFetcher({
         setSelectedTheme({ short_id: shortId } as Theme)
         setCurrentView('theme-detail')
       } else if (pathname.startsWith('/design/')) {
+        console.log('🔵 WorkspaceDataFetcher: Processing design route with shortId:', shortId)
         const { getAssetByShortId: getDesignByShortId, getProjectById } = await import('../../lib/database')
         const design = await getDesignByShortId(shortId)
+        console.log('🔵 WorkspaceDataFetcher: Design lookup result:', design)
         if (design) {
           // Always set the design for viewing
           setSelectedDesignForProject(design)
+          setSelectedDesign(design) // Add this line to set selectedDesign
+          console.log('🔵 WorkspaceDataFetcher: Set selectedDesign and selectedDesignForProject')
           
           // Try to load the associated project if it exists
           if (design.project_id) {
             try {
               const project = await getProjectById(design.project_id)
+              console.log('🔵 WorkspaceDataFetcher: Project lookup result:', project)
               if (project) {
                 setSelectedProject(project)
                 setCurrentView('project-dashboard')
+                console.log('🔵 WorkspaceDataFetcher: Set currentView to project-dashboard')
               } else {
                 // Project not found, show standalone design detail
                 setCurrentView('design-detail')
+                console.log('🔵 WorkspaceDataFetcher: Set currentView to design-detail (no project)')
               }
             } catch (error) {
               console.error('Error loading project for design:', error)
               // Show standalone design detail on error
               setCurrentView('design-detail')
+              console.log('🔵 WorkspaceDataFetcher: Set currentView to design-detail (error)')
             }
           } else {
             // Design doesn't belong to a project, show standalone design detail
             setCurrentView('design-detail')
+            console.log('🔵 WorkspaceDataFetcher: Set currentView to design-detail (no project_id)')
           }
         } else {
+          console.log('🔵 WorkspaceDataFetcher: Design not found, navigating to /')
           navigate('/')
         }
       }
     }
 
     handleRouteNavigation()
-  }
-  )
+  }, [pathname, routeParams.shortId])
 
   const fetchAllData = async () => {
     try {
@@ -883,6 +924,7 @@ export function WorkspaceDataFetcher({
       selectedTheme={selectedTheme}
       selectedNoteTemplate={selectedNoteTemplate}
       selectedDesignForProject={selectedDesignForProject}
+      selectedDesign={selectedDesign}
       allProjectProgressStatus={allProjectProgressStatus}
       allUserStories={allUserStories}
       allUserJourneys={allUserJourneys}

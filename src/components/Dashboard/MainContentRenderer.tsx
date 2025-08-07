@@ -29,7 +29,10 @@ import type {
   UserJourney,
   UserStory,
   Theme,
-  NoteTemplate
+  NoteTemplate,
+  Design,
+  ProjectProgressStatus,
+  UserStoryComment
 } from '../../lib/supabase'
 
 interface MainContentRendererProps {
@@ -61,6 +64,7 @@ interface MainContentRendererProps {
   selectedTheme: Theme | null
   selectedNoteTemplate: NoteTemplate | null
   selectedDesign: Design | null
+  selectedDesignForProject: Design | null
   allProjectProgressStatus: ProjectProgressStatus[]
   allUserStories: UserStory[]
   allUserJourneys: UserJourney[]
@@ -122,6 +126,13 @@ interface MainContentRendererProps {
   
   onUpdateUserStory: (userStoryId: string, updates: { name?: string; description?: string; estimated_complexity?: number; priority_rating?: 'must' | 'should' | 'could' | 'would'; reason?: string; assigned_to_user_id?: string | null; status?: string }) => Promise<void>
   onStoriesReordered?: () => Promise<void>
+  userStoryComments: UserStoryComment[]
+  onAddUserStoryComment: (userStoryId: string, commentText: string) => Promise<void>
+  onEditUserStoryComment: (commentId: string, commentText: string) => Promise<void>
+  onDeleteUserStoryComment: (commentId: string) => Promise<void>
+  onCreateTask: (name: string, description?: string, assignedToUserId?: string, userStoryId?: string) => Promise<void>
+  onUpdateTask: (taskId: string, updates: { name?: string; description?: string; status?: 'complete' | 'not_complete' | 'no_longer_required'; assigned_to_user_id?: string | null; user_story_id?: string }) => Promise<void>
+  onDeleteTask: (taskId: string) => Promise<void>
   onSignOut: () => void
 }
 
@@ -150,6 +161,7 @@ export function MainContentRenderer({
   selectedTheme,
   selectedNoteTemplate,
   selectedDesign,
+  selectedDesignForProject,
   allProjectProgressStatus,
   allUserStories,
   allUserJourneys,
@@ -301,13 +313,12 @@ export function MainContentRenderer({
         availableUsers={workspaceUsers}
         initialSelectedRoleIds={userStoryRoleIds}
         userStoryComments={userStoryComments}
-        userStoryComments={userStoryComments}
         onBack={onBackToWorkspace}
         onThemeCreate={onThemeCreate}
         onUpdate={(storyId, updates, updatedRoleIds) => {
           onUpdateUserStory(storyId, updates, updatedRoleIds)
         }}
-        onAddComment={onAddUserStoryComment}
+        onAddComment={(commentText) => onAddUserStoryComment(selectedUserStory.id, commentText)}
         onEditComment={onEditUserStoryComment}
         onDeleteComment={onDeleteUserStoryComment}
         onCreateTask={onCreateTask}
