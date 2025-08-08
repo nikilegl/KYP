@@ -211,7 +211,7 @@ export function HistorySection({
       }`}>
         <div className="flex items-start gap-3">
           {/* Icon based on type */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 mt-1">
             {item.type === 'audit' && <Clock className="w-4 h-4 text-blue-600" />}
             {item.type === 'decision' && <CheckCircle className="w-4 h-4 text-green-600" />}
             {item.type === 'comment' && <MessageSquare className="w-4 h-4 text-gray-600" />}
@@ -222,7 +222,7 @@ export function HistorySection({
               /* Decision layout */
               <div>
                 {/* Header with title and action buttons */}
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-semibold text-green-800">Decision</h4>
                   {user && item.user_id === user.id && (
                     <div className="flex items-center gap-1">
@@ -276,7 +276,7 @@ export function HistorySection({
                     </div>
                   </div>
                 ) : (
-                  <div className="text-green-800 font-medium mb-2">
+                  <div className="text-green-800 font-medium mb-3">
                     {item.details}
                   </div>
                 )}
@@ -290,31 +290,10 @@ export function HistorySection({
               /* Comment and audit layout */
               <div>
                 {/* Action and details */}
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-gray-900">{item.action}</p>
-                  {user && item.user_id === user.id && item.type === 'comment' && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditComment(item)}
-                        className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                        title="Edit comment"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteComment(item.id)}
-                        className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
-                        title="Delete comment"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                
                 <div className="mb-2">
+                  <p className="text-sm font-medium text-gray-900">{item.action}</p>
                   {item.details && (
-                    <div className="text-sm text-gray-700">
+                    <div className="text-sm mt-1 text-gray-700">
                       {editingCommentId === item.id ? (
                         <div className="space-y-3">
                           <textarea
@@ -354,9 +333,29 @@ export function HistorySection({
                 </div>
                 
                 {/* Author and timestamp */}
-                <div className="text-xs text-gray-500">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-500">
                     <p className="font-medium text-gray-700">{getCommentAuthor(item.user_id)}</p>
                     <p>{date} at {time}</p>
+                  </div>
+                  {user && item.user_id === user.id && item.type === 'comment' && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleEditComment(item)}
+                        className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                        title="Edit comment"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteComment(item.id)}
+                        className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                        title="Delete comment"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
