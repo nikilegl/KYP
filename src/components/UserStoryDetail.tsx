@@ -5,7 +5,6 @@ import { UserRoleTag } from './common/UserRoleTag'
 import { PriorityTag } from '../utils/priorityTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
 import { AssignUserCard } from './common/AssignUserCard'
-import { DecisionSection } from './common/DecisionSection'
 import { updateUserStory, getUserStoryRoles } from '../lib/database'
 import { getThemesForUserStory, linkThemeToUserStory, unlinkThemeFromUserStory } from '../lib/database'
 import { CKEditorComponent } from './CKEditorComponent'
@@ -13,11 +12,12 @@ import { LinkedDesigns } from './UserStoryDetail/LinkedAssets'
 import { UserStoryEditDetailsModal } from './UserStoryDetail/UserStoryEditDetailsModal'
 import { TasksSection } from './TasksSection'
 import { TagThemeCard } from './common/TagThemeCard'
-import { CommentsSection } from './common/CommentsSection'
-import type { UserStory, Stakeholder, UserRole, LawFirm, UserPermission } from '../lib/supabase'
+import { HistorySection } from './common/HistorySection'
+import type { UserStory, Stakeholder, UserRole, LawFirm, UserPermission, Task } from '../lib/supabase'
 import type { Theme } from '../lib/supabase'
 import type { WorkspaceUser } from '../lib/supabase'
 import type { UserStoryComment } from '../lib/supabase'
+import type { User } from '@supabase/supabase-js'
 
 // Helper function to get status colors
 const getStatusColor = (status: string) => {
@@ -49,6 +49,7 @@ interface UserStoryDetailProps {
   availableUsers: WorkspaceUser[]
   initialSelectedRoleIds: string[]
   userStoryComments: UserStoryComment[]
+  currentUser: User | null
   onCreateTask?: (name: string, description: string, status: string, assignedToUserId?: string, userStoryId?: string) => Promise<void>
   onUpdateTask?: (taskId: string, updates: { name?: string; description?: string; status?: string; user_story_id?: string }) => Promise<void>
   onDeleteTask?: (taskId: string) => Promise<void>
@@ -71,6 +72,7 @@ export function UserStoryDetail({
   availableUsers,
   initialSelectedRoleIds,
   userStoryComments,
+  currentUser,
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
@@ -123,8 +125,8 @@ export function UserStoryDetail({
 
   const loadAssignedUser = () => {
     if (userStory.assigned_to_user_id) {
-      const user = availableUsers.find(u => u.user_id === userStory.assigned_to_user_id)
-      setAssignedUser(user || null)
+      const assignedUser = availableUsers.find(u => u.user_id === userStory.assigned_to_user_id)
+      setAssignedUser(assignedUser || null)
     } else {
       setAssignedUser(null)
     }
@@ -231,7 +233,7 @@ export function UserStoryDetail({
     setSaving(true)
     
     try {
-      const updates = { assigned_to_user_id: user.user_id }
+      const updates = { assigned_to_user_id: user.user_id || undefined }
       onUpdate(userStory.id, updates, storyRoleIds)
       setAssignedUser(user)
     } catch (error) {
@@ -245,7 +247,7 @@ export function UserStoryDetail({
     setSaving(true)
     
     try {
-      const updates = { assigned_to_user_id: null }
+      const updates = { assigned_to_user_id: undefined }
       onUpdate(userStory.id, updates, storyRoleIds)
       setAssignedUser(null)
     } catch (error) {
@@ -255,10 +257,12 @@ export function UserStoryDetail({
     }
   }
 
-  const handleUpdateDecision = async (decisionTexts: string[]) => {
+  const handleUpdateDecision = async (decisionText: string) => {
     setSavingDecision(true)
     try {
-      const updates = { decision_text: decisionTexts }
+      const currentDecisions = userStory.decision_text || []
+      const updatedDecisions = [...currentDecisions, decisionText]
+      const updates = { decision_text: updatedDecisions }
       onUpdate(userStory.id, updates, storyRoleIds)
     } catch (error) {
       console.error('Error updating decision:', error)
@@ -268,10 +272,41 @@ export function UserStoryDetail({
     }
   }
 
+  const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
+    setSavingDecision(true)
+    try {
+      const currentDecisions = userStory.decision_text || []
+      const updatedDecisions = [...currentDecisions]
+      updatedDecisions[decisionIndex] = decisionText
+      const updates = { decision_text: updatedDecisions }
+      onUpdate(userStory.id, updates, storyRoleIds)
+    } catch (error) {
+      console.error('Error editing decision:', error)
+      throw error
+    } finally {
+      setSavingDecision(false)
+    }
+  }
+
+  const handleDeleteDecision = async (decisionIndex: number) => {
+    setSavingDecision(true)
+    try {
+      const currentDecisions = userStory.decision_text || []
+      const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+      const updates = { decision_text: updatedDecisions }
+      onUpdate(userStory.id, updates, storyRoleIds)
+    } catch (error) {
+      console.error('Error deleting decision:', error)
+      throw error
+    } finally {
+      setSavingDecision(false)
+    }
+  }
+
 
   // Wrapper functions to include userStory.id
   const handleAddCommentWrapper = async (commentText: string) => {
-    await onAddComment(userStory.id, commentText)
+    await onAddComment(commentText)
   }
 
   const handleEditCommentWrapper = async (commentId: string, commentText: string) => {
@@ -484,12 +519,6 @@ export function UserStoryDetail({
             )}
           </div>
 
-          <DecisionSection
-            entity={userStory}
-            onSave={handleUpdateDecision}
-            saving={savingDecision}
-          />
-
           <AssignUserCard
             availableUsers={availableUsers}
             selectedUser={assignedUser}
@@ -527,28 +556,32 @@ export function UserStoryDetail({
           
         </div>
 
-        {/* Comments Column */}
-        <CommentsSection
+        {/* History Column */}
+        <HistorySection
           entityId={userStory.id}
           entityType="user story"
           comments={userStoryComments}
-          user={user}
+          decisions={userStory.decision_text || []}
+          user={currentUser}
           allUsers={availableUsers}
-          showComments={showComments}
+          showHistory={showComments}
           onAddComment={handleAddCommentWrapper}
           onEditComment={handleEditCommentWrapper}
           onDeleteComment={handleDeleteCommentWrapper}
-          saving={propSaving}
+          onAddDecision={handleUpdateDecision}
+          onEditDecision={handleEditDecision}
+          onDeleteDecision={handleDeleteDecision}
+          saving={propSaving || savingDecision}
         />
       </div>
 
-      {/* Toggle Comments Button */}
+      {/* Toggle History Button */}
       <button
         onClick={() => setShowComments(!showComments)}
         className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
           showComments ? 'right-[384px]' : 'right-0'
         }`}
-        title={showComments ? 'Hide comments' : 'Show comments'}
+        title={showComments ? 'Hide history' : 'Show history'}
       >
         {showComments ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
       </button>
