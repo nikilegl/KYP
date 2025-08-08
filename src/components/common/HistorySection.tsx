@@ -364,9 +364,6 @@ export function HistorySection({
       </div>
     )
   }
-            
-    )
-  }
 
   return (
     <div className={`flex-shrink-0 h-full transition-all duration-300 ease-in-out border-l border-gray-200 bg-white ${
