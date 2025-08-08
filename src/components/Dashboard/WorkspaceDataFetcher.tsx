@@ -114,7 +114,6 @@ export function WorkspaceDataFetcher({
   const [selectedNoteTemplate, setSelectedNoteTemplate] = useState<NoteTemplate | null>(null)
   const [selectedDesignForProject, setSelectedDesignForProject] = useState<Design | null>(null)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null)
-  const [initialProjectView, setInitialProjectView] = useState<string>('dashboard')
   
   // Data states
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -266,36 +265,7 @@ export function WorkspaceDataFetcher({
         const project = await getProjectByShortId(shortId)
         if (project) {
           setSelectedProject(project)
-          
-          // Determine the specific section from the pathname
-          const pathSegments = pathname.split('/')
-          const section = pathSegments[3] // /project/:shortId/section
-          
-          if (section) {
-            // Map URL sections to view IDs
-            const sectionToViewMap: Record<string, string> = {
-              'user-stories': 'user-stories',
-              'notes': 'notes',
-              'designs': 'designs',
-              'user-flows': 'user-flows',
-              'problem-overview': 'problem-overview',
-              'stakeholders': 'stakeholders',
-              'project-tasks': 'project-tasks',
-              'project-progress': 'project-progress',
-              'prompt-builder': 'prompt-builder'
-            }
-            
-            const viewId = sectionToViewMap[section]
-            if (viewId) {
-              setCurrentView('project-dashboard')
-              // Store the target section to be handled by ProjectViewRenderer
-              setInitialProjectView(viewId)
-            } else {
-              setCurrentView('project-dashboard')
-            }
-          } else {
-            setCurrentView('project-dashboard')
-          }
+          setCurrentView('project-dashboard')
         } else {
           navigate('/')
         }
@@ -973,7 +943,6 @@ export function WorkspaceDataFetcher({
       selectedNoteTemplate={selectedNoteTemplate}
       selectedDesignForProject={selectedDesignForProject}
       selectedDesign={selectedDesign}
-      initialProjectView={initialProjectView}
       allProjectProgressStatus={allProjectProgressStatus}
       allUserStories={allUserStories}
       allUserJourneys={allUserJourneys}
