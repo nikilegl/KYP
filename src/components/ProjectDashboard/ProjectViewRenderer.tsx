@@ -128,7 +128,7 @@ interface ProjectViewRendererProps {
     themeIds?: string[]
     status?: string
   }) => Promise<void>
-  onUpdateUserStory: (updatedStory: UserStory, updatedRoleIds?: string[]) => Promise<void>
+  onUpdateUserStory: (storyId: string, updates: Partial<UserStory>, updatedRoleIds?: string[]) => Promise<void>
   onDeleteUserStory: (storyId: string) => Promise<void>
   onStoriesReordered: () => Promise<void>
   onCreateTask: (name: string, description: string, status: string, assignedToUserId?: string, userStoryId?: string) => Promise<void>
@@ -362,21 +362,25 @@ export function ProjectViewRenderer({
           availableUsers={workspaceUsers}
           initialSelectedRoleIds={selectedUserStoryRoles}
           userStoryComments={userStoryComments}
-          userStoryComments={userStoryComments}
+          currentUser={user}
           onBack={() => {
             setSelectedUserStory(null)
             setSelectedUserStoryRoles([])
             setCurrentView('user-stories')
           }}
-          onUpdate={(updatedStory, updatedRoleIds) => {
-            // Update the central state
-            onUpdateUserStory(updatedStory, updatedRoleIds)
+          onUpdate={(storyId, updates, updatedRoleIds) => {
+            // Call onUpdateUserStory with the correct signature
+            onUpdateUserStory(storyId, updates, updatedRoleIds || [])
             // Update the selected user story for immediate visual consistency
-            setSelectedUserStory(updatedStory)
-            setSelectedUserStoryRoles(updatedRoleIds)
+            const currentStory = userStories.find(s => s.id === storyId)
+            if (currentStory) {
+              const updatedStory = { ...currentStory, ...updates }
+              setSelectedUserStory(updatedStory)
+              setSelectedUserStoryRoles(updatedRoleIds || [])
+            }
           }}
           onThemeCreate={onThemeCreate}
-          onAddComment={onAddUserStoryComment}
+          onAddComment={(commentText) => onAddUserStoryComment(selectedUserStory!.id, commentText)}
           onEditComment={onEditUserStoryComment}
           onDeleteComment={onDeleteUserStoryComment}
           onCreateTask={onCreateTask}
