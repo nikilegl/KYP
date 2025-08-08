@@ -61,7 +61,6 @@ interface ProjectViewRendererProps {
   initialSelectedUserJourney?: UserJourney | null
   initialUserStoryRoleIds?: string[]
   initialSelectedDesign?: Design | null
-  initialProjectView?: string
   workspaceUsers: WorkspaceUser[]
   user: User | null
   userStoryComments: UserStoryComment[]
@@ -145,7 +144,6 @@ export function ProjectViewRenderer({
   initialSelectedUserJourney = null,
   initialUserStoryRoleIds = [],
   initialSelectedDesign = null,
-  initialProjectView = 'dashboard',
   workspaceUsers,
   user,
   userStoryComments,
@@ -195,7 +193,6 @@ export function ProjectViewRenderer({
   const mainContentRef = useRef<HTMLElement>(null)
   
   const [currentView, setCurrentView] = useState(() => {
-    if (initialProjectView && initialProjectView !== 'dashboard') return initialProjectView
     if (initialView !== 'dashboard') return initialView
     if (initialSelectedNote) return 'note-detail'
     if (initialSelectedUserStory) return 'user-story-detail'
@@ -243,25 +240,6 @@ export function ProjectViewRenderer({
     
     // Set the new current view
     setCurrentView(viewId)
-    
-    // Update the URL for project sections
-    const sectionToUrlMap: Record<string, string> = {
-      'dashboard': `/project/${project.short_id}`,
-      'user-stories': `/project/${project.short_id}/user-stories`,
-      'notes': `/project/${project.short_id}/notes`,
-      'designs': `/project/${project.short_id}/designs`,
-      'user-flows': `/project/${project.short_id}/user-flows`,
-      'problem-overview': `/project/${project.short_id}/problem-overview`,
-      'stakeholders': `/project/${project.short_id}/stakeholders`,
-      'project-tasks': `/project/${project.short_id}/project-tasks`,
-      'project-progress': `/project/${project.short_id}/project-progress`,
-      'prompt-builder': `/project/${project.short_id}/prompt-builder`
-    }
-    
-    const newUrl = sectionToUrlMap[viewId]
-    if (newUrl) {
-      navigate(newUrl)
-    }
   }
 
   const handleRefreshProjectStakeholders = async () => {

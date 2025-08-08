@@ -12,6 +12,11 @@ import {
   DragOverEvent,
   useDroppable
 } from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove
+} from '@dnd-kit/sortable'
 import { PriorityTag, getPriorityTagStyles } from '../utils/priorityTagStyles.tsx'
 import { UserRoleTag } from './common/UserRoleTag'
 import { UserStoryCard } from './UserStoryCard'
@@ -128,8 +133,8 @@ function DroppableColumn({ id, children, isHovered, className = '' }: DroppableC
       ref={setNodeRef}
       className={`${className} transition-all duration-200 ${
         isHovered 
-          ? 'border-blue-400 bg-blue-50 shadow-lg pointer-events-auto' 
-          : 'border-gray-200 bg-gray-50 pointer-events-none'
+          ? 'border-blue-400 bg-blue-50 shadow-lg' 
+          : 'border-gray-200 bg-gray-50'
       }`}
     >
       {children}
@@ -316,6 +321,7 @@ export function UserStoriesSection({
     // Determine what type of drop this is
     const isStatusColumnDrop = organizationType === 'status' && STATUS_COLUMNS.some(col => col.id === overId)
     const isPriorityColumnDrop = organizationType === 'priority' && PRIORITY_COLUMNS.some(col => col.id === overId)
+    const isStoryDrop = localUserStories.some(s => s.id === overId)
     
     let updatedStory = { ...activeStory }
     let needsPropertyUpdate = false
@@ -339,50 +345,98 @@ export function UserStoriesSection({
       }
     }
     
-    if (!needsPropertyUpdate) return
-    
     // Create the new array with optimistic updates
     let newLocalStories = localUserStories.map(story => 
       story.id === activeId ? updatedStory : story
     )
     
-    // Sort the array to group properly after the change
-    if (organizationType === 'status') {
-      newLocalStories.sort((a, b) => {
-        const aColumnIndex = STATUS_COLUMNS.findIndex(col => col.statuses.includes(a.status || 'Not planned'))
-        const bColumnIndex = STATUS_COLUMNS.findIndex(col => col.statuses.includes(b.status || 'Not planned'))
-        
-        if (aColumnIndex !== bColumnIndex) {
-          return aColumnIndex - bColumnIndex
-        }
-        
-        return (a.weighting || 0) - (b.weighting || 0)
-      })
-    } else if (organizationType === 'priority') {
-      newLocalStories.sort((a, b) => {
-        const aPriorityOrder = getPriorityOrder(a.priority_rating)
-        const bPriorityOrder = getPriorityOrder(b.priority_rating)
-        
-        if (aPriorityOrder !== bPriorityOrder) {
-          return aPriorityOrder - bPriorityOrder
-        }
-        
-        return (a.weighting || 0) - (b.weighting || 0)
-      })
+    // Handle reordering
+    if (isStoryDrop) {
+      // Reordering within the same group or across groups
+      const oldIndex = newLocalStories.findIndex(s => s.id === activeId)
+      const newIndex = newLocalStories.findIndex(s => s.id === overId)
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        newLocalStories = arrayMove(newLocalStories, oldIndex, newIndex)
+      }
+    } else if (needsPropertyUpdate) {
+      // For column drops, sort the array to group properly
+      if (organizationType === 'status') {
+        newLocalStories.sort((a, b) => {
+          const aColumnIndex = STATUS_COLUMNS.findIndex(col => col.statuses.includes(a.status || 'Not planned'))
+          const bColumnIndex = STATUS_COLUMNS.findIndex(col => col.statuses.includes(b.status || 'Not planned'))
+          
+          if (aColumnIndex !== bColumnIndex) {
+            return aColumnIndex - bColumnIndex
+          }
+          
+          return (a.weighting || 0) - (b.weighting || 0)
+        })
+      } else if (organizationType === 'priority') {
+        newLocalStories.sort((a, b) => {
+          const aPriorityOrder = getPriorityOrder(a.priority_rating)
+          const bPriorityOrder = getPriorityOrder(b.priority_rating)
+          
+          if (aPriorityOrder !== bPriorityOrder) {
+            return aPriorityOrder - bPriorityOrder
+          }
+          
+          return (a.weighting || 0) - (b.weighting || 0)
+        })
+      }
     }
     
     // Apply optimistic update immediately
     setLocalUserStories(newLocalStories)
     
+    // Calculate new weightings based on the visual order
+    const orderedStories = newLocalStories.map((story, index) => ({
+      id: story.id,
+      weighting: index + 1
+    }))
+    
     // Perform database updates asynchronously
     try {
-      // Update story properties
-      await onUpdateUserStory(activeStory.id, propertyUpdates, [])
+      // Update story properties if needed
+      if (needsPropertyUpdate) {
+        await onUpdateUserStory(activeStory.id, propertyUpdates, [])
+      }
+      
+      // Update weighting for all stories
+      const { updateUserStoryOrders } = await import('../lib/database')
+      await updateUserStoryOrders(orderedStories)
       
     } catch (error) {
       console.error('Error updating story order:', error)
       // Revert to original state on error
       setLocalUserStories(originalStories)
+    }
+  }
+
+  const handleReorderWithinColumn = async (activeId: string, overId: string) => {
+    const oldIndex = localUserStories.findIndex(s => s.id === activeId)
+    const newIndex = localUserStories.findIndex(s => s.id === overId)
+    
+    if (oldIndex === newIndex) return
+    
+    const reorderedStories = arrayMove(localUserStories, oldIndex, newIndex)
+    
+    try {
+      // Update weightings in database
+      const orderedStories = reorderedStories.map((story, index) => ({
+        id: story.id,
+        weighting: index + 1
+      }))
+      
+      const { updateUserStoryOrders } = await import('../lib/database')
+      await updateUserStoryOrders(orderedStories)
+      
+      // Re-fetch all stories to ensure UI reflects database state
+      if (onStoriesReordered) {
+        await onStoriesReordered()
+      }
+    } catch (error) {
+      console.error('Error updating story order:', error)
     }
   }
 
@@ -477,22 +531,24 @@ export function UserStoriesSection({
       {/* User Stories Display */}
       {organizationType === 'all' ? (
         /* All Stories - Original Grid Layout */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedUserStories.map((story) => (
-            <UserStoryCard
-              key={story.id}
-              story={story}
-              storyRoles={storyRoles}
-              userRoles={userRoles}
-              userPermissions={userPermissions}
-              availableUsers={availableUsers}
-              onUpdate={handleUpdateUserStory}
-              onDelete={onDeleteUserStory}
-              onSelect={onSelectUserStory}
-              showDeleteButton={true}
-            />
-          ))}
-        </div>
+        <SortableContext items={sortedUserStories.map(s => s.id)} strategy={verticalListSortingStrategy}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedUserStories.map((story) => (
+              <UserStoryCard
+                key={story.id}
+                story={story}
+                storyRoles={storyRoles}
+                userRoles={userRoles}
+                userPermissions={userPermissions}
+                availableUsers={availableUsers}
+                onUpdate={handleUpdateUserStory}
+                onDelete={onDeleteUserStory}
+                onSelect={onSelectUserStory}
+                showDeleteButton={true}
+              />
+            ))}
+          </div>
+        </SortableContext>
       ) : organizationType === 'status' ? (
         /* Status Columns Layout */
         <div className="flex gap-6 overflow-x-auto pb-4">
@@ -506,32 +562,34 @@ export function UserStoriesSection({
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-4">{column.title} ({columnStories.length})</h3>
                   
-                  <DroppableColumn 
-                    id={column.id}
-                    isHovered={isHovered}
-                    className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed p-4"
-                  >
-                    {columnStories.map((story) => (
-                      <UserStoryCard
-                        key={story.id}
-                        story={story}
-                        storyRoles={storyRoles}
-                        userRoles={userRoles}
-                        userPermissions={userPermissions}
-                        availableUsers={availableUsers}
-                        onUpdate={handleUpdateUserStory}
-                        onDelete={onDeleteUserStory}
-                        onSelect={onSelectUserStory}
-                        showDeleteButton={true}
-                      />
-                    ))}
-                  {columnStories.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <BookOpen size={32} className="mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No stories</p>
-                    </div>
-                  )}
-                  </DroppableColumn>
+                  <SortableContext items={[column.id, ...columnStories.map(s => s.id)]} strategy={verticalListSortingStrategy}>
+                    <DroppableColumn 
+                      id={column.id}
+                      isHovered={isHovered}
+                      className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed p-4"
+                    >
+                      {columnStories.map((story) => (
+                        <UserStoryCard
+                          key={story.id}
+                          story={story}
+                          storyRoles={storyRoles}
+                          userRoles={userRoles}
+                          userPermissions={userPermissions}
+                          availableUsers={availableUsers}
+                          onUpdate={handleUpdateUserStory}
+                          onDelete={onDeleteUserStory}
+                          onSelect={onSelectUserStory}
+                          showDeleteButton={true}
+                        />
+                      ))}
+                    {columnStories.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <BookOpen size={32} className="mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No stories</p>
+                      </div>
+                    )}
+                    </DroppableColumn>
+                  </SortableContext>
                 </div>
               </div>
             )
@@ -557,32 +615,34 @@ export function UserStoriesSection({
                     <h3 className="font-semibold text-gray-900">{column.title} ({columnStories.length})</h3>
                   </div>
                   
-                  <DroppableColumn 
-                    id={column.id}
-                    isHovered={isHovered}
-                    className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed p-4"
-                  >
-                    {columnStories.map((story) => (
-                      <UserStoryCard
-                        key={story.id}
-                        story={story}
-                        storyRoles={storyRoles}
-                        userRoles={userRoles}
-                        userPermissions={userPermissions}
-                        availableUsers={availableUsers}
-                        onUpdate={handleUpdateUserStory}
-                        onDelete={onDeleteUserStory}
-                        onSelect={onSelectUserStory}
-                        showDeleteButton={true}
-                      />
-                    ))}
-                  {columnStories.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <BookOpen size={32} className="mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No stories</p>
-                    </div>
-                  )}
-                  </DroppableColumn>
+                  <SortableContext items={[column.id, ...columnStories.map(s => s.id)]} strategy={verticalListSortingStrategy}>
+                    <DroppableColumn 
+                      id={column.id}
+                      isHovered={isHovered}
+                      className="space-y-4 min-h-[200px] rounded-lg border-2 border-dashed p-4"
+                    >
+                      {columnStories.map((story) => (
+                        <UserStoryCard
+                          key={story.id}
+                          story={story}
+                          storyRoles={storyRoles}
+                          userRoles={userRoles}
+                          userPermissions={userPermissions}
+                          availableUsers={availableUsers}
+                          onUpdate={handleUpdateUserStory}
+                          onDelete={onDeleteUserStory}
+                          onSelect={onSelectUserStory}
+                          showDeleteButton={true}
+                        />
+                      ))}
+                    {columnStories.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <BookOpen size={32} className="mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No stories</p>
+                      </div>
+                    )}
+                    </DroppableColumn>
+                  </SortableContext>
                 </div>
               </div>
             )
