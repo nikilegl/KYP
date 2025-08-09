@@ -261,7 +261,9 @@ export function UserStoryDetail({
     setSavingDecision(true)
     try {
       const currentDecisions = userStory.decision_text || []
-      const updatedDecisions = [...currentDecisions, decisionText]
+      // Create a decision object with timestamp instead of just storing the text
+      const newDecisionWithTimestamp = `${new Date().toISOString()}|${decisionText}`
+      const updatedDecisions = [...currentDecisions, newDecisionWithTimestamp]
       const updates = { decision_text: updatedDecisions }
       onUpdate(userStory.id, updates, storyRoleIds)
     } catch (error) {
@@ -277,7 +279,14 @@ export function UserStoryDetail({
     try {
       const currentDecisions = userStory.decision_text || []
       const updatedDecisions = [...currentDecisions]
-      updatedDecisions[decisionIndex] = decisionText
+      
+      // Extract the original timestamp if it exists, otherwise use current time
+      const originalDecision = updatedDecisions[decisionIndex]
+      const timestampMatch = originalDecision?.match(/^(.+?)\|(.+)$/)
+      const originalTimestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
+      
+      // Preserve the original timestamp but update the text
+      updatedDecisions[decisionIndex] = `${originalTimestamp}|${decisionText}`
       const updates = { decision_text: updatedDecisions }
       onUpdate(userStory.id, updates, storyRoleIds)
     } catch (error) {
