@@ -95,7 +95,7 @@ export function UserStoryDetail({
   const [showEditDetailsModal, setShowEditDetailsModal] = useState(false)
   const [userStoryThemes, setUserStoryThemes] = useState<Theme[]>([])
   const [assignedUser, setAssignedUser] = useState<WorkspaceUser | null>(null)
-  const [showComments, setShowComments] = useState(false)
+  const [showComments, setShowComments] = useState(true)
   const [userStoryTasks, setUserStoryTasks] = useState<Task[]>([])
   const [savingDecision, setSavingDecision] = useState(false)
 

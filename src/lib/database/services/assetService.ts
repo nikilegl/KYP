@@ -1,13 +1,13 @@
 import { supabase, isSupabaseConfigured } from '../../supabase'
-import type { Asset, AssetComment } from '../../supabase'
+import type { Design, DesignComment } from '../../supabase'
 
-export const getAssets = async (projectId?: string): Promise<Asset[]> => {
+export const getAssets = async (projectId?: string): Promise<Design[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_assets')
       const assets = stored ? JSON.parse(stored) : []
-      return projectId ? assets.filter((asset: Asset) => asset.project_id === projectId) : assets
+      return projectId ? assets.filter((asset: Design) => asset.project_id === projectId) : assets
     } catch {
       return []
     }
@@ -33,7 +33,7 @@ export const getAssets = async (projectId?: string): Promise<Asset[]> => {
     try {
       const stored = localStorage.getItem('kyp_assets')
       const assets = stored ? JSON.parse(stored) : []
-      return projectId ? assets.filter((asset: Asset) => asset.project_id === projectId) : assets
+      return projectId ? assets.filter((asset: Design) => asset.project_id === projectId) : assets
     } catch {
       return []
     }
@@ -48,13 +48,13 @@ export const createAsset = async (
   linkUrl?: string,
   userStoryIds: string[] = [],
   researchNoteIds: string[] = []
-): Promise<Asset | null> => {
+): Promise<Design | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const assets = JSON.parse(localStorage.getItem('kyp_assets') || '[]')
-      const nextShortId = Math.max(0, ...assets.map((a: Asset) => a.short_id || 0)) + 1;
-      const newAsset: Asset = {
+      const nextShortId = Math.max(0, ...assets.map((a: Design) => a.short_id || 0)) + 1;
+      const newAsset: Design = {
         id: `asset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         project_id: projectId,
         name,
@@ -157,15 +157,16 @@ export const updateAsset = async (
     snapshot_image_url?: string
     description?: string
     link_url?: string
+    decision_text?: string[]
   },
   userStoryIds?: string[],
   researchNoteIds?: string[]
-): Promise<Asset | null> => {
+): Promise<Design | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const assets = JSON.parse(localStorage.getItem('kyp_assets') || '[]')
-      const updatedAssets = assets.map((asset: Asset) => 
+      const updatedAssets = assets.map((asset: Design) => 
         asset.id === assetId 
           ? { ...asset, ...updates, updated_at: new Date().toISOString() }
           : asset
@@ -206,7 +207,7 @@ export const updateAsset = async (
         localStorage.setItem('kyp_asset_research_notes', JSON.stringify(filteredResearchNotes))
       }
       
-      const updatedAsset = updatedAssets.find((a: Asset) => a.id === assetId)
+      const updatedAsset = updatedAssets.find((a: Design) => a.id === assetId)
       return updatedAsset || null
     } catch (error) {
       console.error('Error updating asset locally:', error)
@@ -278,7 +279,7 @@ export const deleteAsset = async (assetId: string): Promise<boolean> => {
     // Local storage fallback
     try {
       const assets = JSON.parse(localStorage.getItem('kyp_assets') || '[]')
-      const filteredAssets = assets.filter((asset: Asset) => asset.id !== assetId)
+      const filteredAssets = assets.filter((asset: Design) => asset.id !== assetId)
       localStorage.setItem('kyp_assets', JSON.stringify(filteredAssets))
       return true
     } catch (error) {
@@ -301,7 +302,7 @@ export const deleteAsset = async (assetId: string): Promise<boolean> => {
   }
 }
 
-export const getAssetsForUserStory = async (userStoryId: string): Promise<Asset[]> => {
+export const getAssetsForUserStory = async (userStoryId: string): Promise<Design[]> => {
   if (!userStoryId) {
     return []
   }
@@ -316,7 +317,7 @@ export const getAssetsForUserStory = async (userStoryId: string): Promise<Asset[
         .filter((aus: any) => aus.user_story_id === userStoryId)
         .map((aus: any) => aus.asset_id)
       
-      return assets.filter((asset: Asset) => assetIds.includes(asset.id))
+      return assets.filter((asset: Design) => assetIds.includes(asset.id))
     } catch (error) {
       console.error('Error getting assets for user story locally:', error)
       return []
@@ -349,7 +350,7 @@ export const getAssetsForUserStory = async (userStoryId: string): Promise<Asset[
   }
 }
 
-export const getAssetsForResearchNote = async (researchNoteId: string): Promise<Asset[]> => {
+export const getAssetsForResearchNote = async (researchNoteId: string): Promise<Design[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
@@ -360,7 +361,7 @@ export const getAssetsForResearchNote = async (researchNoteId: string): Promise<
         .filter((arn: any) => arn.research_note_id === researchNoteId)
         .map((arn: any) => arn.asset_id)
       
-      return assets.filter((asset: Asset) => assetIds.includes(asset.id))
+      return assets.filter((asset: Design) => assetIds.includes(asset.id))
     } catch (error) {
       console.error('Error getting assets for research note locally:', error)
       return []
@@ -447,7 +448,7 @@ export const getResearchNotesForAsset = async (assetId: string): Promise<string[
   }
 }
 
-export const getAssetsByThemeId = async (themeId: string): Promise<Asset[]> => {
+export const getAssetsByThemeId = async (themeId: string): Promise<Design[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
@@ -458,7 +459,7 @@ export const getAssetsByThemeId = async (themeId: string): Promise<Asset[]> => {
         .filter((ta: any) => ta.theme_id === themeId)
         .map((ta: any) => ta.asset_id)
       
-      return assets.filter((asset: Asset) => assetIds.includes(asset.id))
+      return assets.filter((asset: Design) => assetIds.includes(asset.id))
     } catch (error) {
       console.error('Error getting assets by theme ID locally:', error)
       return []
@@ -492,13 +493,13 @@ export const getAssetsByThemeId = async (themeId: string): Promise<Asset[]> => {
   }
 }
 
-export const getAssetByShortId = async (shortId: number): Promise<Asset | null> => {
+export const getAssetByShortId = async (shortId: number): Promise<Design | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_assets')
       const assets = stored ? JSON.parse(stored) : []
-      return assets.find((asset: Asset) => asset.short_id === shortId) || null
+      return assets.find((asset: Design) => asset.short_id === shortId) || null
     } catch {
       return null
     }
@@ -520,13 +521,13 @@ export const getAssetByShortId = async (shortId: number): Promise<Asset | null> 
 }
 
 // Asset Comments
-export const getAssetComments = async (assetId: string): Promise<AssetComment[]> => {
+export const getAssetComments = async (assetId: string): Promise<DesignComment[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_asset_comments')
       const comments = stored ? JSON.parse(stored) : []
-      return comments.filter((comment: AssetComment) => comment.asset_id === assetId)
+      return comments.filter((comment: DesignComment) => comment.design_id === assetId)
     } catch {
       return []
     }
@@ -551,14 +552,14 @@ export const createAssetComment = async (
   assetId: string,
   commentText: string,
   userId: string
-): Promise<AssetComment | null> => {
+): Promise<DesignComment | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const comments = JSON.parse(localStorage.getItem('kyp_asset_comments') || '[]')
-      const newComment: AssetComment = {
+      const newComment: DesignComment = {
         id: `ac-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        asset_id: assetId,
+        design_id: assetId,
         user_id: userId,
         comment_text: commentText,
         created_at: new Date().toISOString(),
@@ -596,19 +597,19 @@ export const createAssetComment = async (
 export const updateAssetComment = async (
   commentId: string,
   commentText: string
-): Promise<AssetComment | null> => {
+): Promise<DesignComment | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const comments = JSON.parse(localStorage.getItem('kyp_asset_comments') || '[]')
-      const updatedComments = comments.map((comment: AssetComment) => 
+      const updatedComments = comments.map((comment: DesignComment) => 
         comment.id === commentId 
           ? { ...comment, comment_text: commentText, updated_at: new Date().toISOString() }
           : comment
       )
       localStorage.setItem('kyp_asset_comments', JSON.stringify(updatedComments))
       
-      const updatedComment = updatedComments.find((c: AssetComment) => c.id === commentId)
+      const updatedComment = updatedComments.find((c: DesignComment) => c.id === commentId)
       return updatedComment || null
     } catch (error) {
       console.error('Error updating asset comment locally:', error)
@@ -637,7 +638,7 @@ export const deleteAssetComment = async (commentId: string): Promise<boolean> =>
     // Local storage fallback
     try {
       const comments = JSON.parse(localStorage.getItem('kyp_asset_comments') || '[]')
-      const filteredComments = comments.filter((comment: AssetComment) => comment.id !== commentId)
+      const filteredComments = comments.filter((comment: DesignComment) => comment.id !== commentId)
       localStorage.setItem('kyp_asset_comments', JSON.stringify(filteredComments))
       return true
     } catch (error) {
