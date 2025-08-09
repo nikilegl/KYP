@@ -277,6 +277,7 @@ export interface Design {
   short_id?: number
   created_at: string
   updated_at: string
+  decision_text?: string[]
 }
 
 export interface DesignUserStory {

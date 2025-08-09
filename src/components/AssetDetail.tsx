@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { CopyLinkButton } from './common/CopyLinkButton'
 import { TagThemeCard } from './common/TagThemeCard'
 import { EditDesignModal } from './DesignsSection/EditDesignModal'
-import { CommentsSection } from './common/CommentsSection'
+import { HistorySection } from './common/HistorySection'
 import { DesignLinkedContentSection } from './DesignDetail/DesignLinkedContentSection'
 import { DesignPreviewSection } from './DesignDetail/DesignPreviewSection'
 import { DesignLightbox } from './DesignDetail/DesignLightbox'
@@ -46,6 +46,7 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
   const [saving, setSaving] = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
   const [showComments, setShowComments] = useState(true)
+  const [savingDecision, setSavingDecision] = useState(false)
 
   useEffect(() => {
     loadDesignData()
@@ -180,6 +181,86 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
     }
   }
 
+  const handleUpdateDecision = async (decisionText: string) => {
+    if (!design) return
+    
+    setSavingDecision(true)
+    try {
+      const currentDecisions = design.decision_text || []
+      // Create a decision with timestamp like in UserStoryDetail
+      const newDecisionWithTimestamp = `${new Date().toISOString()}|${decisionText}`
+      const updatedDecisions = [...currentDecisions, newDecisionWithTimestamp]
+      
+      // Update the design with new decision
+      const updatedDesign = await updateDesign(design.id, {
+        decision_text: updatedDecisions
+      }, [], [])
+      
+      if (updatedDesign) {
+        setDesign(updatedDesign)
+      }
+    } catch (error) {
+      console.error('Error updating decision:', error)
+      throw error
+    } finally {
+      setSavingDecision(false)
+    }
+  }
+
+  const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
+    if (!design) return
+    
+    setSavingDecision(true)
+    try {
+      const currentDecisions = design.decision_text || []
+      const updatedDecisions = [...currentDecisions]
+      
+      // Extract the original timestamp if it exists, otherwise use current time
+      const originalDecision = updatedDecisions[decisionIndex]
+      const timestampMatch = originalDecision?.match(/^(.+?)\|(.+)$/)
+      const originalTimestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
+      
+      // Preserve the original timestamp but update the text
+      updatedDecisions[decisionIndex] = `${originalTimestamp}|${decisionText}`
+      
+      const updatedDesign = await updateDesign(design.id, {
+        decision_text: updatedDecisions
+      }, [], [])
+      
+      if (updatedDesign) {
+        setDesign(updatedDesign)
+      }
+    } catch (error) {
+      console.error('Error editing decision:', error)
+      throw error
+    } finally {
+      setSavingDecision(false)
+    }
+  }
+
+  const handleDeleteDecision = async (decisionIndex: number) => {
+    if (!design) return
+    
+    setSavingDecision(true)
+    try {
+      const currentDecisions = design.decision_text || []
+      const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+      
+      const updatedDesign = await updateDesign(design.id, {
+        decision_text: updatedDecisions
+      }, [], [])
+      
+      if (updatedDesign) {
+        setDesign(updatedDesign)
+      }
+    } catch (error) {
+      console.error('Error deleting decision:', error)
+      throw error
+    } finally {
+      setSavingDecision(false)
+    }
+  }
+
   const handleThemeAdd = async (theme: Theme) => {
     if (!design) return
     
@@ -303,18 +384,23 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
           />
         </div>
 
-        {/* Comments Column */}
-        <CommentsSection
+        {/* History Column */}
+        <HistorySection
           entityId={design.id}
           entityType="design"
           comments={comments}
+          decisions={design.decision_text || []}
+          auditHistory={[]} // No audit history for designs yet
           user={user}
           allUsers={availableUsers}
-          showComments={showComments}
+          showHistory={showComments}
           onAddComment={handleAddComment}
           onEditComment={handleEditComment}
           onDeleteComment={handleDeleteComment}
-          saving={saving}
+          onAddDecision={handleUpdateDecision}
+          onEditDecision={handleEditDecision}
+          onDeleteDecision={handleDeleteDecision}
+          saving={saving || savingDecision}
         />
       </div>
 
@@ -324,7 +410,7 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
         className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
           showComments ? 'right-[384px]' : 'right-0'
         }`}
-        title={showComments ? 'Hide comments' : 'Show comments'}
+        title={showComments ? 'Hide history' : 'Show history'}
       >
         {showComments ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
       </button>
