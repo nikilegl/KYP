@@ -151,11 +151,11 @@ export function HistorySection({
     }
   }
 
-  // Create a more sophisticated approach to interleave decisions with comments
-  // Since decisions don't have timestamps, we'll treat them as if they were added in the order they appear in the array
-  // The last decision in the array is the most recent
-  
-  // First, create all history items without timestamps for decisions
+  // Simple approach: Create stable timestamps for decisions based on their array index
+  // Since decisions don't have real timestamps from the database, we'll create them
+  // New decisions get current timestamp, existing ones get stable calculated timestamps
+
+  // First, create all history items
   const auditItems = auditHistory.map(entry => ({
     id: entry.id,
     type: 'audit' as const,
@@ -166,16 +166,39 @@ export function HistorySection({
     sortOrder: new Date(entry.created_at).getTime()
   }))
 
-  const decisionItems = decisions.map((decision, index) => ({
-    id: `decision-${index}`,
-    type: 'decision' as const,
-    action: 'Decision recorded',
-    user_id: user?.id || 'system',
-    created_at: '', // Will be calculated below
-    details: decision,
-    decisionIndex: index, // Add the decision index for editing/deleting
-    sortOrder: Date.now() - ((decisions.length - 1 - index) * 30000) // Most recent decision gets highest timestamp
-  }))
+  // For decisions, parse timestamps from the decision strings (format: "timestamp|text")
+  // If no timestamp exists, use current time (for backwards compatibility)
+  const decisionItems = React.useMemo(() => {
+    return decisions.map((decision, index) => {
+      let decisionTimestamp: number
+      let decisionText: string
+      
+      // Check if decision has timestamp format: "2024-01-01T12:00:00.000Z|Decision text"
+      const timestampMatch = decision.match(/^(.+?)\|(.+)$/)
+      if (timestampMatch) {
+        // Decision has timestamp - use it
+        const [, timestampStr, text] = timestampMatch
+        decisionTimestamp = new Date(timestampStr).getTime()
+        decisionText = text
+      } else {
+        // Legacy decision without timestamp - create a stable one based on position
+        const minutesAgo = 1 + (decisions.length - 1 - index) * 5
+        decisionTimestamp = Date.now() - (minutesAgo * 60 * 1000)
+        decisionText = decision
+      }
+      
+      return {
+        id: `decision-${index}`,
+        type: 'decision' as const,
+        action: 'Decision recorded',
+        user_id: user?.id || 'system',
+        created_at: new Date(decisionTimestamp).toISOString(),
+        details: decisionText,
+        decisionIndex: index,
+        sortOrder: decisionTimestamp
+      }
+    })
+  }, [decisions, user?.id]) // Only recalculate when decisions array changes or user changes
 
   const commentItems = safeComments.map(comment => ({
     id: comment.id,
@@ -195,7 +218,7 @@ export function HistorySection({
       type: item.type,
       action: item.action,
       user_id: item.user_id,
-      created_at: item.created_at || new Date(item.sortOrder).toISOString(),
+      created_at: item.created_at,
       details: item.details,
       decisionIndex: (item as any).decisionIndex // Include decisionIndex for decision items
     }))
@@ -204,162 +227,134 @@ export function HistorySection({
     const { date, time } = formatDateTime(item.created_at)
     
     return (
-      <div key={item.id} className={`rounded-lg p-4 ${
-        item.type === 'decision' 
-          ? 'bg-green-50 border border-green-200' 
-          : 'border border-gray-200'
-      }`}>
-        <div className="flex items-start gap-3">
-          {/* Icon based on type */}
-          <div className="flex-shrink-0 mt-1">
+      <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+        {/* Header row with icon, action title, and Edit/Delete buttons */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            {/* Icon */}
             {item.type === 'audit' && <Clock className="w-4 h-4 text-blue-600" />}
             {item.type === 'decision' && <CheckCircle className="w-4 h-4 text-green-600" />}
             {item.type === 'comment' && <MessageSquare className="w-4 h-4 text-gray-600" />}
+            
+            {/* Action title */}
+            <h4 className="text-sm font-medium text-gray-900">{item.action}</h4>
           </div>
           
-          <div className="flex-1 min-w-0">
-            {item.type === 'decision' ? (
-              /* Decision layout */
-              <div>
-                {/* Header with title and action buttons */}
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-green-800">Decision</h4>
-                  {user && item.user_id === user.id && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditDecision(item.decisionIndex, item.details)}
-                        className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                        title="Edit decision"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDecision(item.decisionIndex)}
-                        className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
-                        title="Delete decision"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
+          {/* Edit/Delete buttons */}
+          {((item.type === 'comment' && user && item.user_id === user.id) || 
+            (item.type === 'decision' && user && item.user_id === user.id)) && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  if (item.type === 'comment') {
+                    setEditingCommentId(item.id)
+                    setEditingCommentText(item.details)
+                  } else if (item.type === 'decision') {
+                    handleEditDecision(item.decisionIndex, item.details)
+                  }
+                }}
+                className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
+                title={item.type === 'comment' ? 'Edit comment' : 'Edit decision'}
+              >
+                <Edit size={14} />
+              </button>
+              <button
+                onClick={() => {
+                  if (item.type === 'comment') {
+                    handleDeleteComment(item.id)
+                  } else if (item.type === 'decision') {
+                    handleDeleteDecision(item.decisionIndex)
+                  }
+                }}
+                className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                title={item.type === 'comment' ? 'Delete comment' : 'Delete decision'}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Content section */}
+        {item.details && (
+          <div className={`text-sm mb-3 ${
+            item.type === 'decision' 
+              ? 'text-green-800 bg-green-50 p-2 rounded border border-green-200' 
+              : 'text-gray-700'
+          }`}>
+            {item.type === 'decision' && editingDecisionIndex === item.decisionIndex ? (
+              // Editing mode for decisions
+              <div className="space-y-2">
+                <textarea
+                  value={editingDecisionText}
+                  onChange={(e) => setEditingDecisionText(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  placeholder="Edit decision..."
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveEditDecision}
+                    disabled={!editingDecisionText.trim()}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save size={12} />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingDecisionIndex(null)
+                      setEditingDecisionText('')
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                  >
+                    <X size={12} />
+                    Cancel
+                  </button>
                 </div>
-                
-                {/* Decision content */}
-                {editingDecisionIndex === item.decisionIndex ? (
-                  <div className="space-y-2">
-                    <textarea
-                      value={editingDecisionText}
-                      onChange={(e) => setEditingDecisionText(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      placeholder="Edit decision..."
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleSaveEditDecision}
-                        disabled={!editingDecisionText.trim()}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-                      >
-                        <Save size={12} />
-                        Save
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingDecisionIndex(null)
-                          setEditingDecisionText('')
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                      >
-                        <X size={12} />
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-green-800 font-medium mb-3">
-                    {item.details}
-                  </div>
-                )}
-                
-                {/* Author and timestamp */}
-                <div className="text-xs text-gray-500">
-                  <span>{getCommentAuthor(item.user_id)} • {date} at {time}</span>
+              </div>
+            ) : item.type === 'comment' && editingCommentId === item.id ? (
+              // Editing mode for comments
+              <div className="space-y-3">
+                <textarea
+                  value={editingCommentText}
+                  onChange={(e) => setEditingCommentText(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  disabled={saving}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveEditComment}
+                    disabled={saving || !editingCommentText.trim()}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingCommentId(null)
+                      setEditingCommentText('')
+                    }}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <X size={14} />
+                    Cancel
+                  </button>
                 </div>
               </div>
             ) : (
-              /* Comment and audit layout */
-              <div>
-                {/* Action and details */}
-                <div className="mb-2">
-                  <p className="text-sm font-medium text-gray-900">{item.action}</p>
-                  {item.details && (
-                    <div className="text-sm mt-1 text-gray-700">
-                      {editingCommentId === item.id ? (
-                        <div className="space-y-3">
-                          <textarea
-                            value={editingCommentText}
-                            onChange={(e) => setEditingCommentText(e.target.value)}
-                            rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                            disabled={saving}
-                          />
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={handleSaveEditComment}
-                              disabled={saving || !editingCommentText.trim()}
-                              className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                            >
-                              <Save size={14} />
-                              Save
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingCommentId(null)
-                                setEditingCommentText('')
-                              }}
-                              disabled={saving}
-                              className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                              <X size={14} />
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        item.details
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Author and timestamp */}
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-gray-500">
-                    <p className="font-medium text-gray-700">{getCommentAuthor(item.user_id)}</p>
-                    <p>{date} at {time}</p>
-                  </div>
-                  {user && item.user_id === user.id && item.type === 'comment' && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditComment(item)}
-                        className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                        title="Edit comment"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteComment(item.id)}
-                        className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
-                        title="Delete comment"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+              item.details
             )}
           </div>
+        )}
+
+        {/* Author and timestamp */}
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <p className="font-medium text-gray-700">{getCommentAuthor(item.user_id)}</p>
+          <p>{date} at {time}</p>
         </div>
       </div>
     )
