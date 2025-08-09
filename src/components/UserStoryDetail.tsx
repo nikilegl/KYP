@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth'
 import { UserRoleTag } from './common/UserRoleTag'
 import { PriorityTag } from '../utils/priorityTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
-import { AssignUserCard } from './common/AssignUserCard'
 import { updateUserStory, getUserStoryRoles } from '../lib/database'
 import { getThemesForUserStory, linkThemeToUserStory, unlinkThemeFromUserStory } from '../lib/database'
 import { CKEditorComponent } from './CKEditorComponent'
@@ -111,6 +110,11 @@ export function UserStoryDetail({
     loadAssignedUser()
     loadUserStoryTasks()
   }, [userStory.id])
+
+  // Update assigned user when userStory.assigned_to_user_id changes
+  useEffect(() => {
+    loadAssignedUser()
+  }, [userStory.assigned_to_user_id, availableUsers])
 
   const loadUserStoryThemes = async () => {
     if (!userStory.id) return
@@ -451,21 +455,47 @@ export function UserStoryDetail({
           )}
         </div>
         
-        {/* Complexity indicator */}
-        <div className="flex items-center gap-2">
-          <PriorityTag 
-            priority={userStory.priority_rating || 'should'} 
-            className="mr-2" 
-          />
-          <span 
-            className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-full"
-            style={{
-              backgroundColor: getStatusColor(userStory.status || 'Not planned').bg,
-              color: getStatusColor(userStory.status || 'Not planned').text
-            }}
-          >
-            {userStory.status || 'Not planned'}
-          </span>
+        {/* Complexity indicator and assigned user */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <PriorityTag 
+              priority={userStory.priority_rating || 'should'} 
+              className="mr-2" 
+            />
+            <span 
+              className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-full"
+              style={{
+                backgroundColor: getStatusColor(userStory.status || 'Not planned').bg,
+                color: getStatusColor(userStory.status || 'Not planned').text
+              }}
+            >
+              {userStory.status || 'Not planned'}
+            </span>
+          </div>
+          
+          {/* Assigned User */}
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600 text-sm">Assigned to:</span>
+            {assignedUser ? (
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-medium text-blue-600">
+                    {assignedUser.full_name ? assignedUser.full_name.charAt(0).toUpperCase() : assignedUser.user_email.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="text-sm font-medium text-gray-900">
+                  {assignedUser.full_name || assignedUser.user_email}
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowEditDetailsModal(true)}
+                className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                Assign user
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -527,13 +557,6 @@ export function UserStoryDetail({
               </div>
             )}
           </div>
-
-          <AssignUserCard
-            availableUsers={availableUsers}
-            selectedUser={assignedUser}
-            onAssignUser={handleAssignUser}
-            onRemoveUser={handleRemoveUser}
-          />
 
           {/* Linked Assets */}
           <LinkedDesigns 
