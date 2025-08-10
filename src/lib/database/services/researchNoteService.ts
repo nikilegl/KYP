@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../../supabase'
-import type { ResearchNote, NoteLink, ResearchNoteComment } from '../../supabase'
+import type { ResearchNote, NoteLink } from '../../supabase'
 
 export const getResearchNotes = async (): Promise<ResearchNote[]> => {
   if (!isSupabaseConfigured || !supabase) {
