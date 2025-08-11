@@ -230,7 +230,7 @@ export function ProjectManager({
         
         try {
           // Save to database
-          await updateProjectOrder(user.id, orderData)
+          await updateProjectOrder(user.id, newOrderedProjects[0].workspace_id, orderData)
           
           // Reload preferences to ensure consistency
           const updatedPreferences = await getUserProjectPreferences(user.id)
