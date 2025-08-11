@@ -1,14 +1,34 @@
 import React, { useState, useEffect } from 'react'
-import { FolderOpen, Plus, Calendar, Loader2, Users, FileText, CheckCircle, AlertCircle, Edit, Trash2, BookOpen, GitBranch, Palette } from 'lucide-react'
+import { FolderOpen, Plus, Loader2 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
 import { getProjectStakeholders } from '../lib/database'
 import { PROGRESS_QUESTIONS } from '../lib/database'
-import type { Project, ProjectProgressStatus, UserStory, UserJourney, Design } from '../lib/supabase'
+import { getUserProjectPreferences, updateProjectOrder } from '../lib/database/services/userProjectPreferenceService'
+import { ProjectCard } from './ProjectCard'
+import { useAuth } from '../hooks/useAuth'
+import type { Project, ProjectProgressStatus, UserStory, UserJourney, Design, Stakeholder, ResearchNote, ProblemOverview, UserProjectPreference } from '../lib/supabase'
 
 interface ProjectManagerProps {
   projects: Project[]
-  stakeholders?: any[]
-  notes?: any[]
-  problemOverviews?: any[]
+  stakeholders?: Stakeholder[]
+  notes?: ResearchNote[]
+  problemOverviews?: ProblemOverview[]
   allProjectProgressStatus?: ProjectProgressStatus[]
   allUserStories?: UserStory[]
   allUserJourneys?: UserJourney[]
@@ -33,14 +53,66 @@ export function ProjectManager({
   onUpdateProject,
   onDeleteProject
 }: ProjectManagerProps) {
+  const { user } = useAuth()
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [newProject, setNewProject] = useState({ name: '', overview: '' })
   const [creatingProject, setCreatingProject] = useState(false)
   const [updatingProject, setUpdatingProject] = useState(false)
+  const [orderedProjects, setOrderedProjects] = useState<Project[]>(projects)
+  const [userPreferences, setUserPreferences] = useState<UserProjectPreference[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [draggedProject, setDraggedProject] = useState<Project | null>(null)
 
   // State for stakeholder counts
   const [stakeholderCounts, setStakeholderCounts] = useState<Record<string, number>>({})
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // Load user preferences and order projects accordingly
+  useEffect(() => {
+    const loadUserPreferences = async () => {
+      if (!user) return
+      
+      try {
+        const preferences = await getUserProjectPreferences(user.id)
+        setUserPreferences(preferences)
+        
+        // Create a map for quick lookup
+        const preferenceMap = new Map(preferences.map(p => [p.project_id, p.order_position]))
+        
+        // Sort projects based on user preferences, with unordered projects at the end
+        const sortedProjects = [...projects].sort((a, b) => {
+          const aOrder = preferenceMap.get(a.id) ?? 999999
+          const bOrder = preferenceMap.get(b.id) ?? 999999
+          
+          if (aOrder === bOrder) {
+            // If both have no preference or same preference, sort by creation date
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          }
+          
+          return aOrder - bOrder
+        })
+        
+        setOrderedProjects(sortedProjects)
+      } catch (error) {
+        console.error('Error loading user preferences:', error)
+        setOrderedProjects(projects)
+      }
+    }
+    
+    loadUserPreferences()
+  }, [projects, user])
 
   // Load stakeholder counts when projects change
   useEffect(() => {
@@ -113,39 +185,63 @@ export function ProjectManager({
     }
   }
 
-  const getProjectNotesCount = (projectId: string) => {
-    return (notes || []).filter(note => note.project_id === projectId).length
-  }
-
-  const getProjectUserStoriesCount = (projectId: string) => {
-    return allUserStories.filter(story => story.project_id === projectId).length
-  }
-
-  const getProjectUserJourneysCount = (projectId: string) => {
-    return allUserJourneys.filter(journey => journey.project_id === projectId).length
-  }
-
-  const getProjectAssetsCount = (projectId: string) => {
-    return allDesigns.filter(design => design.project_id === projectId).length
-  }
-
-  const isProblemOverviewCompleted = (projectId: string) => {
-    const overview = problemOverviews.find(po => po.project_id === projectId)
-    return overview && (overview.what_is_the_problem || overview.should_we_solve_it)
-  }
-
-  const getProjectProgressPercentage = (projectId: string): number => {
-    const projectProgressStatuses = allProjectProgressStatus.filter(status => status.project_id === projectId)
-    const totalQuestions = Object.keys(PROGRESS_QUESTIONS).length
-    
-    if (totalQuestions === 0) return 0
-    
-    const completedQuestions = projectProgressStatuses.filter(status => status.is_completed).length
-    return Math.round((completedQuestions / totalQuestions) * 100)
-  }
+  // Remove these functions as they're now in ProjectCard
 
   const handleProjectClick = (project: Project) => {
     onSelectProject(project)
+  }
+
+  // Drag and drop handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event
+    setActiveId(active.id as string)
+    
+    const project = orderedProjects.find(p => p.id === active.id)
+    setDraggedProject(project || null)
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    
+    setActiveId(null)
+    setDraggedProject(null)
+    
+    if (!over || !user) return
+    
+    const activeId = active.id as string
+    const overId = over.id as string
+    
+    if (activeId !== overId) {
+      const oldIndex = orderedProjects.findIndex(p => p.id === activeId)
+      const newIndex = orderedProjects.findIndex(p => p.id === overId)
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        // Create new order
+        const newOrderedProjects = arrayMove(orderedProjects, oldIndex, newIndex)
+        
+        // Apply optimistic update
+        setOrderedProjects(newOrderedProjects)
+        
+        // Prepare order data for database
+        const orderData = newOrderedProjects.map((project, index) => ({
+          project_id: project.id,
+          order_position: index + 1
+        }))
+        
+        try {
+          // Save to database
+          await updateProjectOrder(user.id, orderData)
+          
+          // Reload preferences to ensure consistency
+          const updatedPreferences = await getUserProjectPreferences(user.id)
+          setUserPreferences(updatedPreferences)
+        } catch (error) {
+          console.error('Error updating project order:', error)
+          // Revert optimistic update on error
+          setOrderedProjects(orderedProjects)
+        }
+      }
+    }
   }
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">
@@ -259,101 +355,62 @@ export function ProjectManager({
         </div>
       )}
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map((project) => (
-          <div 
-            key={project.id} 
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-md transition-all relative group cursor-pointer"
-            onClick={() => handleProjectClick(project)}
-          >
-            {/* Edit/Delete buttons */}
-            <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEditingProject(project)
-                }}
-                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-blue-50 rounded transition-all"
-                title="Edit project"
-              >
-                <Edit size={14} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteProject(project.id, project.name)
-                }}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                title="Delete project"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-
-              <div className="flex items-start justify-between mb-4 pr-16">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <FolderOpen size={20} className="text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{project.name}</h3>
-                  </div>
-                </div>
+      {/* Projects Grid with Drag and Drop */}
+      <DndContext 
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext 
+          items={orderedProjects.map(p => p.id)}
+          strategy={rectSortingStrategy}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {orderedProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                stakeholders={stakeholders}
+                notes={notes}
+                problemOverviews={problemOverviews}
+                allProjectProgressStatus={allProjectProgressStatus}
+                allUserStories={allUserStories}
+                allUserJourneys={allUserJourneys}
+                allDesigns={allDesigns}
+                onSelect={handleProjectClick}
+                onEdit={setEditingProject}
+                onDelete={handleDeleteProject}
+              />
+            ))}
+            {projects.length === 0 && (
+              <div className="col-span-full text-center py-12">
+                <FolderOpen size={48} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-gray-500">No projects yet. Create your first project to get started!</p>
               </div>
-              
-              {/* Project Stats */}
-              <div className="space-y-3 mb-4">
-                
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded flex items-center justify-center">
-                    <FileText size={14} className="text-gray-600" />
-                  </div>
-                  <span className="text-sm text-gray-600">Research Notes ({getProjectNotesCount(project.id)})</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded flex items-center justify-center">
-                    <BookOpen size={14} className="text-gray-600" />
-                  </div>
-                  <span className="text-sm text-gray-600">User Stories ({getProjectUserStoriesCount(project.id)})</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded flex items-center justify-center">
-                    <GitBranch size={14} className="text-gray-600" />
-                  </div>
-                  <span className="text-sm text-gray-600">User Journeys ({getProjectUserJourneysCount(project.id)})</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded flex items-center justify-center">
-                    <Palette size={14} className="text-gray-600" />
-                  </div>
-                  <span className="text-sm text-gray-600">Designs ({getProjectAssetsCount(project.id)})</span>
-                </div>
-              </div>
-              
-            {/* Project Progress Bar */}
-         
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">Project Progress</span>
-                <span className="text-sm font-medium text-gray-900">{getProjectProgressPercentage(project.id)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${getProjectProgressPercentage(project.id)}%` }}
-                ></div>
-              </div>
+            )}
+          </div>
+        </SortableContext>
         
-            
-          </div>
-        ))}
-        {projects.length === 0 && (
-          <div className="col-span-full text-center py-12">
-            <FolderOpen size={48} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">No projects yet. Create your first project to get started!</p>
-          </div>
-        )}
-      </div>
+        <DragOverlay>
+          {activeId && draggedProject ? (
+            <ProjectCard
+              project={draggedProject}
+              stakeholders={stakeholders}
+              notes={notes}
+              problemOverviews={problemOverviews}
+              allProjectProgressStatus={allProjectProgressStatus}
+              allUserStories={allUserStories}
+              allUserJourneys={allUserJourneys}
+              allDesigns={allDesigns}
+              onSelect={() => {}}
+              onEdit={() => {}}
+              onDelete={() => {}}
+              isDragOverlay={true}
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   )
 }
