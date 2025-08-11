@@ -330,8 +330,9 @@ export interface Theme {
 export interface UserProjectPreference {
   id: string
   user_id: string
+  workspace_id: string
   project_id: string
-  order_position: number
+  order_index: number
   created_at: string
   updated_at: string
 }

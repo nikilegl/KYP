@@ -17,7 +17,7 @@ export const getUserProjectPreferences = async (userId: string): Promise<UserPro
       .from('user_project_preferences')
       .select('*')
       .eq('user_id', userId)
-      .order('order_position', { ascending: true })
+      .order('order_index', { ascending: true })
 
     if (error) throw error
     return data || []
@@ -29,7 +29,7 @@ export const getUserProjectPreferences = async (userId: string): Promise<UserPro
 
 export const updateProjectOrder = async (
   userId: string, 
-  orderedProjects: Array<{ project_id: string; order_position: number }>
+  orderedProjects: Array<{ project_id: string; order_index: number }>
 ): Promise<boolean> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
@@ -38,7 +38,7 @@ export const updateProjectOrder = async (
         id: `pref-${userId}-${proj.project_id}`,
         user_id: userId,
         project_id: proj.project_id,
-        order_position: proj.order_position,
+        order_index: proj.order_index,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }))
@@ -56,7 +56,7 @@ export const updateProjectOrder = async (
     const upsertData = orderedProjects.map(proj => ({
       user_id: userId,
       project_id: proj.project_id,
-      order_position: proj.order_position,
+      order_index: proj.order_index,
       updated_at: new Date().toISOString()
     }))
 
@@ -78,7 +78,7 @@ export const updateProjectOrder = async (
 export const setProjectPreference = async (
   userId: string,
   projectId: string,
-  orderPosition: number
+  orderIndex: number
 ): Promise<UserProjectPreference | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
@@ -90,7 +90,7 @@ export const setProjectPreference = async (
         id: `pref-${userId}-${projectId}`,
         user_id: userId,
         project_id: projectId,
-        order_position: orderPosition,
+        order_index: orderIndex,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -116,7 +116,7 @@ export const setProjectPreference = async (
       .upsert({
         user_id: userId,
         project_id: projectId,
-        order_position: orderPosition,
+        order_index: orderIndex,
         updated_at: new Date().toISOString()
       }, { 
         onConflict: 'user_id,project_id',

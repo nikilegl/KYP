@@ -89,7 +89,7 @@ export function ProjectManager({
         setUserPreferences(preferences)
         
         // Create a map for quick lookup
-        const preferenceMap = new Map(preferences.map(p => [p.project_id, p.order_position]))
+        const preferenceMap = new Map(preferences.map(p => [p.project_id, p.order_index]))
         
         // Sort projects based on user preferences, with unordered projects at the end
         const sortedProjects = [...projects].sort((a, b) => {
@@ -225,7 +225,7 @@ export function ProjectManager({
         // Prepare order data for database
         const orderData = newOrderedProjects.map((project, index) => ({
           project_id: project.id,
-          order_position: index + 1
+          order_index: index + 1
         }))
         
         try {
