@@ -327,6 +327,15 @@ export interface Theme {
   updated_at: string
 }
 
+export interface UserProjectPreference {
+  id: string
+  user_id: string
+  project_id: string
+  order_position: number
+  created_at: string
+  updated_at: string
+}
+
 export interface ThemeUserStory {
   id: string
   theme_id: string
