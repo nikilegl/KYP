@@ -16,7 +16,17 @@ export const getAssets = async (projectId?: string): Promise<Design[]> => {
   try {
     let query = supabase
       .from('assets')
-      .select('*')
+      .select(`
+        id,
+        project_id,
+        name,
+        snapshot_image_url,
+        description,
+        link_url,
+        short_id,
+        created_at,
+        updated_at
+      `)
       .order('created_at', { ascending: false })
     
     if (projectId) {
@@ -508,7 +518,17 @@ export const getAssetByShortId = async (shortId: number): Promise<Design | null>
   try {
     const { data, error } = await supabase
       .from('assets')
-      .select('*')
+      .select(`
+        id,
+        project_id,
+        name,
+        snapshot_image_url,
+        description,
+        link_url,
+        short_id,
+        created_at,
+        updated_at
+      `)
       .eq('short_id', shortId)
       .single()
 
