@@ -89,6 +89,122 @@ html, body, #root {
   text-decoration: underline;
 }
 
+.prose blockquote {
+  margin: 1.5em 0;
+  padding: 1rem 1.5rem;
+  border-left: 4px solid #3b82f6;
+  background-color: #f8fafc;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: #475569;
+  position: relative;
+}
+
+.prose blockquote p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1.5em 0;
+  display: block;
+}
+
+/* Image size classes for manual sizing */
+.prose .image-size-25 {
+  width: 25% !important;
+  max-width: 25% !important;
+}
+
+.prose .image-size-50 {
+  width: 50% !important;
+  max-width: 50% !important;
+}
+
+.prose .image-size-75 {
+  width: 75% !important;
+  max-width: 75% !important;
+}
+
+.prose .image-size-full {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.prose figure {
+  margin: 1.5em 0;
+  text-align: center;
+}
+
+.prose figure img {
+  margin: 0 auto;
+}
+
+.prose figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+}
+
+.prose table {
+  margin: 1.5em 0;
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.prose table th {
+  background-color: #f9fafb;
+  color: #374151;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prose table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  color: #374151;
+  vertical-align: top;
+}
+
+.prose table tbody tr {
+  transition: background-color 0.15s ease-in-out;
+}
+
+.prose table tbody tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.prose table tbody tr:hover {
+  background-color: #f3f4f6;
+}
+
+.prose table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.prose table th:first-child,
+.prose table td:first-child {
+  padding-left: 1rem;
+}
+
+.prose table th:last-child,
+.prose table td:last-child {
+  padding-right: 1rem;
+}
+
 /* CKEditor styles */
 .ckeditor-wrapper .ck-editor {
   border: 1px solid #d1d5db;
@@ -152,6 +268,139 @@ html, body, #root {
 
 .ckeditor-wrapper .ck-content h3 {
   font-size: 16px;
+}
+
+.ckeditor-wrapper .ck-content blockquote {
+  margin: 1.5em 0;
+  padding: 1rem 1.5rem;
+  border-left: 4px solid #3b82f6;
+  background-color: #f8fafc;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: #475569;
+  position: relative;
+}
+
+.ckeditor-wrapper .ck-content blockquote p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.ckeditor-wrapper .ck-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1.5em 0;
+  display: block;
+}
+
+/* Image size classes for CKEditor */
+.ckeditor-wrapper .ck-content .image-size-25 {
+  width: 25% !important;
+  max-width: 25% !important;
+}
+
+.ckeditor-wrapper .ck-content .image-size-50 {
+  width: 50% !important;
+  max-width: 50% !important;
+}
+
+.ckeditor-wrapper .ck-content .image-size-75 {
+  width: 75% !important;
+  max-width: 75% !important;
+}
+
+.ckeditor-wrapper .ck-content .image-size-full {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.ckeditor-wrapper .ck-content figure {
+  margin: 1.5em 0;
+  text-align: center;
+}
+
+.ckeditor-wrapper .ck-content figure img {
+  margin: 0 auto;
+}
+
+.ckeditor-wrapper .ck-content figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+}
+
+.ckeditor-wrapper .ck-content .image {
+  display: table;
+  clear: both;
+  text-align: center;
+  margin: 1.5em auto;
+}
+
+.ckeditor-wrapper .ck-content .image img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  min-width: 50px;
+}
+
+.ckeditor-wrapper .ck-content table {
+  margin: 1.5em 0;
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.ckeditor-wrapper .ck-content table th {
+  background-color: #f9fafb;
+  color: #374151;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ckeditor-wrapper .ck-content table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  color: #374151;
+  vertical-align: top;
+  min-width: 50px;
+}
+
+.ckeditor-wrapper .ck-content table tbody tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.ckeditor-wrapper .ck-content table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ckeditor-wrapper .ck-content table th:first-child,
+.ckeditor-wrapper .ck-content table td:first-child {
+  padding-left: 1rem;
+}
+
+.ckeditor-wrapper .ck-content table th:last-child,
+.ckeditor-wrapper .ck-content table td:last-child {
+  padding-right: 1rem;
+}
+
+/* CKEditor table selection styles */
+.ckeditor-wrapper .ck-content table.ck-widget_selected {
+  border: 2px solid #3b82f6;
+}
+
+.ckeditor-wrapper .ck-content table td.ck-editor__editable_selected,
+.ckeditor-wrapper .ck-content table th.ck-editor__editable_selected {
+  background-color: #dbeafe !important;
 }
 
 .ckeditor-wrapper .ck-button {
