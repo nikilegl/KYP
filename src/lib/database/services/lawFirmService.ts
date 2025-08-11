@@ -1,7 +1,12 @@
 import { supabase, isSupabaseConfigured } from '../../supabase'
 import type { LawFirm } from '../../supabase'
 
-export const getLawFirms = async (): Promise<LawFirm[]> => {
+export const getLawFirms = async (options?: {
+  workspaceId?: string;
+  limit?: number;
+  offset?: number;
+  status?: 'active' | 'inactive';
+}): Promise<LawFirm[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
@@ -13,16 +18,128 @@ export const getLawFirms = async (): Promise<LawFirm[]> => {
   }
 
   try {
-    const { data, error } = await supabase
+    // Select only necessary columns for better performance
+    let query = supabase
       .from('law_firms')
-      .select('*')
+      .select(`
+        id,
+        workspace_id,
+        name,
+        structure,
+        status,
+        top_4,
+        created_at,
+        updated_at
+      `)
       .order('created_at', { ascending: false })
+
+    // Apply filters if provided
+    if (options?.workspaceId) {
+      query = query.eq('workspace_id', options.workspaceId)
+    }
+    
+    if (options?.status) {
+      query = query.eq('status', options.status)
+    }
+
+    // Apply pagination if provided
+    if (options?.limit) {
+      query = query.limit(options.limit)
+    }
+    
+    if (options?.offset) {
+      query = query.range(options.offset, (options.offset + (options.limit || 50)) - 1)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
     return data || []
   } catch (error) {
     console.error('Error fetching law firms:', error)
     return []
+  }
+}
+
+// High-performance cursor-based pagination for large datasets
+export const getLawFirmsPaginated = async (options?: {
+  workspaceId?: string;
+  limit?: number;
+  cursorId?: string;
+  status?: 'active' | 'inactive';
+}): Promise<{ data: LawFirm[]; hasMore: boolean; nextCursor?: string }> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    const lawFirms = await getLawFirms()
+    return {
+      data: lawFirms.slice(0, options?.limit || 50),
+      hasMore: lawFirms.length > (options?.limit || 50),
+      nextCursor: undefined
+    }
+  }
+
+  try {
+    const limit = options?.limit || 50
+    
+    // Select only necessary columns for better performance
+    let query = supabase
+      .from('law_firms')
+      .select(`
+        id,
+        workspace_id,
+        name,
+        structure,
+        status,
+        top_4,
+        created_at,
+        updated_at
+      `)
+      .order('created_at', { ascending: false })
+      .limit(limit + 1) // Fetch one extra to check if there are more
+
+    // Apply filters if provided
+    if (options?.workspaceId) {
+      query = query.eq('workspace_id', options.workspaceId)
+    }
+    
+    if (options?.status) {
+      query = query.eq('status', options.status)
+    }
+
+    // Apply cursor-based pagination (more efficient than offset)
+    if (options?.cursorId) {
+      const { data: cursorFirm } = await supabase
+        .from('law_firms')
+        .select('created_at')
+        .eq('id', options.cursorId)
+        .single()
+      
+      if (cursorFirm) {
+        query = query.lt('created_at', cursorFirm.created_at)
+      }
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    const firms = data || []
+    const hasMore = firms.length > limit
+    const actualData = hasMore ? firms.slice(0, limit) : firms
+    const nextCursor = hasMore ? actualData[actualData.length - 1]?.id : undefined
+
+    return {
+      data: actualData,
+      hasMore,
+      nextCursor
+    }
+  } catch (error) {
+    console.error('Error fetching law firms with pagination:', error)
+    return {
+      data: [],
+      hasMore: false,
+      nextCursor: undefined
+    }
   }
 }
 
@@ -200,6 +317,47 @@ export const importLawFirmsFromCSV = async (csvData: string): Promise<{ success:
   }
   
   return results
+}
+
+// Efficient count function that avoids expensive PostgREST operations
+export const getLawFirmsCount = async (options?: {
+  workspaceId?: string;
+  status?: 'active' | 'inactive';
+}): Promise<number> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      const stored = localStorage.getItem('kyp_law_firms')
+      const firms = stored ? JSON.parse(stored) : []
+      return firms.length
+    } catch {
+      return 0
+    }
+  }
+
+  try {
+    // Use a more efficient count query
+    let query = supabase
+      .from('law_firms')
+      .select('id', { count: 'exact', head: true })
+
+    // Apply filters if provided
+    if (options?.workspaceId) {
+      query = query.eq('workspace_id', options.workspaceId)
+    }
+    
+    if (options?.status) {
+      query = query.eq('status', options.status)
+    }
+
+    const { count, error } = await query
+
+    if (error) throw error
+    return count || 0
+  } catch (error) {
+    console.error('Error counting law firms:', error)
+    return 0
+  }
 }
 
 export const deleteAllLawFirms = async (): Promise<boolean> => {
