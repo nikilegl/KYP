@@ -29,7 +29,6 @@ export const getUserProjectPreferences = async (userId: string): Promise<UserPro
 
 export const updateProjectOrder = async (
   userId: string, 
-  workspaceId: string,
   orderedProjects: Array<{ project_id: string; order_index: number }>
 ): Promise<boolean> => {
   if (!isSupabaseConfigured || !supabase) {
@@ -56,7 +55,6 @@ export const updateProjectOrder = async (
     // Use upsert to handle both insert and update cases
     const upsertData = orderedProjects.map(proj => ({
       user_id: userId,
-      workspace_id: workspaceId,
       project_id: proj.project_id,
       order_index: proj.order_index,
       updated_at: new Date().toISOString()
@@ -65,7 +63,7 @@ export const updateProjectOrder = async (
     const { error } = await supabase
       .from('user_project_preferences')
       .upsert(upsertData, { 
-        onConflict: 'user_id,workspace_id,project_id',
+        onConflict: 'user_id,project_id',
         ignoreDuplicates: false 
       })
 
@@ -79,7 +77,6 @@ export const updateProjectOrder = async (
 
 export const setProjectPreference = async (
   userId: string,
-  workspaceId: string,
   projectId: string,
   orderIndex: number
 ): Promise<UserProjectPreference | null> => {
@@ -92,7 +89,6 @@ export const setProjectPreference = async (
       const newPreference: UserProjectPreference = {
         id: `pref-${userId}-${projectId}`,
         user_id: userId,
-        workspace_id: workspaceId,
         project_id: projectId,
         order_index: orderIndex,
         created_at: new Date().toISOString(),
@@ -119,12 +115,11 @@ export const setProjectPreference = async (
       .from('user_project_preferences')
       .upsert({
         user_id: userId,
-        workspace_id: workspaceId,
         project_id: projectId,
         order_index: orderIndex,
         updated_at: new Date().toISOString()
       }, { 
-        onConflict: 'user_id,workspace_id,project_id',
+        onConflict: 'user_id,project_id',
         ignoreDuplicates: false 
       })
       .select()
