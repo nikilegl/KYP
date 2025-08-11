@@ -65,7 +65,7 @@ export const updateProjectOrder = async (
     const { error } = await supabase
       .from('user_project_preferences')
       .upsert(upsertData, { 
-        onConflict: 'user_id,workspace_id,project_id',
+        onConflict: 'user_id,project_id',
         ignoreDuplicates: false 
       })
 
@@ -124,7 +124,7 @@ export const setProjectPreference = async (
         order_index: orderIndex,
         updated_at: new Date().toISOString()
       }, { 
-        onConflict: 'user_id,workspace_id,project_id',
+        onConflict: 'user_id,project_id',
         ignoreDuplicates: false 
       })
       .select()
