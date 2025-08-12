@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-import type { User } from '@supabase/supabase-js'
+
 
 // Custom error class for Supabase authentication errors
 export class SupabaseAuthError extends Error {
@@ -327,15 +327,7 @@ export interface Theme {
   updated_at: string
 }
 
-export interface UserProjectPreference {
-  id: string
-  user_id: string
-  workspace_id: string
-  project_id: string
-  order_index: number
-  created_at: string
-  updated_at: string
-}
+
 
 export interface ThemeUserStory {
   id: string

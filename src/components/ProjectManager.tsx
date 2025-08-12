@@ -1,28 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { FolderOpen, Plus, Loader2 } from 'lucide-react'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
-} from '@dnd-kit/sortable'
+import { FolderOpen, Plus, Loader2, Edit, Trash2, FileText, BookOpen, GitBranch, Palette } from 'lucide-react'
 import { getProjectStakeholders } from '../lib/database'
 import { PROGRESS_QUESTIONS } from '../lib/database'
-import { getUserProjectPreferences, updateProjectOrder } from '../lib/database/services/userProjectPreferenceService'
-import { ProjectCard } from './ProjectCard'
-import { useAuth } from '../hooks/useAuth'
-import type { Project, ProjectProgressStatus, UserStory, UserJourney, Design, Stakeholder, ResearchNote, ProblemOverview, UserProjectPreference } from '../lib/supabase'
+import type { Project, ProjectProgressStatus, UserStory, UserJourney, Design, Stakeholder, ResearchNote, ProblemOverview } from '../lib/supabase'
 
 interface ProjectManagerProps {
   projects: Project[]
@@ -53,66 +33,16 @@ export function ProjectManager({
   onUpdateProject,
   onDeleteProject
 }: ProjectManagerProps) {
-  const { user } = useAuth()
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [newProject, setNewProject] = useState({ name: '', overview: '' })
   const [creatingProject, setCreatingProject] = useState(false)
   const [updatingProject, setUpdatingProject] = useState(false)
-  const [orderedProjects, setOrderedProjects] = useState<Project[]>(projects)
-  const [userPreferences, setUserPreferences] = useState<UserProjectPreference[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [draggedProject, setDraggedProject] = useState<Project | null>(null)
 
   // State for stakeholder counts
   const [stakeholderCounts, setStakeholderCounts] = useState<Record<string, number>>({})
 
-  // Drag and drop sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
-  // Load user preferences and order projects accordingly
-  useEffect(() => {
-    const loadUserPreferences = async () => {
-      if (!user) return
-      
-      try {
-        const preferences = await getUserProjectPreferences(user.id)
-        setUserPreferences(preferences)
-        
-        // Create a map for quick lookup
-        const preferenceMap = new Map(preferences.map(p => [p.project_id, p.order_index]))
-        
-        // Sort projects based on user preferences, with unordered projects at the end
-        const sortedProjects = [...projects].sort((a, b) => {
-          const aOrder = preferenceMap.get(a.id) ?? 999999
-          const bOrder = preferenceMap.get(b.id) ?? 999999
-          
-          if (aOrder === bOrder) {
-            // If both have no preference or same preference, sort by creation date
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          }
-          
-          return aOrder - bOrder
-        })
-        
-        setOrderedProjects(sortedProjects)
-      } catch (error) {
-        console.error('Error loading user preferences:', error)
-        setOrderedProjects(projects)
-      }
-    }
-    
-    loadUserPreferences()
-  }, [projects, user])
+  // Load stakeholder counts when projects change
 
   // Load stakeholder counts when projects change
   useEffect(() => {
@@ -191,68 +121,16 @@ export function ProjectManager({
     onSelectProject(project)
   }
 
-  // Drag and drop handlers
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event
-    setActiveId(active.id as string)
-    
-    const project = orderedProjects.find(p => p.id === active.id)
-    setDraggedProject(project || null)
+  const handleProjectEdit = (project: Project) => {
+    setEditingProject(project)
+    setNewProject({ name: project.name, overview: project.overview || '' })
+    setShowProjectForm(true)
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-    
-    setActiveId(null)
-    setDraggedProject(null)
-    
-    if (!over || !user) return
-    
-    const activeId = active.id as string
-    const overId = over.id as string
-    
-    if (activeId !== overId) {
-      const oldIndex = orderedProjects.findIndex(p => p.id === activeId)
-      const newIndex = orderedProjects.findIndex(p => p.id === overId)
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        // Create new order
-        const newOrderedProjects = arrayMove(orderedProjects, oldIndex, newIndex)
-        
-        // Apply optimistic update
-        setOrderedProjects(newOrderedProjects)
-        
-        // Prepare order data for database
-        const orderData = newOrderedProjects.map((project, index) => ({
-          project_id: project.id,
-          order_index: index + 1
-        }))
-        
-        try {
-          console.log('🎯 Saving project order:', {
-            userId: user.id,
-            workspaceId: newOrderedProjects[0].workspace_id,
-            orderData
-          })
-          
-          // Save to database
-          const success = await updateProjectOrder(user.id, newOrderedProjects[0].workspace_id, orderData)
-          
-          if (success) {
-            console.log('✅ Project order saved, reloading preferences...')
-            // Reload preferences to ensure consistency
-            const updatedPreferences = await getUserProjectPreferences(user.id)
-            setUserPreferences(updatedPreferences)
-          } else {
-            console.error('❌ Failed to save project order')
-            // Revert optimistic update on error
-            setOrderedProjects(orderedProjects)
-          }
-        } catch (error) {
-          console.error('Error updating project order:', error)
-          // Revert optimistic update on error
-          setOrderedProjects(orderedProjects)
-        }
+  const handleProjectDelete = async (projectId: string, projectName: string) => {
+    if (window.confirm(`Are you sure you want to delete "${projectName}"?`)) {
+      if (onDeleteProject) {
+        await onDeleteProject(projectId)
       }
     }
   }
@@ -368,62 +246,112 @@ export function ProjectManager({
         </div>
       )}
 
-      {/* Projects Grid with Drag and Drop */}
-      <DndContext 
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext 
-          items={orderedProjects.map(p => p.id)}
-          strategy={rectSortingStrategy}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {orderedProjects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                stakeholders={stakeholders}
-                notes={notes}
-                problemOverviews={problemOverviews}
-                allProjectProgressStatus={allProjectProgressStatus}
-                allUserStories={allUserStories}
-                allUserJourneys={allUserJourneys}
-                allDesigns={allDesigns}
-                onSelect={handleProjectClick}
-                onEdit={setEditingProject}
-                onDelete={handleDeleteProject}
-              />
-            ))}
-            {projects.length === 0 && (
-              <div className="col-span-full text-center py-12">
-                <FolderOpen size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">No projects yet. Create your first project to get started!</p>
+      {/* Projects Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {projects.map((project) => {
+          const projectNotes = notes.filter(note => note.project_id === project.id)
+          const projectProblemOverview = problemOverviews.find(po => po.project_id === project.id)
+          const projectProgressStatuses = allProjectProgressStatus.filter(ps => ps.project_id === project.id)
+          const projectUserStories = allUserStories.filter(us => us.project_id === project.id)
+          const projectUserJourneys = allUserJourneys.filter(uj => uj.project_id === project.id)
+          const projectDesigns = allDesigns.filter(d => d.project_id === project.id)
+
+          // Calculate progress percentage
+          const totalProgressItems = projectProgressStatuses.length
+          const completedProgressItems = projectProgressStatuses.filter(ps => ps.is_completed).length
+          const progressPercentage = totalProgressItems > 0 ? Math.round((completedProgressItems / totalProgressItems) * 100) : 0
+
+          return (
+            <div 
+              key={project.id}
+              className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-md transition-all relative group cursor-pointer"
+              onClick={() => handleProjectClick(project)}
+            >
+              {/* Edit/Delete buttons */}
+              <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleProjectEdit(project)
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-blue-50 rounded transition-all"
+                  title="Edit project"
+                >
+                  <Edit size={14} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleProjectDelete(project.id, project.name)
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                  title="Delete project"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
-            )}
+
+              {/* Project Header */}
+              <div className="flex items-start justify-between mb-4 pr-12">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <FolderOpen size={20} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{project.name}</h3>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Project Stats List */}
+              <div className="space-y-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded flex items-center justify-center">
+                    <FileText size={14} className="text-gray-600" />
+                  </div>
+                  <span className="text-sm text-gray-600">Research Notes ({projectNotes.length})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded flex items-center justify-center">
+                    <BookOpen size={14} className="text-gray-600" />
+                  </div>
+                  <span className="text-sm text-gray-600">User Stories ({projectUserStories.length})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded flex items-center justify-center">
+                    <GitBranch size={14} className="text-gray-600" />
+                  </div>
+                  <span className="text-sm text-gray-600">User Journeys ({projectUserJourneys.length})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded flex items-center justify-center">
+                    <Palette size={14} className="text-gray-600" />
+                  </div>
+                  <span className="text-sm text-gray-600">Designs ({projectDesigns.length})</span>
+                </div>
+              </div>
+              
+              {/* Project Progress Bar */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600">Project Progress</span>
+                <span className="text-sm font-medium text-gray-900">{progressPercentage}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercentage}%` }}
+                ></div>
+              </div>
+            </div>
+          )
+        })}
+        {projects.length === 0 && (
+          <div className="col-span-full text-center py-12">
+            <FolderOpen size={48} className="mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500">No projects yet. Create your first project to get started!</p>
           </div>
-        </SortableContext>
-        
-        <DragOverlay>
-          {activeId && draggedProject ? (
-            <ProjectCard
-              project={draggedProject}
-              stakeholders={stakeholders}
-              notes={notes}
-              problemOverviews={problemOverviews}
-              allProjectProgressStatus={allProjectProgressStatus}
-              allUserStories={allUserStories}
-              allUserJourneys={allUserJourneys}
-              allDesigns={allDesigns}
-              onSelect={() => {}}
-              onEdit={() => {}}
-              onDelete={() => {}}
-              isDragOverlay={true}
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+        )}
+      </div>
     </div>
   )
 }
