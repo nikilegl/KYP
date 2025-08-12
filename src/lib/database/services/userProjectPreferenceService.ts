@@ -32,12 +32,16 @@ export const updateProjectOrder = async (
   workspaceId: string,
   orderedProjects: Array<{ project_id: string; order_index: number }>
 ): Promise<boolean> => {
+  console.log('🔧 updateProjectOrder called with:', { userId, workspaceId, isSupabaseConfigured, hasSupabase: !!supabase })
+  
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
+    console.log('📱 Using localStorage fallback')
     try {
       const preferences: UserProjectPreference[] = orderedProjects.map((proj, index) => ({
         id: `pref-${userId}-${proj.project_id}`,
         user_id: userId,
+        workspace_id: workspaceId,
         project_id: proj.project_id,
         order_index: proj.order_index,
         created_at: new Date().toISOString(),
@@ -45,6 +49,7 @@ export const updateProjectOrder = async (
       }))
       
       localStorage.setItem(`kyp_user_project_preferences_${userId}`, JSON.stringify(preferences))
+      console.log('📱 Saved to localStorage:', preferences)
       return true
     } catch (error) {
       console.error('Error updating project order locally:', error)
@@ -62,6 +67,8 @@ export const updateProjectOrder = async (
       updated_at: new Date().toISOString()
     }))
 
+    console.log('🔍 Upserting project order data:', upsertData)
+
     const { error } = await supabase
       .from('user_project_preferences')
       .upsert(upsertData, { 
@@ -69,7 +76,12 @@ export const updateProjectOrder = async (
         ignoreDuplicates: false 
       })
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Supabase error:', error)
+      throw error
+    }
+    
+    console.log('✅ Project order saved successfully')
     return true
   } catch (error) {
     console.error('Error updating project order:', error)

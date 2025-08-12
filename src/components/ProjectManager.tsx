@@ -229,12 +229,25 @@ export function ProjectManager({
         }))
         
         try {
-          // Save to database
-          await updateProjectOrder(user.id, newOrderedProjects[0].workspace_id, orderData)
+          console.log('🎯 Saving project order:', {
+            userId: user.id,
+            workspaceId: newOrderedProjects[0].workspace_id,
+            orderData
+          })
           
-          // Reload preferences to ensure consistency
-          const updatedPreferences = await getUserProjectPreferences(user.id)
-          setUserPreferences(updatedPreferences)
+          // Save to database
+          const success = await updateProjectOrder(user.id, newOrderedProjects[0].workspace_id, orderData)
+          
+          if (success) {
+            console.log('✅ Project order saved, reloading preferences...')
+            // Reload preferences to ensure consistency
+            const updatedPreferences = await getUserProjectPreferences(user.id)
+            setUserPreferences(updatedPreferences)
+          } else {
+            console.error('❌ Failed to save project order')
+            // Revert optimistic update on error
+            setOrderedProjects(orderedProjects)
+          }
         } catch (error) {
           console.error('Error updating project order:', error)
           // Revert optimistic update on error
