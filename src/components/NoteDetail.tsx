@@ -8,7 +8,6 @@ import { NoteEditModal } from './NoteDetail/NoteEditModal'
 import { NoteCreateForm } from './NoteDetail/NoteCreateForm'
 import { NoteContentTabs } from './NoteDetail/NoteContentTabs'
 import { LinksSection } from './common/LinksSection'
-import { DecisionSection } from './common/DecisionSection'
 import { NoteLinkedDesigns } from './NoteDetail/NoteLinkedAssets'
 import { TasksSection } from './TasksSection'
 import { TagThemeCard } from './common/TagThemeCard'
@@ -81,7 +80,6 @@ export function NoteDetail({
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-  const [localDecisions, setLocalDecisions] = useState<string[]>([])
   
   // History panel state
   const [showHistory, setShowHistory] = useState(true)
@@ -94,16 +92,8 @@ export function NoteDetail({
       loadNoteTasks()
       loadNoteThemes()
       loadNoteComments()
-      setLocalDecisions(note.decision_text || [])
     }
   }, [note, isCreating])
-
-  // Update local decisions when note.decision_text changes
-  useEffect(() => {
-    if (note) {
-      setLocalDecisions(note.decision_text || [])
-    }
-  }, [note?.decision_text])
   const loadNoteStakeholders = async () => {
     if (!note) return
     
@@ -184,29 +174,6 @@ export function NoteDetail({
       }
     } catch (error) {
       console.error('Error updating note basic info:', error)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleUpdateDecision = async (decisionTexts: string[]) => {
-    if (!note) return
-    
-    setSaving(true)
-    try {
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: decisionTexts },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
-      
-      if (updatedNote) {
-        onUpdate(updatedNote)
-      }
-    } catch (error) {
-      console.error('Error updating decision:', error)
-      throw error
     } finally {
       setSaving(false)
     }
@@ -389,23 +356,13 @@ export function NoteDetail({
   }
 
   const handleAddDecision = async (decisionText: string) => {
-    if (!note) return
+    if (!note || !currentUser) return
     
     setSaving(true)
     try {
-      const currentDecisions = localDecisions
-      const updatedDecisions = [...currentDecisions, decisionText]
-        
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: updatedDecisions },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
-      
-      if (updatedNote) {
-        setLocalDecisions(updatedDecisions)
-        onUpdate(updatedNote)
+      const newComment = await createResearchNoteComment(note.id, decisionText, currentUser.id, true)
+      if (newComment) {
+        await loadNoteComments() // Reload to get fresh data
       }
     } catch (error) {
       console.error('Error adding decision:', error)
@@ -448,25 +405,18 @@ export function NoteDetail({
   }
 
   const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
-    if (!note) return
-    
     setSaving(true)
     try {
-      const currentDecisions = localDecisions
-      if (decisionIndex < currentDecisions.length) {
-        const updatedDecisions = [...currentDecisions]
-        updatedDecisions[decisionIndex] = decisionText
-        
-        const updatedNote = await updateResearchNote(
-          note.id,
-          { decision_text: updatedDecisions },
-          noteStakeholderIds,
-          noteThemes.map(t => t.id)
-        )
-        
-        if (updatedNote) {
-          setLocalDecisions(updatedDecisions)
-          onUpdate(updatedNote)
+      // Get the decision comments in chronological order
+      const decisionComments = noteComments
+        .filter(comment => comment.is_decision)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      
+      if (decisionIndex < decisionComments.length) {
+        const decisionToEdit = decisionComments[decisionIndex]
+        const updatedComment = await updateResearchNoteComment(decisionToEdit.id, decisionText)
+        if (updatedComment) {
+          await loadNoteComments() // Reload to get fresh data
         }
       }
     } catch (error) {
@@ -478,32 +428,22 @@ export function NoteDetail({
   }
 
   const handleDeleteDecision = async (decisionIndex: number) => {
-    if (!note) return
-    
-    // Update local state immediately for instant UI feedback
-    const currentDecisions = localDecisions
-    const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
-    setLocalDecisions(updatedDecisions)
-    
     setSaving(true)
     try {
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: updatedDecisions },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
+      // Get the decision comments in chronological order
+      const decisionComments = noteComments
+        .filter(comment => comment.is_decision)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       
-      if (updatedNote) {
-        onUpdate(updatedNote)
-      } else {
-        // Revert local state if database update failed
-        setLocalDecisions(currentDecisions)
+      if (decisionIndex < decisionComments.length) {
+        const decisionToDelete = decisionComments[decisionIndex]
+        const success = await deleteResearchNoteComment(decisionToDelete.id)
+        if (success) {
+          await loadNoteComments() // Reload to get fresh data
+        }
       }
     } catch (error) {
       console.error('Error deleting decision:', error)
-      // Revert local state on error
-      setLocalDecisions(currentDecisions)
       throw error
     } finally {
       setSaving(false)
@@ -681,7 +621,9 @@ export function NoteDetail({
               created_at: comment.created_at,
               updated_at: comment.updated_at
             }))}
-          decisions={localDecisions}
+          decisions={noteComments
+            .filter(comment => comment.is_decision)
+            .map(comment => `${comment.created_at}|${comment.comment_text}`)}
           user={currentUser || null}
           allUsers={availableUsers}
           showHistory={showHistory}
