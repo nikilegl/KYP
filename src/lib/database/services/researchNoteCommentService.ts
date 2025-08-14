@@ -5,7 +5,6 @@ export interface ResearchNoteComment {
   research_note_id: string
   user_id: string
   comment_text: string
-  is_decision: boolean
   created_at: string
   updated_at: string
 }
@@ -40,8 +39,7 @@ export const getResearchNoteComments = async (researchNoteId: string): Promise<R
 export const createResearchNoteComment = async (
   researchNoteId: string,
   commentText: string,
-  userId: string,
-  isDecision: boolean = false
+  userId: string
 ): Promise<ResearchNoteComment | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
@@ -51,7 +49,6 @@ export const createResearchNoteComment = async (
         research_note_id: researchNoteId,
         user_id: userId,
         comment_text: commentText,
-        is_decision: isDecision,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -74,8 +71,7 @@ export const createResearchNoteComment = async (
       .insert([{
         research_note_id: researchNoteId,
         user_id: userId,
-        comment_text: commentText,
-        is_decision: isDecision
+        comment_text: commentText
       }])
       .select()
       .single()

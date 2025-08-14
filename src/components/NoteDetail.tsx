@@ -368,7 +368,7 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-      const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id, false)
+      const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id)
       if (newComment) {
         await loadNoteComments() // Reload to get fresh data
       }
@@ -381,14 +381,14 @@ export function NoteDetail({
   }
 
   const handleAddDecision = async (decisionText: string) => {
-    if (!note || !currentUser) return
+    if (!note) return
     
     setSaving(true)
     try {
-      const newComment = await createResearchNoteComment(note.id, decisionText, currentUser.id, true)
-      if (newComment) {
-        await loadNoteComments() // Reload to get fresh data
-      }
+      // Add decision to the note's decision_text array
+      const currentDecisions = note.decision_text || []
+      const updatedDecisions = [...currentDecisions, `${new Date().toISOString()}|${decisionText}`]
+      await handleUpdateDecision(updatedDecisions)
     } catch (error) {
       console.error('Error adding decision:', error)
       throw error
@@ -428,48 +428,27 @@ export function NoteDetail({
   }
 
   const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
-    setSaving(true)
-    try {
-      // Get the decision comments in chronological order
-      const decisionComments = noteComments
-        .filter(comment => comment.is_decision)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      
-      if (decisionIndex < decisionComments.length) {
-        const decisionToEdit = decisionComments[decisionIndex]
-        const updatedComment = await updateResearchNoteComment(decisionToEdit.id, decisionText)
-        if (updatedComment) {
-          await loadNoteComments() // Reload to get fresh data
-        }
-      }
-    } catch (error) {
-      console.error('Error editing decision:', error)
-      throw error
-    } finally {
-      setSaving(false)
+    if (!note) return
+    
+    const currentDecisions = note.decision_text || []
+    if (decisionIndex < currentDecisions.length) {
+      const updatedDecisions = [...currentDecisions]
+      // Preserve timestamp if it exists, otherwise add current timestamp
+      const existingDecision = updatedDecisions[decisionIndex]
+      const timestampMatch = existingDecision.match(/^(.+?)\|(.+)$/)
+      const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
+      updatedDecisions[decisionIndex] = `${timestamp}|${decisionText}`
+      await handleUpdateDecision(updatedDecisions)
     }
   }
 
   const handleDeleteDecision = async (decisionIndex: number) => {
-    setSaving(true)
-    try {
-      // Get the decision comments in chronological order
-      const decisionComments = noteComments
-        .filter(comment => comment.is_decision)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      
-      if (decisionIndex < decisionComments.length) {
-        const decisionToDelete = decisionComments[decisionIndex]
-        const success = await deleteResearchNoteComment(decisionToDelete.id)
-        if (success) {
-          await loadNoteComments() // Reload to get fresh data
-        }
-      }
-    } catch (error) {
-      console.error('Error deleting decision:', error)
-      throw error
-    } finally {
-      setSaving(false)
+    if (!note) return
+    
+    const currentDecisions = note.decision_text || []
+    if (decisionIndex < currentDecisions.length) {
+      const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+      await handleUpdateDecision(updatedDecisions)
     }
   }
 
@@ -642,7 +621,6 @@ export function NoteDetail({
           entityId={note.id}
           entityType="research note"
           comments={noteComments
-            .filter(comment => !comment.is_decision)
             .map(comment => ({
               id: comment.id,
               user_id: comment.user_id,
@@ -650,9 +628,7 @@ export function NoteDetail({
               created_at: comment.created_at,
               updated_at: comment.updated_at
             }))}
-          decisions={noteComments
-            .filter(comment => comment.is_decision)
-            .map(comment => `${comment.created_at}|${comment.comment_text}`)}
+          decisions={note.decision_text || []}
           user={currentUser || null}
           allUsers={availableUsers}
           showHistory={showHistory}
