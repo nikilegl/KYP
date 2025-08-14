@@ -31,6 +31,7 @@ interface NoteDetailProps {
   noteTemplates?: NoteTemplate[]
   availableUsers?: WorkspaceUser[]
   currentUser?: User | null
+  projectId?: string
   onBack: () => void
   onUpdate: (updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => void
   onAssignStakeholderToProject: (stakeholderId: string) => Promise<void>
@@ -66,6 +67,7 @@ export function NoteDetail({
   noteTemplates = [],
   availableUsers = [],
   currentUser,
+  projectId,
   onBack, 
   onUpdate,
   onAssignStakeholderToProject,
@@ -552,22 +554,26 @@ export function NoteDetail({
   // Handle creation mode
   if (isCreating) {
     return (
-      <NoteCreateForm
-        assignedStakeholders={assignedStakeholders}
-        allWorkspaceStakeholders={allWorkspaceStakeholders}
-        projectAssignedStakeholderIds={projectAssignedStakeholderIds}
-        projectId={note?.project_id || ''}
-        userRoles={userRoles}
-        userPermissions={userPermissions}
-        lawFirms={lawFirms}
-        themes={themes}
-        noteTemplates={noteTemplates}
-        availableUsers={availableUsers}
-        onBack={onBack}
-        onAssignStakeholderToProject={onAssignStakeholderToProject}
-        onThemeCreate={onThemeCreate}
-        onCreate={onCreateNote!}
-      />
+      <div className="h-screen flex flex-col w-full">
+        <div className="flex-1 p-6 overflow-y-auto">
+          <NoteCreateForm
+            assignedStakeholders={assignedStakeholders}
+            allWorkspaceStakeholders={allWorkspaceStakeholders}
+            projectAssignedStakeholderIds={projectAssignedStakeholderIds}
+            projectId={projectId || note?.project_id || ''}
+            userRoles={userRoles}
+            userPermissions={userPermissions}
+            lawFirms={lawFirms}
+            themes={themes}
+            noteTemplates={noteTemplates}
+            availableUsers={availableUsers}
+            onBack={onBack}
+            onAssignStakeholderToProject={onAssignStakeholderToProject}
+            onThemeCreate={onThemeCreate}
+            onCreate={onCreateNote!}
+          />
+        </div>
+      </div>
     )
   }
 

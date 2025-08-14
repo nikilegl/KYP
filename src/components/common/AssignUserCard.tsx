@@ -25,7 +25,7 @@ export function AssignUserCard({
     if (selectedUserId === '') {
       onRemoveUser()
     } else {
-      const user = availableUsers.find(u => u.id === selectedUserId)
+      const user = availableUsers.find(u => u.user_id === selectedUserId)
       if (user) {
         onAssignUser(user)
       }
@@ -37,7 +37,7 @@ export function AssignUserCard({
       <div className={`flex items-center gap-2 ${className}`}>
         <Users size={16} className="text-blue-600" />
         <select
-          value={selectedUser?.id || ''}
+          value={selectedUser?.user_id || ''}
           onChange={handleSelectChange}
           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
         >
@@ -45,7 +45,7 @@ export function AssignUserCard({
           {availableUsers
             .filter(user => user.status === 'active')
             .map((user) => (
-              <option key={user.id} value={user.id}>
+              <option key={user.user_id} value={user.user_id}>
                 {user.user_email}
               </option>
             ))}
@@ -64,9 +64,8 @@ export function AssignUserCard({
       </div>
 
       <div>
-    
         <select
-          value={selectedUser?.id || ''}
+          value={selectedUser?.user_id || ''}
           onChange={handleSelectChange}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
@@ -74,7 +73,7 @@ export function AssignUserCard({
           {availableUsers
             .filter(user => user.status === 'active')
             .map((user) => (
-              <option key={user.id} value={user.id}>
+              <option key={user.user_id} value={user.user_id}>
                 {user.user_email} ({user.role})
               </option>
             ))}

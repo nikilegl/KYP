@@ -6,7 +6,8 @@ import { AddStakeholdersModal } from '../common/AddStakeholdersModal'
 import { AddLinkModal } from '../common/AddLinkModal'
 import { TagThemeCard } from '../common/TagThemeCard'
 import { NoteTemplateSelectionModal } from './NoteTemplateSelectionModal'
-import type { Stakeholder, UserRole } from '../../lib/supabase'
+import { AssignUserCard } from '../common/AssignUserCard'
+import type { Stakeholder, UserRole, Theme, WorkspaceUser, UserPermission, LawFirm, NoteTemplate } from '../../lib/supabase'
 
 interface NoteLink {
   name: string
