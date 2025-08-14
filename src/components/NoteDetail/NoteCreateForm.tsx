@@ -1,25 +1,20 @@
 import React, { useState } from 'react'
-import { ArrowLeft, Calendar, Check, Users, Sparkles, Plus, Trash2, ExternalLink, CheckCircle, ClipboardList, X } from 'lucide-react'
+import { ArrowLeft, Check, Plus, Trash2, ExternalLink, CheckCircle, ClipboardList, X, Tag } from 'lucide-react'
 import { CKEditorComponent } from '../CKEditorComponent'
 import { StakeholderAvatar } from '../common/StakeholderAvatar'
 import { AddStakeholdersModal } from '../common/AddStakeholdersModal'
 import { AddLinkModal } from '../common/AddLinkModal'
 import { TagThemeCard } from '../common/TagThemeCard'
+import { TaskForm, type TaskData } from '../common/TaskForm'
 import { NoteTemplateSelectionModal } from './NoteTemplateSelectionModal'
-import { AssignUserCard } from '../common/AssignUserCard'
-import type { Stakeholder, UserRole, Theme, WorkspaceUser, UserPermission, LawFirm, NoteTemplate } from '../../lib/supabase'
+import type { Stakeholder, UserRole, Theme, WorkspaceUser, UserPermission, LawFirm, NoteTemplate, Design } from '../../lib/supabase'
 
 interface NoteLink {
   name: string
   url: string
 }
 
-interface TaskData {
-  name: string
-  description: string
-  status: 'not_complete' | 'complete' | 'no_longer_required'
-  assignedToUserId?: string
-}
+
 
 interface NoteCreateFormProps {
   assignedStakeholders: Stakeholder[]
@@ -49,10 +44,8 @@ interface NoteCreateFormProps {
 }
 
 export function NoteCreateForm({ 
-  assignedStakeholders, 
   allWorkspaceStakeholders,
   projectId,
-  projectAssignedStakeholderIds,
   userRoles, 
   userPermissions = [],
   lawFirms = [],
@@ -60,7 +53,6 @@ export function NoteCreateForm({
   availableUsers = [],
   noteTemplates,
   onBack, 
-  onAssignStakeholderToProject,
   onThemeCreate,
   onCreate 
 }: NoteCreateFormProps) {
@@ -73,16 +65,17 @@ export function NoteCreateForm({
   const [links, setLinks] = useState<NoteLink[]>([])
   const [showAddLinkModal, setShowAddLinkModal] = useState(false)
   const [tasks, setTasks] = useState<TaskData[]>([])
-  const [newTask, setNewTask] = useState<TaskData>({
-    name: '',
-    description: '',
-    status: 'not_complete',
-    assignedToUserId: undefined,
-    projectId: projectId
-  })
   const [showAddStakeholderModal, setShowAddStakeholderModal] = useState(false)
   const [selectedThemes, setSelectedThemes] = useState<Theme[]>([])
   const [showTemplateModal, setShowTemplateModal] = useState(false)
+  
+  // Modal states
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false)
+  const [showTagThemeModal, setShowTagThemeModal] = useState(false)
+  const [showAddDesignLinkModal, setShowAddDesignLinkModal] = useState(false)
+  
+  // Linked designs state
+  const [linkedDesigns] = useState<Design[]>([])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -159,6 +152,7 @@ export function NoteCreateForm({
     setLinks([...links, newLink])
     console.log('🔗 NoteCreateForm: Added link to state:', newLink)
     console.log('🔗 NoteCreateForm: Current links array:', [...links, newLink])
+    setShowAddLinkModal(false)
   }
 
   const handleRemoveLink = (index: number) => {
@@ -166,24 +160,18 @@ export function NoteCreateForm({
     console.log('🔗 NoteCreateForm: Removed link at index:', index)
   }
 
-  const addTask = () => {
-    if (!newTask.name.trim()) return
-    
-    setTasks([...tasks, { ...newTask }])
-    setNewTask({
-      name: '',
-      description: '',
-      status: 'not_complete',
-      assignedToUserId: undefined
-    })
-  }
-
   const removeTask = (index: number) => {
     setTasks(tasks.filter((_, i) => i !== index))
   }
 
-  const updateNewTask = (field: keyof TaskData, value: string) => {
-    setNewTask(prev => ({ ...prev, [field]: value }))
+  const handleCreateTaskFromModal = async (taskData: TaskData) => {
+    try {
+      setTasks([...tasks, { ...taskData }])
+      setShowCreateTaskModal(false)
+    } catch (error) {
+      console.error('Error creating task:', error)
+      throw error
+    }
   }
 
   const handleSaveStakeholderSelection = async (stakeholderIds: string[]) => {
@@ -193,17 +181,6 @@ export function NoteCreateForm({
     } catch (error) {
       console.error('Error adding stakeholders to note:', error)
       throw error
-    }
-  }
-
-
-  const isValidUrl = (url: string) => {
-    if (!url.trim()) return true // Empty URLs are allowed
-    try {
-      new URL(url.startsWith('http') ? url : `https://${url}`)
-      return true
-    } catch {
-      return false
     }
   }
 
@@ -334,86 +311,16 @@ export function NoteCreateForm({
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <ClipboardList className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">
-              Associated Tasks ({tasks.length})
-            </h2>
-          </div>
-          
-          {/* Add New Task */}
-          <div className="border border-gray-200 rounded-lg p-4 mb-4">
-          
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Task Name
-                </label>
-                <input
-                  type="text"
-                  value={newTask.name}
-                  onChange={(e) => updateNewTask('name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter task name..."
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select
-                  value={newTask.status}
-                  onChange={(e) => updateNewTask('status', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="not_complete">Not Complete</option>
-                  <option value="complete">Complete</option>
-                  <option value="no_longer_required">No Longer Required</option>
-                </select>
-              </div>
+        {tasks.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ClipboardList className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">
+                Associated Tasks ({tasks.length})
+              </h2>
             </div>
             
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                value={newTask.description}
-                onChange={(e) => updateNewTask('description', e.target.value)}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                placeholder="Enter task description..."
-              />
-            </div>
-
-            {availableUsers.length > 0 && (
-              <div className="mt-4">
-                <AssignUserCard
-                  availableUsers={availableUsers}
-                  selectedUser={availableUsers.find(u => u.user_id === newTask.assignedToUserId) || null}
-                  onAssignUser={(user) => updateNewTask('assignedToUserId', user.user_id || '')}
-                  onRemoveUser={() => updateNewTask('assignedToUserId', '')}
-                />
-              </div>
-            )}
-            
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={addTask}
-                disabled={!newTask.name.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus size={16} />
-                Add Task
-              </button>
-            </div>
-          </div>
-          
-          {/* Task List */}
-          {tasks.length > 0 && (
+            {/* Task List */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-gray-700">Tasks to be created:</h3>
               {tasks.map((task, index) => (
@@ -457,16 +364,18 @@ export function NoteCreateForm({
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <TagThemeCard
-          availableThemes={themes}
-          selectedThemes={selectedThemes}
-          onThemeAdd={handleThemeAdd}
-          onThemeRemove={handleThemeRemove}
-          onThemeCreate={onThemeCreate}
-        />
+        {selectedThemes.length > 0 && (
+          <TagThemeCard
+            availableThemes={themes}
+            selectedThemes={selectedThemes}
+            onThemeAdd={handleThemeAdd}
+            onThemeRemove={handleThemeRemove}
+            onThemeCreate={onThemeCreate}
+          />
+        )}
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -515,12 +424,12 @@ export function NoteCreateForm({
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Links ({links.length})
-          </h2>
-          
-          {links.length > 0 ? (
+        {links.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Links ({links.length})
+            </h2>
+            
             <div className="space-y-3 mb-4">
               {links.map((link, index) => (
                 <div 
@@ -552,22 +461,67 @@ export function NoteCreateForm({
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-gray-500 italic text-center py-4 mb-4">No links added yet</p>
-          )}
-          
-          <button
-            type="button"
-            onClick={() => setShowAddLinkModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            Add Link
-          </button>
-        </div>
+          </div>
+        )}
+
+        {/* Unified Action Buttons Row */}
+        {(links.length === 0 || tasks.length === 0 || linkedDesigns.length === 0 || selectedThemes.length === 0) && (
+         
+            
+            <div className="flex items-center gap-4 flex-wrap">
+              {links.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddLinkModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Add Link
+                </button>
+              )}
+              
+              {tasks.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTaskModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Create tasks
+                </button>
+              )}
+
+              {linkedDesigns.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddDesignLinkModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Add Design Link
+                </button>
+              )}
+
+              {selectedThemes.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowTagThemeModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Tag size={16} />
+                  Tag Theme
+                </button>
+              )}
+            </div>
+        
+        )}
 
    
-          <div className="flex items-center justify-end space-x-3">
+          <div className="flex items-center justify-end space-x-3 pb-6">
             <button
               type="button"
               onClick={onBack}
@@ -612,6 +566,114 @@ export function NoteCreateForm({
         onClose={() => setShowAddLinkModal(false)}
         onSaveLink={handleSaveLink}
       />
+
+      {/* Create Task Modal */}
+      {showCreateTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Task</h3>
+              <button
+                onClick={() => setShowCreateTaskModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6">
+              <TaskForm
+                availableUsers={availableUsers}
+                initialTaskData={{ projectId: projectId }}
+                onSubmit={handleCreateTaskFromModal}
+                onCancel={() => setShowCreateTaskModal(false)}
+                loading={saving}
+                isEditing={false}
+                isInsideModal={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tag Theme Modal */}
+      {showTagThemeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Tag Theme</h3>
+              <button
+                onClick={() => setShowTagThemeModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
+              <TagThemeCard
+                availableThemes={themes}
+                selectedThemes={selectedThemes}
+                onThemeAdd={handleThemeAdd}
+                onThemeRemove={handleThemeRemove}
+                onThemeCreate={onThemeCreate}
+                className="border-0 shadow-none p-0"
+              />
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowTagThemeModal(false)}
+                disabled={saving}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowTagThemeModal(false)}
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Design Link Modal - Placeholder for now */}
+      {showAddDesignLinkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Add Design Link</h3>
+              <button
+                onClick={() => setShowAddDesignLinkModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">Design linking functionality will be available after note creation.</p>
+              <button
+                onClick={() => setShowAddDesignLinkModal(false)}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

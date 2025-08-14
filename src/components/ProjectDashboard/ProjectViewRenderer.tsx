@@ -107,6 +107,7 @@ interface ProjectViewRendererProps {
       name: string
       description: string
       status: 'not_complete' | 'complete' | 'no_longer_required'
+      assignedToUserId?: string
     }>
     themeIds: string[]
   }) => Promise<void>
