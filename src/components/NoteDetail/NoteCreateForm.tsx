@@ -489,7 +489,7 @@ export function NoteCreateForm({
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
                 >
                   <Plus size={16} />
-                  Create tasks
+                  Create Tasks
                 </button>
               )}
 
