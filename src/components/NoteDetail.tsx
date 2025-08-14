@@ -389,23 +389,7 @@ export function NoteDetail({
       const newDecisionWithTimestamp = `${new Date().toISOString()}|${decisionText}`
       const updatedDecisions = [...currentDecisions, newDecisionWithTimestamp]
         
-        const updatedNote = await updateResearchNote(
-          note.id,
-          { decision_text: updatedDecisions },
-          noteStakeholderIds,
-          noteThemes.map(t => t.id)
-        )
-        
-        if (updatedNote) {
-          onUpdate(updatedNote)
-        }
       const updatedNote = await updateResearchNote(
-    } catch (error) {
-      console.error('Error deleting decision:', error)
-      throw error
-    } finally {
-      setSaving(false)
-    }
         note.id,
         { decision_text: updatedDecisions },
         noteStakeholderIds,
@@ -460,14 +444,14 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-    const currentDecisions = note.decision_text || []
-    if (decisionIndex < currentDecisions.length) {
-      const updatedDecisions = [...currentDecisions]
-      // Preserve timestamp if it exists, otherwise add current timestamp
-      const existingDecision = updatedDecisions[decisionIndex]
-      const timestampMatch = existingDecision.match(/^(.+?)\|(.+)$/)
-      const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
-      updatedDecisions[decisionIndex] = `${timestamp}|${decisionText}`
+      const currentDecisions = note.decision_text || []
+      if (decisionIndex < currentDecisions.length) {
+        const updatedDecisions = [...currentDecisions]
+        // Preserve timestamp if it exists, otherwise add current timestamp
+        const existingDecision = updatedDecisions[decisionIndex]
+        const timestampMatch = existingDecision.match(/^(.+?)\|(.+)$/)
+        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
+        updatedDecisions[decisionIndex] = `${timestamp}|${decisionText}`
         
         const updatedNote = await updateResearchNote(
           note.id,
@@ -479,7 +463,7 @@ export function NoteDetail({
         if (updatedNote) {
           onUpdate(updatedNote)
         }
-    }
+      }
     } catch (error) {
       console.error('Error editing decision:', error)
       throw error
@@ -493,10 +477,16 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-    const currentDecisions = note.decision_text || []
-    if (decisionIndex < currentDecisions.length) {
-      const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
-      await handleUpdateDecision(updatedDecisions)
+      const currentDecisions = note.decision_text || []
+      if (decisionIndex < currentDecisions.length) {
+        const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+        await handleUpdateDecision(updatedDecisions)
+      }
+    } catch (error) {
+      console.error('Error deleting decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -604,64 +594,64 @@ export function NoteDetail({
       {/* Content with normal padding */}
       <div className="flex-1 w-full flex">
         <div className="flex-1 space-y-6 p-6">
-        <NoteContentTabs
-          key={`${note.id}-${note.summary || ''}`}
-          note={note}
-          onUpdateSummary={handleUpdateSummary}
-          saving={saving}
-        />
+          <NoteContentTabs
+            key={`${note.id}-${note.summary || ''}`}
+            note={note}
+            onUpdateSummary={handleUpdateSummary}
+            saving={saving}
+          />
 
-        <DecisionSection
-          entity={note}
-          onSave={handleUpdateDecision}
-          saving={saving}
-        />
+          <DecisionSection
+            entity={note}
+            onSave={handleUpdateDecision}
+            saving={saving}
+          />
 
-        <TagThemeCard
-          availableThemes={themes}
-          selectedThemes={noteThemes}
-          onThemeAdd={handleThemeAdd}
-          onThemeRemove={handleThemeRemove}
-          onThemeCreate={onThemeCreate}
-        />
+          <TagThemeCard
+            availableThemes={themes}
+            selectedThemes={noteThemes}
+            onThemeAdd={handleThemeAdd}
+            onThemeRemove={handleThemeRemove}
+            onThemeCreate={onThemeCreate}
+          />
 
-        <NoteStakeholdersSection
-          assignedStakeholders={assignedStakeholders}
-          allWorkspaceStakeholders={allWorkspaceStakeholders}
-          noteStakeholderIds={noteStakeholderIds}
-          noteId={note.id}
-          projectAssignedStakeholderIds={projectAssignedStakeholderIds}
-          userRoles={userRoles}
-          userPermissions={userPermissions}
-          lawFirms={lawFirms}
-          onSave={handleSaveStakeholders}
-          onAssignStakeholderToProject={onAssignStakeholderToProject}
-          onRemoveStakeholderFromNoteAndConditionallyProject={onRemoveStakeholderFromNoteAndConditionallyProject}
-          saving={saving}
-        />
+          <NoteStakeholdersSection
+            assignedStakeholders={assignedStakeholders}
+            allWorkspaceStakeholders={allWorkspaceStakeholders}
+            noteStakeholderIds={noteStakeholderIds}
+            noteId={note.id}
+            projectAssignedStakeholderIds={projectAssignedStakeholderIds}
+            userRoles={userRoles}
+            userPermissions={userPermissions}
+            lawFirms={lawFirms}
+            onSave={handleSaveStakeholders}
+            onAssignStakeholderToProject={onAssignStakeholderToProject}
+            onRemoveStakeholderFromNoteAndConditionallyProject={onRemoveStakeholderFromNoteAndConditionallyProject}
+            saving={saving}
+          />
 
-        <LinksSection
-          entityId={note.id}
-          entityType="note"
-          links={noteLinks}
-          onSaveLinks={handleSaveLinks}
-          saving={saving}
-        />
+          <LinksSection
+            entityId={note.id}
+            entityType="note"
+            links={noteLinks}
+            onSaveLinks={handleSaveLinks}
+            saving={saving}
+          />
 
-        <NoteLinkedDesigns
-          researchNoteId={note.id}
-          projectId={note.project_id}
-        />
+          <NoteLinkedDesigns
+            researchNoteId={note.id}
+            projectId={note.project_id}
+          />
 
-        <TasksSection
-          researchNoteId={note.id}
-          tasks={noteTasks}
-          availableUsers={availableUsers}
-          onCreateTask={handleCreateTask}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
-          saving={saving}
-        />
+          <TasksSection
+            researchNoteId={note.id}
+            tasks={noteTasks}
+            availableUsers={availableUsers}
+            onCreateTask={handleCreateTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            saving={saving}
+          />
         </div>
 
         {/* History Column */}
