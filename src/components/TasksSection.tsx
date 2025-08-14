@@ -118,7 +118,7 @@ export function TasksSection({
         <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 text-blue-600 rounded-lg hover:bg-blue-700 transition-all"
+          className="flex items-center gap-2 px-4 py-2 text-blue-600 rounded-lg hover:bg-gray-100 transition-all"
         >
           <Plus size={20} />
           Add Task
