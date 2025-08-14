@@ -404,7 +404,7 @@ export function NoteDetail({
       )
       
       if (updatedNote) {
-        setLocalDecisions(decisionTexts)
+        setLocalDecisions(updatedDecisions)
         onUpdate(updatedNote)
       }
     } catch (error) {
