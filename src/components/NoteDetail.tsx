@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, X, Tag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
 import { NoteHeader } from './NoteDetail/NoteHeader'
@@ -8,14 +8,15 @@ import { NoteEditModal } from './NoteDetail/NoteEditModal'
 import { NoteCreateForm } from './NoteDetail/NoteCreateForm'
 import { NoteContentTabs } from './NoteDetail/NoteContentTabs'
 import { LinksSection } from './common/LinksSection'
-import { DecisionSection } from './common/DecisionSection'
 import { NoteLinkedDesigns } from './NoteDetail/NoteLinkedAssets'
 import { TasksSection } from './TasksSection'
 import { TagThemeCard } from './common/TagThemeCard'
 import { HistorySection } from './common/HistorySection'
-import { getTasks, createTask, updateTask, deleteTask } from '../lib/database'
+import { TaskForm, type TaskData } from './common/TaskForm'
+import { AddLinkModal } from './common/AddLinkModal'
+import { getTasks, createTask, updateTask, deleteTask, getAssetsForResearchNote as getDesignsForResearchNote } from '../lib/database'
 import { getResearchNoteComments, createResearchNoteComment, updateResearchNoteComment, deleteResearchNoteComment, type ResearchNoteComment } from '../lib/database/services/researchNoteCommentService'
-import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, NoteTemplate, Task } from '../lib/supabase'
+import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, NoteTemplate, Task, Design } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
 interface NoteDetailProps {
@@ -30,6 +31,7 @@ interface NoteDetailProps {
   noteTemplates?: NoteTemplate[]
   availableUsers?: WorkspaceUser[]
   currentUser?: User | null
+  projectId?: string
   onBack: () => void
   onUpdate: (updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => void
   onAssignStakeholderToProject: (stakeholderId: string) => Promise<void>
@@ -47,6 +49,7 @@ interface NoteDetailProps {
       name: string
       description: string
       status: 'not_complete' | 'complete' | 'no_longer_required'
+      assignedToUserId?: string
     }>
     themeIds: string[]
   }) => Promise<void>
@@ -65,6 +68,7 @@ export function NoteDetail({
   noteTemplates = [],
   availableUsers = [],
   currentUser,
+  projectId,
   onBack, 
   onUpdate,
   onAssignStakeholderToProject,
@@ -79,13 +83,25 @@ export function NoteDetail({
   const [noteLinks, setNoteLinks] = useState<NoteLink[]>([])
   const [noteTasks, setNoteTasks] = useState<Task[]>([])
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
+  const [linkedDesigns, setLinkedDesigns] = useState<Design[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-  const [localDecisions, setLocalDecisions] = useState<string[]>([])
   
   // History panel state
   const [showHistory, setShowHistory] = useState(true)
   const [noteComments, setNoteComments] = useState<ResearchNoteComment[]>([])
+  
+  // Create task modal state
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false)
+  
+  // Add link modal state
+  const [showAddLinkModal, setShowAddLinkModal] = useState(false)
+  
+  // Add design link modal state  
+  const [showAddDesignLinkModal, setShowAddDesignLinkModal] = useState(false)
+  
+  // Tag theme modal state
+  const [showTagThemeModal, setShowTagThemeModal] = useState(false)
 
   useEffect(() => {
     if (note && !isCreating) {
@@ -94,16 +110,9 @@ export function NoteDetail({
       loadNoteTasks()
       loadNoteThemes()
       loadNoteComments()
-      setLocalDecisions(note.decision_text || [])
+      loadLinkedDesigns()
     }
   }, [note, isCreating])
-
-  // Update local decisions when note.decision_text changes
-  useEffect(() => {
-    if (note) {
-      setLocalDecisions(note.decision_text || [])
-    }
-  }, [note?.decision_text])
   const loadNoteStakeholders = async () => {
     if (!note) return
     
@@ -159,6 +168,17 @@ export function NoteDetail({
     }
   }
 
+  const loadLinkedDesigns = async () => {
+    if (!note) return
+    
+    try {
+      const designs = await getDesignsForResearchNote(note.id)
+      setLinkedDesigns(designs)
+    } catch (error) {
+      console.error('Error loading linked designs:', error)
+    }
+  }
+
   const handleSaveBasicInfo = async (updates: { name: string; note_date: string }) => {
     if (!note) return
     
@@ -184,29 +204,6 @@ export function NoteDetail({
       }
     } catch (error) {
       console.error('Error updating note basic info:', error)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleUpdateDecision = async (decisionTexts: string[]) => {
-    if (!note) return
-    
-    setSaving(true)
-    try {
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: decisionTexts },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
-      
-      if (updatedNote) {
-        onUpdate(updatedNote)
-      }
-    } catch (error) {
-      console.error('Error updating decision:', error)
-      throw error
     } finally {
       setSaving(false)
     }
@@ -315,6 +312,34 @@ export function NoteDetail({
     }
   }
 
+  const handleCreateTaskFromButton = async (taskData: TaskData) => {
+    try {
+      await handleCreateTask(
+        taskData.name,
+        taskData.description,
+        taskData.status,
+        taskData.assignedToUserId
+      )
+      setShowCreateTaskModal(false)
+    } catch (error) {
+      console.error('Error creating task:', error)
+      throw error
+    }
+  }
+
+  const handleAddNewLink = async (name: string, url: string) => {
+    try {
+      // Create new link and combine with existing links
+      const newLink = { name, url }
+      const updatedLinks = [...noteLinks.map(link => ({ ...link })), newLink]
+      await handleSaveLinks(updatedLinks)
+      setShowAddLinkModal(false)
+    } catch (error) {
+      console.error('Error adding new link:', error)
+      throw error
+    }
+  }
+
   const handleUpdateTask = async (taskId: string, updates: { name?: string; description?: string; status?: string }) => {
     setSaving(true)
     try {
@@ -389,23 +414,13 @@ export function NoteDetail({
   }
 
   const handleAddDecision = async (decisionText: string) => {
-    if (!note) return
+    if (!note || !currentUser) return
     
     setSaving(true)
     try {
-      const currentDecisions = localDecisions
-      const updatedDecisions = [...currentDecisions, decisionText]
-        
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: updatedDecisions },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
-      
-      if (updatedNote) {
-        setLocalDecisions(updatedDecisions)
-        onUpdate(updatedNote)
+      const newComment = await createResearchNoteComment(note.id, decisionText, currentUser.id, true)
+      if (newComment) {
+        await loadNoteComments() // Reload to get fresh data
       }
     } catch (error) {
       console.error('Error adding decision:', error)
@@ -448,25 +463,18 @@ export function NoteDetail({
   }
 
   const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
-    if (!note) return
-    
     setSaving(true)
     try {
-      const currentDecisions = localDecisions
-      if (decisionIndex < currentDecisions.length) {
-        const updatedDecisions = [...currentDecisions]
-        updatedDecisions[decisionIndex] = decisionText
-        
-        const updatedNote = await updateResearchNote(
-          note.id,
-          { decision_text: updatedDecisions },
-          noteStakeholderIds,
-          noteThemes.map(t => t.id)
-        )
-        
-        if (updatedNote) {
-          setLocalDecisions(updatedDecisions)
-          onUpdate(updatedNote)
+      // Get the decision comments in chronological order
+      const decisionComments = noteComments
+        .filter(comment => comment.is_decision)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      
+      if (decisionIndex < decisionComments.length) {
+        const decisionToEdit = decisionComments[decisionIndex]
+        const updatedComment = await updateResearchNoteComment(decisionToEdit.id, decisionText)
+        if (updatedComment) {
+          await loadNoteComments() // Reload to get fresh data
         }
       }
     } catch (error) {
@@ -478,32 +486,22 @@ export function NoteDetail({
   }
 
   const handleDeleteDecision = async (decisionIndex: number) => {
-    if (!note) return
-    
-    // Update local state immediately for instant UI feedback
-    const currentDecisions = localDecisions
-    const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
-    setLocalDecisions(updatedDecisions)
-    
     setSaving(true)
     try {
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: updatedDecisions },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
+      // Get the decision comments in chronological order
+      const decisionComments = noteComments
+        .filter(comment => comment.is_decision)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       
-      if (updatedNote) {
-        onUpdate(updatedNote)
-      } else {
-        // Revert local state if database update failed
-        setLocalDecisions(currentDecisions)
+      if (decisionIndex < decisionComments.length) {
+        const decisionToDelete = decisionComments[decisionIndex]
+        const success = await deleteResearchNoteComment(decisionToDelete.id)
+        if (success) {
+          await loadNoteComments() // Reload to get fresh data
+        }
       }
     } catch (error) {
       console.error('Error deleting decision:', error)
-      // Revert local state on error
-      setLocalDecisions(currentDecisions)
       throw error
     } finally {
       setSaving(false)
@@ -557,22 +555,26 @@ export function NoteDetail({
   // Handle creation mode
   if (isCreating) {
     return (
-      <NoteCreateForm
-        assignedStakeholders={assignedStakeholders}
-        allWorkspaceStakeholders={allWorkspaceStakeholders}
-        projectAssignedStakeholderIds={projectAssignedStakeholderIds}
-        projectId={note?.project_id || ''}
-        userRoles={userRoles}
-        userPermissions={userPermissions}
-        lawFirms={lawFirms}
-        themes={themes}
-        noteTemplates={noteTemplates}
-        availableUsers={availableUsers}
-        onBack={onBack}
-        onAssignStakeholderToProject={onAssignStakeholderToProject}
-        onThemeCreate={onThemeCreate}
-        onCreate={onCreateNote!}
-      />
+      <div className="h-screen flex flex-col w-full">
+        <div className="flex-1 p-6 overflow-y-auto">
+          <NoteCreateForm
+            assignedStakeholders={assignedStakeholders}
+            allWorkspaceStakeholders={allWorkspaceStakeholders}
+            projectAssignedStakeholderIds={projectAssignedStakeholderIds}
+            projectId={projectId || note?.project_id || ''}
+            userRoles={userRoles}
+            userPermissions={userPermissions}
+            lawFirms={lawFirms}
+            themes={themes}
+            noteTemplates={noteTemplates}
+            availableUsers={availableUsers}
+            onBack={onBack}
+            onAssignStakeholderToProject={onAssignStakeholderToProject}
+            onThemeCreate={onThemeCreate}
+            onCreate={onCreateNote!}
+          />
+        </div>
+      </div>
     )
   }
 
@@ -621,14 +623,15 @@ export function NoteDetail({
             saving={saving}
           />
 
-         
-          <TagThemeCard
-            availableThemes={themes}
-            selectedThemes={noteThemes}
-            onThemeAdd={handleThemeAdd}
-            onThemeRemove={handleThemeRemove}
-            onThemeCreate={onThemeCreate}
-          />
+          {noteThemes.length > 0 && (
+            <TagThemeCard
+              availableThemes={themes}
+              selectedThemes={noteThemes}
+              onThemeAdd={handleThemeAdd}
+              onThemeRemove={handleThemeRemove}
+              onThemeCreate={onThemeCreate}
+            />
+          )}
 
           <NoteStakeholdersSection
             assignedStakeholders={assignedStakeholders}
@@ -645,28 +648,85 @@ export function NoteDetail({
             saving={saving}
           />
 
-          <LinksSection
-            entityId={note.id}
-            entityType="note"
-            links={noteLinks}
-            onSaveLinks={handleSaveLinks}
-            saving={saving}
-          />
+          {noteLinks.length > 0 && (
+            <LinksSection
+              entityId={note.id}
+              entityType="note"
+              links={noteLinks}
+              onSaveLinks={handleSaveLinks}
+              saving={saving}
+            />
+          )}
 
           <NoteLinkedDesigns
             researchNoteId={note.id}
             projectId={note.project_id}
+            linkedDesigns={linkedDesigns}
+            onLinkedDesignsChange={setLinkedDesigns}
+            showLinkModal={showAddDesignLinkModal}
+            onShowLinkModal={setShowAddDesignLinkModal}
           />
 
-          <TasksSection
-            researchNoteId={note.id}
-            tasks={noteTasks}
-            availableUsers={availableUsers}
-            onCreateTask={handleCreateTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
-            saving={saving}
-          />
+          {noteTasks.length > 0 && (
+            <TasksSection
+              researchNoteId={note.id}
+              tasks={noteTasks}
+              availableUsers={availableUsers}
+              onCreateTask={handleCreateTask}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
+              saving={saving}
+            />
+          )}
+
+          {/* Unified Action Buttons Row */}
+          {(noteLinks.length === 0 || noteTasks.length === 0 || linkedDesigns.length === 0 || noteThemes.length === 0) && (
+            <div className="flex items-center gap-4">
+              {noteLinks.length === 0 && (
+                <button
+                  onClick={() => setShowAddLinkModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Add Link
+                </button>
+              )}
+              
+              {noteTasks.length === 0 && (
+                <button
+                  onClick={() => setShowCreateTaskModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Create tasks
+                </button>
+              )}
+
+              {linkedDesigns.length === 0 && (
+                <button
+                  onClick={() => setShowAddDesignLinkModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Add Design Link
+                </button>
+              )}
+
+              {noteThemes.length === 0 && (
+                <button
+                  onClick={() => setShowTagThemeModal(true)}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  <Tag size={16} />
+                  Tag Theme
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* History Column */}
@@ -681,7 +741,9 @@ export function NoteDetail({
               created_at: comment.created_at,
               updated_at: comment.updated_at
             }))}
-          decisions={localDecisions}
+          decisions={noteComments
+            .filter(comment => comment.is_decision)
+            .map(comment => `${comment.created_at}|${comment.comment_text}`)}
           user={currentUser || null}
           allUsers={availableUsers}
           showHistory={showHistory}
@@ -713,6 +775,92 @@ export function NoteDetail({
           onClose={() => setShowEditModal(false)}
           saving={saving}
         />
+      )}
+
+      {/* Create Task Modal */}
+      {showCreateTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Task</h3>
+              <button
+                onClick={() => setShowCreateTaskModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6">
+              <TaskForm
+                availableUsers={availableUsers}
+                initialTaskData={{ projectId: note.project_id }}
+                onSubmit={handleCreateTaskFromButton}
+                onCancel={() => setShowCreateTaskModal(false)}
+                loading={saving}
+                isEditing={false}
+                isInsideModal={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Link Modal */}
+      <AddLinkModal
+        isOpen={showAddLinkModal}
+        onClose={() => setShowAddLinkModal(false)}
+        onSaveLink={handleAddNewLink}
+      />
+
+      {/* Tag Theme Modal */}
+      {showTagThemeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Tag Theme</h3>
+              <button
+                onClick={() => setShowTagThemeModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
+              <TagThemeCard
+                availableThemes={themes}
+                selectedThemes={noteThemes}
+                onThemeAdd={handleThemeAdd}
+                onThemeRemove={handleThemeRemove}
+                onThemeCreate={onThemeCreate}
+                className="border-0 shadow-none p-0"
+              />
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowTagThemeModal(false)}
+                disabled={saving}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowTagThemeModal(false)}
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

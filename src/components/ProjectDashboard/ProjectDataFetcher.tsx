@@ -385,6 +385,7 @@ export function ProjectDataFetcher({
       name: string
       description: string
       status: 'not_complete' | 'complete' | 'no_longer_required'
+      assignedToUserId?: string
     }>
     themeIds: string[]
   }) => {
@@ -423,16 +424,27 @@ export function ProjectDataFetcher({
         // Create associated tasks
         if (noteData.tasks && noteData.tasks.length > 0) {
           try {
+            console.log('📝 ProjectDataFetcher: Creating tasks for note:', note.id, noteData.tasks)
             const { createTask } = await import('../../lib/database')
             await Promise.all(
               noteData.tasks.map(task => 
-                createTask(project.id, task.name, task.description, task.status)
+                createTask(
+                  project.id, 
+                  task.name, 
+                  task.description, 
+                  task.status,
+                  task.assignedToUserId, // Pass assigned user ID if available
+                  note.id // Link task to the research note
+                )
               )
             )
+            console.log('✅ ProjectDataFetcher: Successfully created all tasks for note:', note.id)
           } catch (taskError) {
-            console.error('Error creating tasks:', taskError)
+            console.error('❌ ProjectDataFetcher: Error creating tasks:', taskError)
             // Note was created successfully, but tasks failed - could show a warning
           }
+        } else {
+          console.log('📝 ProjectDataFetcher: No tasks to create for note:', note.id)
         }
       }
     } catch (error) {

@@ -107,6 +107,7 @@ interface ProjectViewRendererProps {
       name: string
       description: string
       status: 'not_complete' | 'complete' | 'no_longer_required'
+      assignedToUserId?: string
     }>
     themeIds: string[]
   }) => Promise<void>
@@ -435,6 +436,7 @@ export function ProjectViewRenderer({
           noteTemplates={noteTemplates}
           availableUsers={workspaceUsers}
           currentUser={user}
+          projectId={project.id}
           onBack={handleBackFromNote}
           onUpdate={onUpdateNote}
           onAssignStakeholderToProject={onAssignStakeholder}
