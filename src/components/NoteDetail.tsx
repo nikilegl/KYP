@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { Sparkles, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemes, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
+import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
 import { NoteHeader } from './NoteDetail/NoteHeader'
 import { NoteStakeholdersSection } from './NoteDetail/NoteStakeholdersSection'
 import { NoteEditModal } from './NoteDetail/NoteEditModal'
@@ -15,7 +15,8 @@ import { TagThemeCard } from './common/TagThemeCard'
 import { HistorySection } from './common/HistorySection'
 import { getTasks, createTask, updateTask, deleteTask } from '../lib/database'
 import { getResearchNoteComments, createResearchNoteComment, updateResearchNoteComment, deleteResearchNoteComment, type ResearchNoteComment } from '../lib/database/services/researchNoteCommentService'
-import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, User } from '../lib/supabase'
+import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, NoteTemplate, Task } from '../lib/supabase'
+import type { User } from '@supabase/supabase-js'
 
 interface NoteDetailProps {
   note: ResearchNote | null
@@ -77,7 +78,6 @@ export function NoteDetail({
   const [saving, setSaving] = useState(false)
   const [noteLinks, setNoteLinks] = useState<NoteLink[]>([])
   const [noteTasks, setNoteTasks] = useState<Task[]>([])
-  const [loadingTasks, setLoadingTasks] = useState(false)
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
@@ -85,7 +85,6 @@ export function NoteDetail({
   // History panel state
   const [showHistory, setShowHistory] = useState(true)
   const [noteComments, setNoteComments] = useState<ResearchNoteComment[]>([])
-  const [loadingComments, setLoadingComments] = useState(false)
 
   useEffect(() => {
     if (note && !isCreating) {
@@ -133,32 +132,26 @@ export function NoteDetail({
   const loadNoteTasks = async () => {
     if (!note) return
     
-    setLoadingTasks(true)
     try {
       const tasks = await getTasks(undefined, note.id)
       setNoteTasks(tasks)
     } catch (error) {
       console.error('Error loading note tasks:', error)
-    } finally {
-      setLoadingTasks(false)
     }
   }
 
   const loadNoteComments = async () => {
     if (!note) return
     
-    setLoadingComments(true)
     try {
       const comments = await getResearchNoteComments(note.id)
       setNoteComments(comments)
     } catch (error) {
       console.error('Error loading note comments:', error)
-    } finally {
-      setLoadingComments(false)
     }
   }
 
-  const handleSaveBasicInfo = async (updates: { name: string; note_date: string; is_decision: boolean }) => {
+  const handleSaveBasicInfo = async (updates: { name: string; note_date: string }) => {
     if (!note) return
     
     console.log('🔵 NoteDetail: handleSaveBasicInfo called with updates:', updates)
@@ -211,8 +204,8 @@ export function NoteDetail({
     }
   }
 
-  const handleUpdateSummary = async (summary: string) => {
-    if (!note) return
+  const handleUpdateSummary = async (summary: string): Promise<ResearchNote | null> => {
+    if (!note) return null
     
     setSaving(true)
     try {
@@ -287,7 +280,7 @@ export function NoteDetail({
     }
   }
 
-  const handleCreateTask = async (name: string, description: string, status: string, assignedToUserId?: string) => {
+  const handleCreateTask = async (name: string, description: string, status: string, assignedToUserId?: string, userStoryId?: string) => {
     if (!note) return
     
     setSaving(true)
@@ -297,10 +290,10 @@ export function NoteDetail({
         note.project_id,
         name,
         description,
-        status,
+        status as 'not_complete' | 'complete' | 'no_longer_required',
         assignedToUserId,
         note.id, // researchNoteId
-        undefined // userStoryId
+        userStoryId // userStoryId
       )
       
       // Reload tasks to show the new task
@@ -317,7 +310,10 @@ export function NoteDetail({
   const handleUpdateTask = async (taskId: string, updates: { name?: string; description?: string; status?: string }) => {
     setSaving(true)
     try {
-      await updateTask(taskId, updates)
+      await updateTask(taskId, {
+        ...updates,
+        status: updates.status as 'not_complete' | 'complete' | 'no_longer_required' | undefined
+      })
       
       // Reload tasks to show the updated task
       await loadNoteTasks()
@@ -431,6 +427,52 @@ export function NoteDetail({
     }
   }
 
+  const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
+    setSaving(true)
+    try {
+      // Get the decision comments in chronological order
+      const decisionComments = noteComments
+        .filter(comment => comment.is_decision)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      
+      if (decisionIndex < decisionComments.length) {
+        const decisionToEdit = decisionComments[decisionIndex]
+        const updatedComment = await updateResearchNoteComment(decisionToEdit.id, decisionText)
+        if (updatedComment) {
+          await loadNoteComments() // Reload to get fresh data
+        }
+      }
+    } catch (error) {
+      console.error('Error editing decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteDecision = async (decisionIndex: number) => {
+    setSaving(true)
+    try {
+      // Get the decision comments in chronological order
+      const decisionComments = noteComments
+        .filter(comment => comment.is_decision)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      
+      if (decisionIndex < decisionComments.length) {
+        const decisionToDelete = decisionComments[decisionIndex]
+        const success = await deleteResearchNoteComment(decisionToDelete.id)
+        if (success) {
+          await loadNoteComments() // Reload to get fresh data
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleShareToSlack = async () => {
     if (!note || !supabase) return
     
@@ -482,11 +524,13 @@ export function NoteDetail({
         assignedStakeholders={assignedStakeholders}
         allWorkspaceStakeholders={allWorkspaceStakeholders}
         projectAssignedStakeholderIds={projectAssignedStakeholderIds}
+        projectId={note?.project_id || ''}
         userRoles={userRoles}
         userPermissions={userPermissions}
         lawFirms={lawFirms}
         themes={themes}
         noteTemplates={noteTemplates}
+        availableUsers={availableUsers}
         onBack={onBack}
         onAssignStakeholderToProject={onAssignStakeholderToProject}
         onThemeCreate={onThemeCreate}
@@ -597,20 +641,27 @@ export function NoteDetail({
         <HistorySection
           entityId={note.id}
           entityType="research note"
-          comments={noteComments.map(comment => ({
-            id: comment.id,
-            user_id: comment.user_id,
-            comment_text: comment.comment_text,
-            created_at: comment.created_at,
-            updated_at: comment.updated_at
-          }))}
-          user={currentUser}
+          comments={noteComments
+            .filter(comment => !comment.is_decision)
+            .map(comment => ({
+              id: comment.id,
+              user_id: comment.user_id,
+              comment_text: comment.comment_text,
+              created_at: comment.created_at,
+              updated_at: comment.updated_at
+            }))}
+          decisions={noteComments
+            .filter(comment => comment.is_decision)
+            .map(comment => `${comment.created_at}|${comment.comment_text}`)}
+          user={currentUser || null}
           allUsers={availableUsers}
           showHistory={showHistory}
           onAddComment={handleAddComment}
           onEditComment={handleEditComment}
           onDeleteComment={handleDeleteComment}
           onAddDecision={handleAddDecision}
+          onEditDecision={handleEditDecision}
+          onDeleteDecision={handleDeleteDecision}
           saving={saving}
         />
       </div>
