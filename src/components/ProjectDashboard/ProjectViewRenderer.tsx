@@ -434,6 +434,7 @@ export function ProjectViewRenderer({
           themes={themes}
           noteTemplates={noteTemplates}
           availableUsers={workspaceUsers}
+          currentUser={user}
           onBack={handleBackFromNote}
           onUpdate={onUpdateNote}
           onAssignStakeholderToProject={onAssignStakeholder}
@@ -672,7 +673,7 @@ export function ProjectViewRenderer({
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto" ref={mainContentRef}>
-        <div className={currentView === 'stakeholder-detail' && selectedStakeholder || currentView === 'user-story-detail' || currentView === 'user-story-create' || (selectedUserStory && currentView !== 'user-stories') || currentView === 'design-detail' ? '' : 'p-6'}>
+        <div className={currentView === 'stakeholder-detail' && selectedStakeholder || currentView === 'user-story-detail' || currentView === 'user-story-create' || (selectedUserStory && currentView !== 'user-stories') || currentView === 'design-detail' || currentView === 'note-detail' ? '' : 'p-6'}>
           {renderContent()}
         </div>
       </main>

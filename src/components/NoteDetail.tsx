@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { Sparkles, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemes, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
+import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
 import { NoteHeader } from './NoteDetail/NoteHeader'
 import { NoteStakeholdersSection } from './NoteDetail/NoteStakeholdersSection'
 import { NoteEditModal } from './NoteDetail/NoteEditModal'
@@ -12,8 +12,11 @@ import { DecisionSection } from './common/DecisionSection'
 import { NoteLinkedDesigns } from './NoteDetail/NoteLinkedAssets'
 import { TasksSection } from './TasksSection'
 import { TagThemeCard } from './common/TagThemeCard'
+import { HistorySection } from './common/HistorySection'
 import { getTasks, createTask, updateTask, deleteTask } from '../lib/database'
-import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme } from '../lib/supabase'
+import { getResearchNoteComments, createResearchNoteComment, updateResearchNoteComment, deleteResearchNoteComment, type ResearchNoteComment } from '../lib/database/services/researchNoteCommentService'
+import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, NoteTemplate, Task } from '../lib/supabase'
+import type { User } from '@supabase/supabase-js'
 
 interface NoteDetailProps {
   note: ResearchNote | null
@@ -26,6 +29,7 @@ interface NoteDetailProps {
   themes: Theme[]
   noteTemplates?: NoteTemplate[]
   availableUsers?: WorkspaceUser[]
+  currentUser?: User | null
   onBack: () => void
   onUpdate: (updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => void
   onAssignStakeholderToProject: (stakeholderId: string) => Promise<void>
@@ -60,6 +64,7 @@ export function NoteDetail({
   themes,
   noteTemplates = [],
   availableUsers = [],
+  currentUser,
   onBack, 
   onUpdate,
   onAssignStakeholderToProject,
@@ -73,10 +78,14 @@ export function NoteDetail({
   const [saving, setSaving] = useState(false)
   const [noteLinks, setNoteLinks] = useState<NoteLink[]>([])
   const [noteTasks, setNoteTasks] = useState<Task[]>([])
-  const [loadingTasks, setLoadingTasks] = useState(false)
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [localDecisions, setLocalDecisions] = useState<string[]>([])
+  
+  // History panel state
+  const [showHistory, setShowHistory] = useState(true)
+  const [noteComments, setNoteComments] = useState<ResearchNoteComment[]>([])
 
   useEffect(() => {
     if (note && !isCreating) {
@@ -84,9 +93,17 @@ export function NoteDetail({
       loadNoteLinks()
       loadNoteTasks()
       loadNoteThemes()
+      loadNoteComments()
+      setLocalDecisions(note.decision_text || [])
     }
   }, [note, isCreating])
 
+  // Update local decisions when note.decision_text changes
+  useEffect(() => {
+    if (note) {
+      setLocalDecisions(note.decision_text || [])
+    }
+  }, [note?.decision_text])
   const loadNoteStakeholders = async () => {
     if (!note) return
     
@@ -123,18 +140,26 @@ export function NoteDetail({
   const loadNoteTasks = async () => {
     if (!note) return
     
-    setLoadingTasks(true)
     try {
       const tasks = await getTasks(undefined, note.id)
       setNoteTasks(tasks)
     } catch (error) {
       console.error('Error loading note tasks:', error)
-    } finally {
-      setLoadingTasks(false)
     }
   }
 
-  const handleSaveBasicInfo = async (updates: { name: string; note_date: string; is_decision: boolean }) => {
+  const loadNoteComments = async () => {
+    if (!note) return
+    
+    try {
+      const comments = await getResearchNoteComments(note.id)
+      setNoteComments(comments)
+    } catch (error) {
+      console.error('Error loading note comments:', error)
+    }
+  }
+
+  const handleSaveBasicInfo = async (updates: { name: string; note_date: string }) => {
     if (!note) return
     
     console.log('🔵 NoteDetail: handleSaveBasicInfo called with updates:', updates)
@@ -187,8 +212,8 @@ export function NoteDetail({
     }
   }
 
-  const handleUpdateSummary = async (summary: string) => {
-    if (!note) return
+  const handleUpdateSummary = async (summary: string): Promise<ResearchNote | null> => {
+    if (!note) return null
     
     setSaving(true)
     try {
@@ -263,7 +288,7 @@ export function NoteDetail({
     }
   }
 
-  const handleCreateTask = async (name: string, description: string, status: string, assignedToUserId?: string) => {
+  const handleCreateTask = async (name: string, description: string, status: string, assignedToUserId?: string, userStoryId?: string) => {
     if (!note) return
     
     setSaving(true)
@@ -273,10 +298,10 @@ export function NoteDetail({
         note.project_id,
         name,
         description,
-        status,
+        status as 'not_complete' | 'complete' | 'no_longer_required',
         assignedToUserId,
         note.id, // researchNoteId
-        undefined // userStoryId
+        userStoryId // userStoryId
       )
       
       // Reload tasks to show the new task
@@ -293,7 +318,10 @@ export function NoteDetail({
   const handleUpdateTask = async (taskId: string, updates: { name?: string; description?: string; status?: string }) => {
     setSaving(true)
     try {
-      await updateTask(taskId, updates)
+      await updateTask(taskId, {
+        ...updates,
+        status: updates.status as 'not_complete' | 'complete' | 'no_longer_required' | undefined
+      })
       
       // Reload tasks to show the updated task
       await loadNoteTasks()
@@ -339,6 +367,146 @@ export function NoteDetail({
       setNoteThemes(noteThemes.filter(theme => theme.id !== themeId))
     } catch (error) {
       console.error('Error unlinking theme from note:', error)
+    }
+  }
+
+  // Comment handling functions
+  const handleAddComment = async (commentText: string) => {
+    if (!note || !currentUser) return
+    
+    setSaving(true)
+    try {
+      const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id)
+      if (newComment) {
+        setNoteComments([newComment, ...noteComments])
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddDecision = async (decisionText: string) => {
+    if (!note) return
+    
+    setSaving(true)
+    try {
+      const currentDecisions = localDecisions
+      const updatedDecisions = [...currentDecisions, decisionText]
+        
+      const updatedNote = await updateResearchNote(
+        note.id,
+        { decision_text: updatedDecisions },
+        noteStakeholderIds,
+        noteThemes.map(t => t.id)
+      )
+      
+      if (updatedNote) {
+        setLocalDecisions(updatedDecisions)
+        onUpdate(updatedNote)
+      }
+    } catch (error) {
+      console.error('Error adding decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEditComment = async (commentId: string, commentText: string) => {
+    setSaving(true)
+    try {
+      const updatedComment = await updateResearchNoteComment(commentId, commentText)
+      if (updatedComment) {
+        setNoteComments(noteComments.map(comment => 
+          comment.id === commentId ? updatedComment : comment
+        ))
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    setSaving(true)
+    try {
+      const success = await deleteResearchNoteComment(commentId)
+      if (success) {
+        setNoteComments(noteComments.filter(comment => comment.id !== commentId))
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
+    if (!note) return
+    
+    setSaving(true)
+    try {
+      const currentDecisions = localDecisions
+      if (decisionIndex < currentDecisions.length) {
+        const updatedDecisions = [...currentDecisions]
+        updatedDecisions[decisionIndex] = decisionText
+        
+        const updatedNote = await updateResearchNote(
+          note.id,
+          { decision_text: updatedDecisions },
+          noteStakeholderIds,
+          noteThemes.map(t => t.id)
+        )
+        
+        if (updatedNote) {
+          setLocalDecisions(updatedDecisions)
+          onUpdate(updatedNote)
+        }
+      }
+    } catch (error) {
+      console.error('Error editing decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteDecision = async (decisionIndex: number) => {
+    if (!note) return
+    
+    // Update local state immediately for instant UI feedback
+    const currentDecisions = localDecisions
+    const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+    setLocalDecisions(updatedDecisions)
+    
+    setSaving(true)
+    try {
+      const updatedNote = await updateResearchNote(
+        note.id,
+        { decision_text: updatedDecisions },
+        noteStakeholderIds,
+        noteThemes.map(t => t.id)
+      )
+      
+      if (updatedNote) {
+        onUpdate(updatedNote)
+      } else {
+        // Revert local state if database update failed
+        setLocalDecisions(currentDecisions)
+      }
+    } catch (error) {
+      console.error('Error deleting decision:', error)
+      // Revert local state on error
+      setLocalDecisions(currentDecisions)
+      throw error
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -393,11 +561,13 @@ export function NoteDetail({
         assignedStakeholders={assignedStakeholders}
         allWorkspaceStakeholders={allWorkspaceStakeholders}
         projectAssignedStakeholderIds={projectAssignedStakeholderIds}
+        projectId={note?.project_id || ''}
         userRoles={userRoles}
         userPermissions={userPermissions}
         lawFirms={lawFirms}
         themes={themes}
         noteTemplates={noteTemplates}
+        availableUsers={availableUsers}
         onBack={onBack}
         onAssignStakeholderToProject={onAssignStakeholderToProject}
         onThemeCreate={onThemeCreate}
@@ -409,7 +579,7 @@ export function NoteDetail({
   if (!note) return null
 
   return (
-    <div className="h-full flex flex-col w-full">
+    <div className="h-screen flex flex-col w-full relative">
       {/* Slack Share Status */}
       {slackShareStatus && (
         <div className={`p-4 rounded-lg border absolute z-100 w-[240px] ${
@@ -432,6 +602,7 @@ export function NoteDetail({
         </div>
       )}
 
+      {/* Full-width page header */}
       <NoteHeader 
         note={note} 
         onBack={onBack} 
@@ -440,66 +611,100 @@ export function NoteDetail({
         sharingToSlack={sharingToSlack}
       />
 
-      <div className="flex-1 overflow-y-auto w-full space-y-6">
-        <NoteContentTabs
-          key={`${note.id}-${note.summary || ''}`}
-          note={note}
-          onUpdateSummary={handleUpdateSummary}
-          saving={saving}
-        />
+      {/* Content with normal padding */}
+      <div className="flex-1 w-full flex">
+        <div className="flex-1 space-y-6 p-6">
+          <NoteContentTabs
+            key={`${note.id}-${note.summary || ''}`}
+            note={note}
+            onUpdateSummary={handleUpdateSummary}
+            saving={saving}
+          />
 
-        <DecisionSection
-          entity={note}
-          onSave={handleUpdateDecision}
-          saving={saving}
-        />
+         
+          <TagThemeCard
+            availableThemes={themes}
+            selectedThemes={noteThemes}
+            onThemeAdd={handleThemeAdd}
+            onThemeRemove={handleThemeRemove}
+            onThemeCreate={onThemeCreate}
+          />
 
-        <TagThemeCard
-          availableThemes={themes}
-          selectedThemes={noteThemes}
-          onThemeAdd={handleThemeAdd}
-          onThemeRemove={handleThemeRemove}
-          onThemeCreate={onThemeCreate}
-        />
+          <NoteStakeholdersSection
+            assignedStakeholders={assignedStakeholders}
+            allWorkspaceStakeholders={allWorkspaceStakeholders}
+            noteStakeholderIds={noteStakeholderIds}
+            noteId={note.id}
+            projectAssignedStakeholderIds={projectAssignedStakeholderIds}
+            userRoles={userRoles}
+            userPermissions={userPermissions}
+            lawFirms={lawFirms}
+            onSave={handleSaveStakeholders}
+            onAssignStakeholderToProject={onAssignStakeholderToProject}
+            onRemoveStakeholderFromNoteAndConditionallyProject={onRemoveStakeholderFromNoteAndConditionallyProject}
+            saving={saving}
+          />
 
-        <NoteStakeholdersSection
-          assignedStakeholders={assignedStakeholders}
-          allWorkspaceStakeholders={allWorkspaceStakeholders}
-          noteStakeholderIds={noteStakeholderIds}
-          noteId={note.id}
-          projectAssignedStakeholderIds={projectAssignedStakeholderIds}
-          userRoles={userRoles}
-          userPermissions={userPermissions}
-          lawFirms={lawFirms}
-          onSave={handleSaveStakeholders}
-          onAssignStakeholderToProject={onAssignStakeholderToProject}
-          onRemoveStakeholderFromNoteAndConditionallyProject={onRemoveStakeholderFromNoteAndConditionallyProject}
-          saving={saving}
-        />
+          <LinksSection
+            entityId={note.id}
+            entityType="note"
+            links={noteLinks}
+            onSaveLinks={handleSaveLinks}
+            saving={saving}
+          />
 
-        <LinksSection
+          <NoteLinkedDesigns
+            researchNoteId={note.id}
+            projectId={note.project_id}
+          />
+
+          <TasksSection
+            researchNoteId={note.id}
+            tasks={noteTasks}
+            availableUsers={availableUsers}
+            onCreateTask={handleCreateTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            saving={saving}
+          />
+        </div>
+
+        {/* History Column */}
+        <HistorySection
           entityId={note.id}
-          entityType="note"
-          links={noteLinks}
-          onSaveLinks={handleSaveLinks}
-          saving={saving}
-        />
-
-        <NoteLinkedDesigns
-          researchNoteId={note.id}
-          projectId={note.project_id}
-        />
-
-        <TasksSection
-          researchNoteId={note.id}
-          tasks={noteTasks}
-          availableUsers={availableUsers}
-          onCreateTask={handleCreateTask}
-          onUpdateTask={handleUpdateTask}
-          onDeleteTask={handleDeleteTask}
+          entityType="research note"
+          comments={noteComments
+            .map(comment => ({
+              id: comment.id,
+              user_id: comment.user_id,
+              comment_text: comment.comment_text,
+              created_at: comment.created_at,
+              updated_at: comment.updated_at
+            }))}
+          decisions={localDecisions}
+          user={currentUser || null}
+          allUsers={availableUsers}
+          showHistory={showHistory}
+          onAddComment={handleAddComment}
+          onEditComment={handleEditComment}
+          onDeleteComment={handleDeleteComment}
+          onAddDecision={handleAddDecision}
+          onEditDecision={handleEditDecision}
+          onDeleteDecision={handleDeleteDecision}
           saving={saving}
         />
       </div>
+
+      {/* Toggle History Button */}
+      <button
+        onClick={() => setShowHistory(!showHistory)}
+        className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
+          showHistory ? 'right-[384px]' : 'right-0'
+        }`}
+        title={showHistory ? 'Hide history' : 'Show history'}
+      >
+        {showHistory ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+      </button>
 
       {showEditModal && (
         <NoteEditModal
