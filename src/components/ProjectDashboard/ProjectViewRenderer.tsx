@@ -316,10 +316,11 @@ export function ProjectViewRenderer({
 
   const menuItems = [
     { id: 'dashboard', label: 'Overview', icon: FolderOpen },
-    { id: 'user-stories', label: 'User Stories', icon: BookOpen },
     { id: 'notes', label: 'Notes & Calls', icon: FileText },  
-    { id: 'designs', label: 'Designs', icon: Palette },    
+    { id: 'user-stories', label: 'User Stories', icon: BookOpen },
     { id: 'user-flows', label: 'User Journeys', icon: Workflow },    
+    { id: 'designs', label: 'Designs', icon: Palette },    
+   
     { id: 'problem-overview', label: 'Problem Definition', icon: AlertTriangle },
     { id: 'stakeholders', label: 'Stakeholders', icon: Users },
     { id: 'project-tasks', label: 'Project Tasks', icon: CheckSquare },
