@@ -621,12 +621,7 @@ export function NoteDetail({
             saving={saving}
           />
 
-          <DecisionSection
-            entity={note}
-            onSave={handleUpdateDecision}
-            saving={saving}
-          />
-
+         
           <TagThemeCard
             availableThemes={themes}
             selectedThemes={noteThemes}
