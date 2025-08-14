@@ -172,9 +172,14 @@ export const createResearchNote = async (
         url: link.url
       }))
 
-      await supabase
+      const { error: linkError } = await supabase
         .from('note_links')
         .insert(linkInserts)
+
+      if (linkError) {
+        console.error('Error creating note links:', linkError)
+        throw linkError
+      }
     }
 
     // Create theme associations
