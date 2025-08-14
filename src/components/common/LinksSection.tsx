@@ -135,25 +135,16 @@ export function LinksSection({
     return `https://${url}`
   }
 
-  // If no links exist and not editing, show just the Add Link button
+  // If no links exist and not editing, return null (buttons will be shown in unified row)
   if (links.length === 0 && !editingLinks) {
     return (
-      <div className={className}>
-        <button
-          onClick={() => setShowAddLinkModal(true)}
-          disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-        >
-          <Plus size={16} />
-          Add Link
-        </button>
-
+      <>
         <AddLinkModal
           isOpen={showAddLinkModal}
           onClose={() => setShowAddLinkModal(false)}
           onSaveLink={handleAddNewLink}
         />
-      </div>
+      </>
     )
   }
 

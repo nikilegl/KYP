@@ -6,12 +6,21 @@ import type { Design } from '../../lib/supabase'
 interface NoteLinkedDesignsProps {
   researchNoteId: string
   projectId: string
+  linkedDesigns: Design[]
+  onLinkedDesignsChange: (designs: Design[]) => void
+  showLinkModal: boolean
+  onShowLinkModal: (show: boolean) => void
 }
 
-export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesignsProps) {
-  const [linkedDesigns, setLinkedDesigns] = useState<Design[]>([])
+export function NoteLinkedDesigns({ 
+  researchNoteId, 
+  projectId, 
+  linkedDesigns, 
+  onLinkedDesignsChange,
+  showLinkModal,
+  onShowLinkModal
+}: NoteLinkedDesignsProps) {
   const [allDesigns, setAllDesigns] = useState<Design[]>([])
-  const [showLinkModal, setShowLinkModal] = useState(false)
   const [selectedDesignIds, setSelectedDesignIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -19,28 +28,19 @@ export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesig
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    loadLinkedDesigns()
     loadAllDesigns()
   }, [researchNoteId, projectId])
 
-  const loadLinkedDesigns = async () => {
-    try {
-      const designs = await getDesignsForResearchNote(researchNoteId)
-      setLinkedDesigns(designs)
-    } catch (error) {
-      console.error('Error loading linked designs:', error)
-    }
-  }
+  // Update selectedDesignIds when linkedDesigns prop changes
+  useEffect(() => {
+    setSelectedDesignIds(linkedDesigns.map(design => design.id))
+  }, [linkedDesigns])
 
   const loadAllDesigns = async () => {
     try {
       setLoading(true)
       const designs = await getDesigns(projectId)
       setAllDesigns(designs)
-      
-      // Set currently linked design IDs
-      const linkedDesignData = await getDesignsForResearchNote(researchNoteId)
-      setSelectedDesignIds(linkedDesignData.map(design => design.id))
     } catch (error) {
       console.error('Error loading all designs:', error)
     } finally {
@@ -85,8 +85,9 @@ export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesig
       }
       
       // Reload linked designs
-      await loadLinkedDesigns()
-      setShowLinkModal(false)
+      const updatedDesigns = await getDesignsForResearchNote(researchNoteId)
+      onLinkedDesignsChange(updatedDesigns)
+      onShowLinkModal(false)
     } catch (error) {
       console.error('Error saving design links:', error)
     } finally {
@@ -114,76 +115,75 @@ export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesig
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Linked Designs ({linkedDesigns.length})
-        </h2>
-        <button
-          onClick={() => setShowLinkModal(true)}
-          className="flex items-center gap-2 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-        >
-          <Plus size={14} />
-          Link Designs
-        </button>
-      </div>
+    <>
+      {/* If no designs are linked, return null (button will be shown in unified row) */}
+      {linkedDesigns.length === 0 ? null : (
+        /* Show the full card when designs exist */
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Linked Designs ({linkedDesigns.length})
+            </h2>
+            <button
+              onClick={() => onShowLinkModal(true)}
+              className="flex items-center gap-2 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+            >
+              <Plus size={14} />
+              Link Designs
+            </button>
+          </div>
 
-      {linkedDesigns.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {linkedDesigns.map((design) => (
-            <div key={design.id} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                {design.snapshot_image_url ? (
-                  <button
-                    type="button"
-                    onClick={(e) => handleImageClick(design.snapshot_image_url!, e)}
-                    className="p-0 border-none bg-transparent cursor-pointer hover:opacity-90 transition-opacity"
-                  >
-                    <img 
-                      src={design.snapshot_image_url} 
-                      alt={design.name}
-                      className="w-12 h-12 object-cover rounded border border-gray-200"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.style.display = 'none'
-                        target.nextElementSibling?.classList.remove('hidden')
-                      }}
-                    />
-                    <div className="hidden w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                      <div className="text-center">
-                        <Palette size={12} className="mx-auto text-gray-400 mb-1" />
-                        <p className="text-xs text-gray-500">Image not available</p>
-                      </div>
-                    </div>
-                  </button>
-                ) : (
-                  <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                    <Palette size={16} className="text-gray-400" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-gray-900 truncate">{design.name}</h4>
-                 
-                  {design.link_url && (
-                    <a
-                      href={design.link_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {linkedDesigns.map((design) => (
+              <div key={design.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  {design.snapshot_image_url ? (
+                    <button
+                      type="button"
+                      onClick={(e) => handleImageClick(design.snapshot_image_url!, e)}
+                      className="p-0 border-none bg-transparent cursor-pointer hover:opacity-90 transition-opacity"
                     >
-                      <ExternalLink size={12} />
-                      View Link
-                    </a>
+                      <img 
+                        src={design.snapshot_image_url} 
+                        alt={design.name}
+                        className="w-12 h-12 object-cover rounded border border-gray-200"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          target.nextElementSibling?.classList.remove('hidden')
+                        }}
+                      />
+                      <div className="hidden w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                        <div className="text-center">
+                          <Palette size={12} className="mx-auto text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-500">Image not available</p>
+                        </div>
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <Palette size={16} className="text-gray-400" />
+                    </div>
                   )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-gray-900 truncate">{design.name}</h4>
+                   
+                    {design.link_url && (
+                      <a
+                        href={design.link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-2"
+                      >
+                        <ExternalLink size={12} />
+                        View Link
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <Palette size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">No designs linked to this note yet.</p>
+            ))}
+          </div>
         </div>
       )}
 
@@ -194,7 +194,7 @@ export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesig
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Link Designs to Note</h3>
               <button
-                onClick={() => setShowLinkModal(false)}
+                onClick={() => onShowLinkModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X size={20} className="text-gray-500" />
@@ -257,7 +257,7 @@ export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesig
             
             <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
               <button
-                onClick={() => setShowLinkModal(false)}
+                onClick={() => onShowLinkModal(false)}
                 disabled={saving}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
@@ -299,6 +299,6 @@ export function NoteLinkedDesigns({ researchNoteId, projectId }: NoteLinkedDesig
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
