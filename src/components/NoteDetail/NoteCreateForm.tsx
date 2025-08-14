@@ -565,7 +565,7 @@ export function NoteCreateForm({
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+   
           <div className="flex items-center justify-end space-x-3">
             <button
               type="button"
@@ -584,7 +584,7 @@ export function NoteCreateForm({
               {saving ? 'Creating...' : 'Create Note'}
             </button>
           </div>
-        </div>
+  
       </form>
 
       <AddStakeholdersModal
