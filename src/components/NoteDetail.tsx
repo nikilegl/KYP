@@ -480,15 +480,30 @@ export function NoteDetail({
   const handleDeleteDecision = async (decisionIndex: number) => {
     if (!note) return
     
+    // Update local state immediately for instant UI feedback
+    const currentDecisions = localDecisions
+    const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+    setLocalDecisions(updatedDecisions)
+    
     setSaving(true)
     try {
-      const currentDecisions = localDecisions
-      if (decisionIndex < currentDecisions.length) {
-        const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
-        await handleUpdateDecision(updatedDecisions)
+      const updatedNote = await updateResearchNote(
+        note.id,
+        { decision_text: updatedDecisions },
+        noteStakeholderIds,
+        noteThemes.map(t => t.id)
+      )
+      
+      if (updatedNote) {
+        onUpdate(updatedNote)
+      } else {
+        // Revert local state if database update failed
+        setLocalDecisions(currentDecisions)
       }
     } catch (error) {
       console.error('Error deleting decision:', error)
+      // Revert local state on error
+      setLocalDecisions(currentDecisions)
       throw error
     } finally {
       setSaving(false)
