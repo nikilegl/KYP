@@ -478,17 +478,9 @@ export function NoteDetail({
     setSaving(true)
     try {
       const currentDecisions = note.decision_text || []
-      const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
-      
-      const updatedNote = await updateResearchNote(
-        note.id,
-        { decision_text: updatedDecisions },
-        noteStakeholderIds,
-        noteThemes.map(t => t.id)
-      )
-      
-      if (updatedNote) {
-        onUpdate(updatedNote)
+      if (decisionIndex < currentDecisions.length) {
+        const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
+        await handleUpdateDecision(updatedDecisions)
       }
     } catch (error) {
       console.error('Error deleting decision:', error)
