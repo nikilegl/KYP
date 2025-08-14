@@ -3,6 +3,7 @@ import { ArrowLeft, Calendar, Check, Users, Sparkles, Plus, Trash2, ExternalLink
 import { CKEditorComponent } from '../CKEditorComponent'
 import { StakeholderAvatar } from '../common/StakeholderAvatar'
 import { AddStakeholdersModal } from '../common/AddStakeholdersModal'
+import { AddLinkModal } from '../common/AddLinkModal'
 import { TagThemeCard } from '../common/TagThemeCard'
 import { NoteTemplateSelectionModal } from './NoteTemplateSelectionModal'
 import type { Stakeholder, UserRole } from '../../lib/supabase'
@@ -68,7 +69,8 @@ export function NoteCreateForm({
   const [selectedStakeholderIds, setSelectedStakeholderIds] = useState<string[]>([])
   const [decisionTexts, setDecisionTexts] = useState<string[]>([''])
   const [saving, setSaving] = useState(false)
-  const [links, setLinks] = useState<NoteLink[]>([{ name: '', url: '' }])
+  const [links, setLinks] = useState<NoteLink[]>([])
+  const [showAddLinkModal, setShowAddLinkModal] = useState(false)
   const [tasks, setTasks] = useState<TaskData[]>([])
   const [newTask, setNewTask] = useState<TaskData>({
     name: '',
@@ -95,7 +97,7 @@ export function NoteCreateForm({
         note_date: noteDate,
         stakeholderIds: selectedStakeholderIds,
         decision_text: decisionTexts.filter(decision => decision.trim() !== ''),
-        links: links.filter(link => link.name.trim() && link.url.trim()),
+        links: links,
         tasks: tasks,
         themeIds: selectedThemes.map(theme => theme.id)
       })
@@ -150,20 +152,13 @@ export function NoteCreateForm({
     setDecisionTexts(newValues)
   }
 
-  const addLink = () => {
-    setLinks([...links, { name: '', url: '' }])
+  const handleSaveLink = async (name: string, url: string) => {
+    const newLink: NoteLink = { name, url }
+    setLinks([...links, newLink])
   }
 
-  const removeLink = (index: number) => {
-    if (links.length > 1) {
-      setLinks(links.filter((_, i) => i !== index))
-    }
-  }
-
-  const updateLink = (index: number, field: 'name' | 'url', value: string) => {
-    const updatedLinks = [...links]
-    updatedLinks[index][field] = value
-    setLinks(updatedLinks)
+  const handleRemoveLink = (index: number) => {
+    setLinks(links.filter((_, i) => i !== index))
   }
 
   const addTask = () => {
@@ -517,68 +512,53 @@ export function NoteCreateForm({
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Links ({links.filter(link => link.name.trim() && link.url.trim()).length})
+            Links ({links.length})
           </h2>
           
-          <div className="space-y-4">
-            {links.map((link, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Link Name
-                    </label>
-                    <input
-                      type="text"
-                      value={link.name}
-                      onChange={(e) => updateLink(index, 'name', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter link name..."
-                    />
+          {links.length > 0 ? (
+            <div className="space-y-3 mb-4">
+              {links.map((link, index) => (
+                <div 
+                  key={index} 
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                  onClick={() => window.open(link.url.startsWith('http') ? link.url : `https://${link.url}`, '_blank', 'noopener,noreferrer')}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <ExternalLink className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{link.name}</p>
+                      <p className="text-sm text-gray-600 truncate max-w-md">{link.url}</p>
+                    </div>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Link URL
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="url"
-                        value={link.url}
-                        onChange={(e) => updateLink(index, 'url', e.target.value)}
-                        className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                          link.url && !isValidUrl(link.url) ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="https://example.com"
-                      />
-                      {links.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLink(index)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                          title="Remove link"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                    {link.url && !isValidUrl(link.url) && (
-                      <p className="text-sm text-red-600 mt-1">Please enter a valid URL</p>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRemoveLink(index)
+                    }}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    title="Remove link"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-              </div>
-            ))}
-            
-            <button
-              type="button"
-              onClick={addLink}
-              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <Plus size={16} />
-              Add Link
-            </button>
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 italic text-center py-4 mb-4">No links added yet</p>
+          )}
+          
+          <button
+            type="button"
+            onClick={() => setShowAddLinkModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={16} />
+            Add Link
+          </button>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -620,6 +600,12 @@ export function NoteCreateForm({
         onClose={() => setShowTemplateModal(false)}
         noteTemplates={noteTemplates}
         onSelectTemplate={handleTemplateSelected}
+      />
+
+      <AddLinkModal
+        isOpen={showAddLinkModal}
+        onClose={() => setShowAddLinkModal(false)}
+        onSaveLink={handleSaveLink}
       />
     </div>
   )
