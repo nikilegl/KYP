@@ -434,6 +434,7 @@ export function ProjectViewRenderer({
           themes={themes}
           noteTemplates={noteTemplates}
           availableUsers={workspaceUsers}
+          currentUser={user}
           onBack={handleBackFromNote}
           onUpdate={onUpdateNote}
           onAssignStakeholderToProject={onAssignStakeholder}

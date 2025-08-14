@@ -61,7 +61,7 @@ export function NoteHeader({ note, onBack, onEdit, onShareToSlack, sharingToSlac
   }, [slackShareStatus, setSlackShareStatus])
 
   return (
-    <div className="bg-white border-b border-gray-200 p-6 -mx-6 -mt-6 mb-6">
+    <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 w-full">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={onBack}

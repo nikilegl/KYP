@@ -275,6 +275,7 @@ export function MainContentRenderer({
         themes={themes}
         availableUsers={workspaceUsers}
         noteTemplates={noteTemplates}
+        currentUser={user}
         onBack={() => console.log('Back from note')}
         onUpdate={(updatedNote) => {
           console.log('Note updated:', updatedNote)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Sparkles, CheckCircle, AlertCircle } from 'lucide-react'
+import { Sparkles, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemes, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
 import { NoteHeader } from './NoteDetail/NoteHeader'
@@ -12,8 +12,10 @@ import { DecisionSection } from './common/DecisionSection'
 import { NoteLinkedDesigns } from './NoteDetail/NoteLinkedAssets'
 import { TasksSection } from './TasksSection'
 import { TagThemeCard } from './common/TagThemeCard'
+import { HistorySection } from './common/HistorySection'
 import { getTasks, createTask, updateTask, deleteTask } from '../lib/database'
-import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme } from '../lib/supabase'
+import { getResearchNoteComments, createResearchNoteComment, updateResearchNoteComment, deleteResearchNoteComment, type ResearchNoteComment } from '../lib/database/services/researchNoteCommentService'
+import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, User } from '../lib/supabase'
 
 interface NoteDetailProps {
   note: ResearchNote | null
@@ -26,6 +28,7 @@ interface NoteDetailProps {
   themes: Theme[]
   noteTemplates?: NoteTemplate[]
   availableUsers?: WorkspaceUser[]
+  currentUser?: User | null
   onBack: () => void
   onUpdate: (updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => void
   onAssignStakeholderToProject: (stakeholderId: string) => Promise<void>
@@ -60,6 +63,7 @@ export function NoteDetail({
   themes,
   noteTemplates = [],
   availableUsers = [],
+  currentUser,
   onBack, 
   onUpdate,
   onAssignStakeholderToProject,
@@ -77,6 +81,11 @@ export function NoteDetail({
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  
+  // History panel state
+  const [showHistory, setShowHistory] = useState(true)
+  const [noteComments, setNoteComments] = useState<ResearchNoteComment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
 
   useEffect(() => {
     if (note && !isCreating) {
@@ -84,6 +93,7 @@ export function NoteDetail({
       loadNoteLinks()
       loadNoteTasks()
       loadNoteThemes()
+      loadNoteComments()
     }
   }, [note, isCreating])
 
@@ -131,6 +141,20 @@ export function NoteDetail({
       console.error('Error loading note tasks:', error)
     } finally {
       setLoadingTasks(false)
+    }
+  }
+
+  const loadNoteComments = async () => {
+    if (!note) return
+    
+    setLoadingComments(true)
+    try {
+      const comments = await getResearchNoteComments(note.id)
+      setNoteComments(comments)
+    } catch (error) {
+      console.error('Error loading note comments:', error)
+    } finally {
+      setLoadingComments(false)
     }
   }
 
@@ -342,6 +366,71 @@ export function NoteDetail({
     }
   }
 
+  // Comment handling functions
+  const handleAddComment = async (commentText: string) => {
+    if (!note || !currentUser) return
+    
+    setSaving(true)
+    try {
+      const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id, false)
+      if (newComment) {
+        await loadNoteComments() // Reload to get fresh data
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddDecision = async (decisionText: string) => {
+    if (!note || !currentUser) return
+    
+    setSaving(true)
+    try {
+      const newComment = await createResearchNoteComment(note.id, decisionText, currentUser.id, true)
+      if (newComment) {
+        await loadNoteComments() // Reload to get fresh data
+      }
+    } catch (error) {
+      console.error('Error adding decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEditComment = async (commentId: string, commentText: string) => {
+    setSaving(true)
+    try {
+      const updatedComment = await updateResearchNoteComment(commentId, commentText)
+      if (updatedComment) {
+        await loadNoteComments() // Reload to get fresh data
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    setSaving(true)
+    try {
+      const success = await deleteResearchNoteComment(commentId)
+      if (success) {
+        await loadNoteComments() // Reload to get fresh data
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleShareToSlack = async () => {
     if (!note || !supabase) return
     
@@ -409,7 +498,7 @@ export function NoteDetail({
   if (!note) return null
 
   return (
-    <div className="h-full flex flex-col w-full">
+    <div className="h-screen flex flex-col w-full relative">
       {/* Slack Share Status */}
       {slackShareStatus && (
         <div className={`p-4 rounded-lg border absolute z-100 w-[240px] ${
@@ -432,6 +521,7 @@ export function NoteDetail({
         </div>
       )}
 
+      {/* Full-width page header */}
       <NoteHeader 
         note={note} 
         onBack={onBack} 
@@ -440,7 +530,9 @@ export function NoteDetail({
         sharingToSlack={sharingToSlack}
       />
 
-      <div className="flex-1 overflow-y-auto w-full space-y-6">
+      {/* Content with normal padding */}
+      <div className="flex-1 w-full flex">
+        <div className="flex-1 space-y-6 p-6">
         <NoteContentTabs
           key={`${note.id}-${note.summary || ''}`}
           note={note}
@@ -499,7 +591,40 @@ export function NoteDetail({
           onDeleteTask={handleDeleteTask}
           saving={saving}
         />
+        </div>
+
+        {/* History Column */}
+        <HistorySection
+          entityId={note.id}
+          entityType="research note"
+          comments={noteComments.map(comment => ({
+            id: comment.id,
+            user_id: comment.user_id,
+            comment_text: comment.comment_text,
+            created_at: comment.created_at,
+            updated_at: comment.updated_at
+          }))}
+          user={currentUser}
+          allUsers={availableUsers}
+          showHistory={showHistory}
+          onAddComment={handleAddComment}
+          onEditComment={handleEditComment}
+          onDeleteComment={handleDeleteComment}
+          onAddDecision={handleAddDecision}
+          saving={saving}
+        />
       </div>
+
+      {/* Toggle History Button */}
+      <button
+        onClick={() => setShowHistory(!showHistory)}
+        className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
+          showHistory ? 'right-[384px]' : 'right-0'
+        }`}
+        title={showHistory ? 'Hide history' : 'Show history'}
+      >
+        {showHistory ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+      </button>
 
       {showEditModal && (
         <NoteEditModal
