@@ -81,6 +81,7 @@ export function NoteDetail({
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [localDecisions, setLocalDecisions] = useState<string[]>([])
   
   // History panel state
   const [showHistory, setShowHistory] = useState(true)
@@ -93,9 +94,16 @@ export function NoteDetail({
       loadNoteTasks()
       loadNoteThemes()
       loadNoteComments()
+      setLocalDecisions(note.decision_text || [])
     }
   }, [note, isCreating])
 
+  // Update local decisions when note.decision_text changes
+  useEffect(() => {
+    if (note) {
+      setLocalDecisions(note.decision_text || [])
+    }
+  }, [note?.decision_text])
   const loadNoteStakeholders = async () => {
     if (!note) return
     
@@ -385,9 +393,8 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-      const currentDecisions = note.decision_text || []
-      const newDecisionWithTimestamp = `${new Date().toISOString()}|${decisionText}`
-      const updatedDecisions = [...currentDecisions, newDecisionWithTimestamp]
+      const currentDecisions = localDecisions
+      const updatedDecisions = [...currentDecisions, decisionText]
         
       const updatedNote = await updateResearchNote(
         note.id,
@@ -397,6 +404,7 @@ export function NoteDetail({
       )
       
       if (updatedNote) {
+        setLocalDecisions(updatedDecisions)
         onUpdate(updatedNote)
       }
     } catch (error) {
@@ -444,14 +452,10 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-      const currentDecisions = note.decision_text || []
+      const currentDecisions = localDecisions
       if (decisionIndex < currentDecisions.length) {
         const updatedDecisions = [...currentDecisions]
-        // Preserve timestamp if it exists, otherwise add current timestamp
-        const existingDecision = updatedDecisions[decisionIndex]
-        const timestampMatch = existingDecision.match(/^(.+?)\|(.+)$/)
-        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
-        updatedDecisions[decisionIndex] = `${timestamp}|${decisionText}`
+        updatedDecisions[decisionIndex] = decisionText
         
         const updatedNote = await updateResearchNote(
           note.id,
@@ -461,6 +465,7 @@ export function NoteDetail({
         )
         
         if (updatedNote) {
+          setLocalDecisions(updatedDecisions)
           onUpdate(updatedNote)
         }
       }
@@ -477,7 +482,7 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-      const currentDecisions = note.decision_text || []
+      const currentDecisions = localDecisions
       if (decisionIndex < currentDecisions.length) {
         const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
         await handleUpdateDecision(updatedDecisions)
@@ -489,6 +494,7 @@ export function NoteDetail({
       setSaving(false)
     }
   }
+          setLocalDecisions(updatedDecisions)
 
   const handleShareToSlack = async () => {
     if (!note || !supabase) return
@@ -666,7 +672,7 @@ export function NoteDetail({
               created_at: comment.created_at,
               updated_at: comment.updated_at
             }))}
-          decisions={note.decision_text || []}
+          decisions={localDecisions}
           user={currentUser || null}
           allUsers={availableUsers}
           showHistory={showHistory}

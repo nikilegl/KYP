@@ -113,13 +113,17 @@ export function HistorySection({
 
   const handleEditDecision = (decisionIndex: number, decisionText: string) => {
     setEditingDecisionIndex(decisionIndex)
-    setEditingDecisionText(decisionText)
+    // Extract plain text if it has timestamp format
+    const timestampMatch = decisionText.match(/^(.+?)\|(.+)$/)
+    const plainText = timestampMatch ? timestampMatch[2] : decisionText
+    setEditingDecisionText(plainText)
   }
 
   const handleSaveEditDecision = async () => {
     if (editingDecisionIndex === null || !editingDecisionText.trim() || !onEditDecision) return
     
     try {
+      // Pass only the plain text to the parent component
       await onEditDecision(editingDecisionIndex, editingDecisionText.trim())
       setEditingDecisionIndex(null)
       setEditingDecisionText('')
@@ -181,7 +185,7 @@ export function HistorySection({
         decisionTimestamp = new Date(timestampStr).getTime()
         decisionText = text
       } else {
-        // Legacy decision without timestamp - create a stable one based on position
+        // Plain text decision - create a stable timestamp based on position
         const minutesAgo = 1 + (decisions.length - 1 - index) * 5
         decisionTimestamp = Date.now() - (minutesAgo * 60 * 1000)
         decisionText = decision
