@@ -494,7 +494,6 @@ export function NoteDetail({
       setSaving(false)
     }
   }
-          setLocalDecisions(updatedDecisions)
 
   const handleShareToSlack = async () => {
     if (!note || !supabase) return
