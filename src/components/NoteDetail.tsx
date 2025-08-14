@@ -370,7 +370,7 @@ export function NoteDetail({
     try {
       const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id)
       if (newComment) {
-        await loadNoteComments() // Reload to get fresh data
+        setNoteComments([newComment, ...noteComments])
       }
     } catch (error) {
       console.error('Error adding comment:', error)
@@ -385,10 +385,36 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-      // Add decision to the note's decision_text array
       const currentDecisions = note.decision_text || []
-      const updatedDecisions = [...currentDecisions, `${new Date().toISOString()}|${decisionText}`]
-      await handleUpdateDecision(updatedDecisions)
+      const newDecisionWithTimestamp = `${new Date().toISOString()}|${decisionText}`
+      const updatedDecisions = [...currentDecisions, newDecisionWithTimestamp]
+        
+        const updatedNote = await updateResearchNote(
+          note.id,
+          { decision_text: updatedDecisions },
+          noteStakeholderIds,
+          noteThemes.map(t => t.id)
+        )
+        
+        if (updatedNote) {
+          onUpdate(updatedNote)
+        }
+      const updatedNote = await updateResearchNote(
+    } catch (error) {
+      console.error('Error deleting decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
+    }
+        note.id,
+        { decision_text: updatedDecisions },
+        noteStakeholderIds,
+        noteThemes.map(t => t.id)
+      )
+      
+      if (updatedNote) {
+        onUpdate(updatedNote)
+      }
     } catch (error) {
       console.error('Error adding decision:', error)
       throw error
@@ -402,7 +428,9 @@ export function NoteDetail({
     try {
       const updatedComment = await updateResearchNoteComment(commentId, commentText)
       if (updatedComment) {
-        await loadNoteComments() // Reload to get fresh data
+        setNoteComments(noteComments.map(comment => 
+          comment.id === commentId ? updatedComment : comment
+        ))
       }
     } catch (error) {
       console.error('Error updating comment:', error)
@@ -417,7 +445,7 @@ export function NoteDetail({
     try {
       const success = await deleteResearchNoteComment(commentId)
       if (success) {
-        await loadNoteComments() // Reload to get fresh data
+        setNoteComments(noteComments.filter(comment => comment.id !== commentId))
       }
     } catch (error) {
       console.error('Error deleting comment:', error)
@@ -430,6 +458,8 @@ export function NoteDetail({
   const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
     if (!note) return
     
+    setSaving(true)
+    try {
     const currentDecisions = note.decision_text || []
     if (decisionIndex < currentDecisions.length) {
       const updatedDecisions = [...currentDecisions]
@@ -438,13 +468,31 @@ export function NoteDetail({
       const timestampMatch = existingDecision.match(/^(.+?)\|(.+)$/)
       const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
       updatedDecisions[decisionIndex] = `${timestamp}|${decisionText}`
-      await handleUpdateDecision(updatedDecisions)
+        
+        const updatedNote = await updateResearchNote(
+          note.id,
+          { decision_text: updatedDecisions },
+          noteStakeholderIds,
+          noteThemes.map(t => t.id)
+        )
+        
+        if (updatedNote) {
+          onUpdate(updatedNote)
+        }
+    }
+    } catch (error) {
+      console.error('Error editing decision:', error)
+      throw error
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleDeleteDecision = async (decisionIndex: number) => {
     if (!note) return
     
+    setSaving(true)
+    try {
     const currentDecisions = note.decision_text || []
     if (decisionIndex < currentDecisions.length) {
       const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
