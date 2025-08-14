@@ -389,6 +389,7 @@ export function ProjectDataFetcher({
     themeIds: string[]
   }) => {
     try {
+      console.log('🔗 ProjectDataFetcher: Creating note with links:', noteData.links)
       const note = await createResearchNote(
         noteData.name, 
         project.id, 
@@ -396,7 +397,8 @@ export function ProjectDataFetcher({
         noteData.nativeNotes,
         Array.isArray(noteData.stakeholderIds) ? noteData.stakeholderIds : [],
         noteData.decision_text,
-        noteData.note_date
+        noteData.note_date,
+        noteData.links
       )
       if (note) {
         // Assign stakeholders to project after note creation
