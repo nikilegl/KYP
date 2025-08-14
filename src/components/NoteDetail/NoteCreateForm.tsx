@@ -90,6 +90,7 @@ export function NoteCreateForm({
     
     setSaving(true)
     try {
+      console.log('🔗 NoteCreateForm: Creating note with links:', links)
       await onCreate({
         name: name.trim(),
         summary,
@@ -155,10 +156,13 @@ export function NoteCreateForm({
   const handleSaveLink = async (name: string, url: string) => {
     const newLink: NoteLink = { name, url }
     setLinks([...links, newLink])
+    console.log('🔗 NoteCreateForm: Added link to state:', newLink)
+    console.log('🔗 NoteCreateForm: Current links array:', [...links, newLink])
   }
 
   const handleRemoveLink = (index: number) => {
     setLinks(links.filter((_, i) => i !== index))
+    console.log('🔗 NoteCreateForm: Removed link at index:', index)
   }
 
   const addTask = () => {
