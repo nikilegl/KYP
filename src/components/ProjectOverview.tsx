@@ -140,20 +140,11 @@ export function ProjectOverview({
 
       {/* Assigned Stakeholders Breakdown */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Stakeholders Overview</h3>
-              <p className="text-sm text-gray-600">{assignedStakeholders.length} stakeholders assigned to this project</p>
-            </div>
-          </div>
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-gray-900">Stakeholder overview</h3>
         </div>
         
-        <div className="space-y-6">
-          {/* User Roles Section */}
-          <div className="w-full">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">User Roles</h4>
-            <div className="space-y-2">
+        <div className="w-full">
               {(() => {
                 const roleBreakdown = new Map<string, { count: number, userRole: UserRole }>()
                 
@@ -221,26 +212,72 @@ export function ProjectOverview({
                   )
                 }
                 
+                const totalStakeholders = assignedStakeholders.length
+                const maxCount = Math.max(...Array.from(roleBreakdown.values()).map(data => data.count))
+                
                 return (
-                  <div className="flex flex-wrap gap-2 w-full">
-                    {Array.from(roleBreakdown.entries()).map(([roleName, data]) => (
-                      <UserRoleTag
-                        key={roleName}
-                        userRole={data.userRole}
-                        count={data.count}
-                        size="md"
-                      />
-                    ))}
+                  <div className="space-y-5">
+                    {Array.from(roleBreakdown.entries()).map(([roleName, data]) => {
+                      const percentage = totalStakeholders > 0 ? (data.count / totalStakeholders) * 100 : 0
+                      const barWidth = maxCount > 0 ? (data.count / maxCount) * 100 : 0
+                      
+                      return (
+                        <div key={roleName} className="flex items-center gap-4">
+                          {/* Role Icon */}
+                          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                            {data.userRole.icon === 'Briefcase' && <span className="text-lg">🦩</span>}
+                            {data.userRole.icon === 'Shield' && <span className="text-lg">🦅</span>}
+                            {data.userRole.icon === 'DollarSign' && <span className="text-lg">🐚</span>}
+                            {data.userRole.icon === 'Monitor' && <span className="text-lg">🦆</span>}
+                            {data.userRole.icon === 'Users' && <span className="text-lg">👥</span>}
+                            {data.userRole.icon === 'Person' && <span className="text-lg">👤</span>}
+                            {!['Briefcase', 'Shield', 'DollarSign', 'Monitor', 'Users', 'Person'].includes(data.userRole.icon) && 
+                              <div 
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
+                                style={{ backgroundColor: data.userRole.colour }}
+                              >
+                                {data.userRole.name.charAt(0).toUpperCase()}
+                              </div>
+                            }
+                          </div>
+                          
+                          {/* Role Name */}
+                          <div className="w-40 flex-shrink-0">
+                            <span className="text-base font-medium text-gray-900">{data.userRole.name}</span>
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className="flex-1 flex items-center gap-4">
+                            <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+                              <div 
+                                className="h-full transition-all duration-500 ease-out rounded-full"
+                                style={{ 
+                                  backgroundColor: data.userRole.colour,
+                                  width: `${barWidth}%`,
+                                  opacity: 0.9
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Count */}
+                            <div className="w-8 text-right">
+                              <span className="text-lg font-bold text-gray-900">{data.count}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )
               })()}
-            </div>
-          </div>
-          
-          {/* Law Firms Section */}
-          <div className="w-full">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">Law Firms</h4>
-            <div className="flex flex-wrap gap-2 w-full">
+      </div>
+      
+      {/* Law Firms Section */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">Law Firms Breakdown</h3>
+        </div>
+        <div className="flex flex-wrap gap-2 w-full">
               {(() => {
                 const structureBreakdown = new Map<string, number>()
                 
@@ -290,8 +327,6 @@ export function ProjectOverview({
                   </div>
                 ))
               })()}
-            </div>
-          </div>
         </div>
       </div>
 
