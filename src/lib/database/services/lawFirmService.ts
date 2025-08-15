@@ -150,6 +150,33 @@ export const getLawFirmsPaginated = async (options?: {
   }
 }
 
+export const getLawFirmByShortId = async (shortId: number): Promise<LawFirm | null> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      const stored = localStorage.getItem('kyp_law_firms')
+      const lawFirms = stored ? JSON.parse(stored) : []
+      return lawFirms.find((firm: LawFirm) => firm.short_id === shortId) || null
+    } catch {
+      return null
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('law_firms')
+      .select('*')
+      .eq('short_id', shortId)
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error fetching law firm by short ID:', error)
+    return null
+  }
+}
+
 export const createLawFirm = async (name: string, structure: 'centralised' | 'decentralised', status: 'active' | 'inactive'): Promise<LawFirm | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
