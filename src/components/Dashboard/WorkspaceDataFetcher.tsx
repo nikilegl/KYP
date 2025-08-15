@@ -115,6 +115,7 @@ export function WorkspaceDataFetcher({
   const [selectedNoteTemplate, setSelectedNoteTemplate] = useState<NoteTemplate | null>(null)
   const [selectedDesignForProject, setSelectedDesignForProject] = useState<Design | null>(null)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null)
+  const [selectedLawFirm, setSelectedLawFirm] = useState<LawFirm | null>(null)
   
   // Data states
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
