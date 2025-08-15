@@ -217,7 +217,7 @@ export function StakeholderTable({
                 onClick={() => handleSort('notes_count')}
               >
                 <div className="flex items-center gap-1">
-                  Number of calls
+                  Notes Tagged
                   {getSortIcon('notes_count')}
                 </div>
               </th>

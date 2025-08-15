@@ -476,6 +476,7 @@ export function StakeholderManager({
           userRoles={userRoles}
           lawFirms={lawFirms}
           userPermissions={userPermissions}
+          stakeholderNotesCountMap={stakeholderNotesCountMap}
           selectedStakeholders={selectedStakeholders}
           onRowClick={handleRowClick}
           onEdit={setEditingStakeholder}
