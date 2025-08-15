@@ -330,7 +330,7 @@ export function ProjectOverview({
                         ) : (
                           <div 
                             className="w-3 h-3 rounded-full border-2 border-dashed"
-                            style={{ borderColor: '#253658' }}
+                            style={{ borderColor: '#253658' borderWidth:'1px' }}
                           />
                         )}
                       </div>
