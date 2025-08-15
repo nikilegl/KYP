@@ -1,5 +1,5 @@
 import React from 'react'
-import { Trash2, Users, ArrowRight, Star, RefreshCw } from 'lucide-react'
+import { Trash2, Users, ArrowRight, Star, RefreshCw, ArrowLeft } from 'lucide-react'
 import { StakeholderTag } from './common/StakeholderTag'
 import { StakeholderAvatar } from './common/StakeholderAvatar'
 import { StakeholderSelectionTable } from './common/StakeholderSelectionTable'
@@ -19,6 +19,7 @@ interface AssignedStakeholdersProps {
   onViewStakeholder: (stakeholder: Stakeholder) => void
   onRefreshStakeholders: () => Promise<void>
   refreshing?: boolean
+  onBack?: () => void
 }
 
 export const AssignedStakeholders: React.FC<AssignedStakeholdersProps> = ({
@@ -33,7 +34,8 @@ export const AssignedStakeholders: React.FC<AssignedStakeholdersProps> = ({
   onRemoveStakeholder,
   onViewStakeholder,
   onRefreshStakeholders,
-  refreshing = false
+  refreshing = false,
+  onBack
 }) => {
   const [selectedStakeholders, setSelectedStakeholders] = React.useState<string[]>([])
 
@@ -70,6 +72,15 @@ export const AssignedStakeholders: React.FC<AssignedStakeholdersProps> = ({
     <div className="space-y-6">
       {/* Assigned Stakeholders Section */}
       <div>
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-3"
+          >
+            <ArrowLeft size={20} />
+            Back to Project Overview
+          </button>
+        )}
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Project Stakeholders</h2>

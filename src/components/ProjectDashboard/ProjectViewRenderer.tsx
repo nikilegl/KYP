@@ -322,7 +322,6 @@ export function ProjectViewRenderer({
     { id: 'designs', label: 'Designs', icon: Palette },    
    
     { id: 'problem-overview', label: 'Problem Definition', icon: AlertTriangle },
-    { id: 'stakeholders', label: 'Stakeholders', icon: Users },
     { id: 'project-tasks', label: 'Project Tasks', icon: CheckSquare },
     { id: 'project-progress', label: 'Project Progress', icon: Clipboard },
     { id: 'prompt-builder', label: 'Prompt Builder', icon: Zap },
@@ -506,6 +505,7 @@ export function ProjectViewRenderer({
               setCurrentView('stakeholder-detail')
               setSelectedStakeholder(stakeholder)
             }}
+            onBack={() => setCurrentView('dashboard')}
           />
         )
       case 'notes':
