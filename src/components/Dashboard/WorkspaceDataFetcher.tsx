@@ -107,7 +107,8 @@ export function WorkspaceDataFetcher({
   const [selectedUserStory, setSelectedUserStory] = useState<UserStory | null>(null)
   const [noteStakeholderIds, setNoteStakeholderIds] = useState<string[]>([])
   const [userStoryRoleIds, setUserStoryRoleIds] = useState<string[]>([])
-  const [stakeholderDetailOrigin, setStakeholderDetailOrigin] = useState<'project' | 'manager'>('manager')
+  const [stakeholderDetailOrigin, setStakeholderDetailOrigin] = useState<'project' | 'manager' | 'law-firm'>('manager')
+  const [originLawFirm, setOriginLawFirm] = useState<LawFirm | null>(null)
   const [isNavigatingBack, setIsNavigatingBack] = useState(false)
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null)
   const [themesWithCounts, setThemesWithCounts] = useState<Array<Theme & { contentCounts: { userStories: number; userJourneys: number; researchNotes: number; assets: number } }>>([])
@@ -646,6 +647,20 @@ export function WorkspaceDataFetcher({
   }
 
   const handleSelectStakeholder = (stakeholder: Stakeholder) => {
+    // Set origin based on current view
+    if (currentView === 'stakeholders') {
+      setStakeholderDetailOrigin('manager')
+      setOriginLawFirm(null)
+    } else {
+      setStakeholderDetailOrigin('project')
+      setOriginLawFirm(null)
+    }
+    navigate(`/stakeholder/${stakeholder.short_id}`)
+  }
+
+  const handleSelectStakeholderFromLawFirm = (stakeholder: Stakeholder, lawFirm: LawFirm) => {
+    setStakeholderDetailOrigin('law-firm')
+    setOriginLawFirm(lawFirm)
     navigate(`/stakeholder/${stakeholder.short_id}`)
   }
 
@@ -653,6 +668,11 @@ export function WorkspaceDataFetcher({
     if (stakeholderDetailOrigin === 'manager') {
       setSelectedStakeholder(null)
       onViewChange('stakeholders')
+      setIsNavigatingBack(true)
+      navigate('/')
+    } else if (stakeholderDetailOrigin === 'law-firm') {
+      setSelectedStakeholder(null)
+      onViewChange('law-firms')
       setIsNavigatingBack(true)
       navigate('/')
     } else {
@@ -944,6 +964,7 @@ export function WorkspaceDataFetcher({
       noteStakeholderIds={noteStakeholderIds}
       userStoryRoleIds={userStoryRoleIds}
       stakeholderDetailOrigin={stakeholderDetailOrigin}
+      originLawFirm={originLawFirm}
       selectedTheme={selectedTheme}
       selectedNoteTemplate={selectedNoteTemplate}
       selectedDesignForProject={selectedDesignForProject}
@@ -963,6 +984,7 @@ export function WorkspaceDataFetcher({
       onUpdateStakeholder={handleUpdateStakeholder}
       onDeleteStakeholder={handleDeleteStakeholder}
       onSelectStakeholder={handleSelectStakeholder}
+      onSelectStakeholderFromLawFirm={handleSelectStakeholderFromLawFirm}
       onStakeholderBack={handleStakeholderBack}
       onCreateUser={handleCreateUser}
       onUpdateWorkspaceUser={handleUpdateWorkspaceUser}

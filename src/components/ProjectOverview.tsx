@@ -1,6 +1,6 @@
 import React from 'react'
 import { Check, X } from 'lucide-react'
-import { FolderOpen, Users, FileText, Edit, AlertTriangle, TrendingUp, CheckSquare, Star, BarChart, Palette } from 'lucide-react'
+import { FolderOpen, Users, FileText, Edit, AlertTriangle, TrendingUp, CheckSquare, Star, BarChart, Palette, ArrowRight } from 'lucide-react'
 import { UserRoleTag } from './common/UserRoleTag'
 import { StructureTag } from '../utils/structureTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
@@ -146,6 +146,13 @@ export function ProjectOverview({
               <h3 className="text-lg font-semibold text-gray-900">Stakeholders Overview</h3>
               <p className="text-sm text-gray-600">{assignedStakeholders.length} stakeholders assigned to this project</p>
             </div>
+            <button
+              onClick={onNavigateToStakeholders}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              View stakeholders
+              <ArrowRight size={16} />
+            </button>
           </div>
         </div>
         

@@ -15,7 +15,7 @@ interface StakeholderDetailProps {
   userRoles: UserRole[]
   lawFirms: LawFirm[]
   userPermissions: UserPermission[]
-  origin: 'project' | 'manager'
+  origin: 'project' | 'manager' | 'law-firm'
   backButtonText: string
   onBack: () => void
   onUpdate: (updates: Partial<Stakeholder>) => void

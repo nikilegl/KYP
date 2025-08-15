@@ -17,6 +17,7 @@ interface LawFirmManagerProps {
   onDeleteLawFirm: (id: string) => Promise<void>
   onImportCSV: (csvData: string) => Promise<{ success: number, errors: string[] }>
   onDeleteAll: () => Promise<void>
+  onSelectStakeholder?: (stakeholder: Stakeholder, lawFirm: LawFirm) => void
 }
 
 export function LawFirmManager({ 
@@ -27,7 +28,8 @@ export function LawFirmManager({
   onUpdateLawFirm, 
   onDeleteLawFirm,
   onImportCSV,
-  onDeleteAll
+  onDeleteAll,
+  onSelectStakeholder
 }: LawFirmManagerProps) {
   const [showLawFirmForm, setShowLawFirmForm] = useState(false)
   const [editingLawFirm, setEditingLawFirm] = useState<LawFirm | null>(null)
@@ -68,6 +70,7 @@ export function LawFirmManager({
           // Update the selected law firm state
           setSelectedLawFirm({ ...selectedLawFirm, ...updates })
         }}
+        onSelectStakeholder={onSelectStakeholder ? (stakeholder: Stakeholder) => onSelectStakeholder(stakeholder, selectedLawFirm) : undefined}
       />
     )
   }

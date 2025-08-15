@@ -3,6 +3,7 @@ import { ArrowLeft, Building2, Users, Edit, Save, X, Star } from 'lucide-react'
 import { updateLawFirm } from '../lib/database'
 import { getStructureTagStyles } from '../utils/structureTagStyles'
 import { EditableContentSection } from './common/EditableContentSection'
+import { StakeholderAvatar } from './common/StakeholderAvatar'
 import type { LawFirm, Stakeholder, UserRole } from '../lib/supabase'
 
 interface LawFirmDetailProps {
@@ -11,6 +12,7 @@ interface LawFirmDetailProps {
   userRoles: UserRole[]
   onBack: () => void
   onUpdate: (updates: Partial<LawFirm>) => void
+  onSelectStakeholder?: (stakeholder: Stakeholder, lawFirm: LawFirm) => void
 }
 
 const sections = [
@@ -41,7 +43,8 @@ export function LawFirmDetail({
   stakeholders, 
   userRoles, 
   onBack, 
-  onUpdate 
+  onUpdate,
+  onSelectStakeholder
 }: LawFirmDetailProps) {
 
   const firmStakeholders = stakeholders.filter(s => s.law_firm_id === lawFirm.id)
@@ -152,15 +155,15 @@ export function LawFirmDetail({
               {firmStakeholders.map((stakeholder) => {
                 const userRole = getUserRoleById(stakeholder.user_role_id)
                 return (
-                  <div key={stakeholder.id} className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                    <div 
-                      className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ 
-                        backgroundColor: userRole ? `${userRole.colour}20` : '#F3F4F6',
-                      }}
-                    >
-                      <Users size={20} style={{ color: userRole?.colour || '#6B7280' }} />
-                    </div>
+                  <div 
+                    key={stakeholder.id} 
+                    className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                    onClick={() => onSelectStakeholder?.(stakeholder, lawFirm)}
+                  >
+                    <StakeholderAvatar 
+                      userRole={userRole}
+                      size="lg"
+                    />
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{stakeholder.name}</p>
                       {userRole && (

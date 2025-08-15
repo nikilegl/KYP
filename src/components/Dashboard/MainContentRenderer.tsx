@@ -60,7 +60,8 @@ interface MainContentRendererProps {
   selectedUserStory: UserStory | null
   noteStakeholderIds: string[]
   userStoryRoleIds: string[]
-  stakeholderDetailOrigin: 'project' | 'manager'
+  stakeholderDetailOrigin: 'project' | 'manager' | 'law-firm'
+  originLawFirm: LawFirm | null
   selectedTheme: Theme | null
   selectedNoteTemplate: NoteTemplate | null
   selectedDesign: Design | null
@@ -83,6 +84,7 @@ interface MainContentRendererProps {
   onUpdateStakeholder: (stakeholderId: string, updates: { name?: string; user_role_id?: string; law_firm_id?: string; user_permission_id?: string; notes?: string; visitor_id?: string; department?: string; pendo_role?: string }) => Promise<void>
   onDeleteStakeholder: (stakeholderId: string) => Promise<void>
   onSelectStakeholder: (stakeholder: Stakeholder) => void
+  onSelectStakeholderFromLawFirm: (stakeholder: Stakeholder, lawFirm: LawFirm) => void
   onStakeholderBack: () => void
   
   // Team management handlers
@@ -158,6 +160,7 @@ export function MainContentRenderer({
   noteStakeholderIds,
   userStoryRoleIds,
   stakeholderDetailOrigin,
+  originLawFirm,
   selectedTheme,
   selectedNoteTemplate,
   selectedDesign,
@@ -177,6 +180,7 @@ export function MainContentRenderer({
   onUpdateStakeholder,
   onDeleteStakeholder,
   onSelectStakeholder,
+  onSelectStakeholderFromLawFirm,
   onStakeholderBack,
   onCreateUser,
   onUpdateWorkspaceUser,
@@ -253,7 +257,13 @@ export function MainContentRenderer({
         lawFirms={lawFirms}
         userPermissions={userPermissions}
         origin={stakeholderDetailOrigin}
-        backButtonText={stakeholderDetailOrigin === 'manager' ? 'Back to Stakeholders' : 'Back to Project'}
+        backButtonText={
+          stakeholderDetailOrigin === 'manager' 
+            ? 'Back to Stakeholders' 
+            : stakeholderDetailOrigin === 'law-firm' && originLawFirm
+              ? `Back to ${originLawFirm.name}`
+              : 'Back to Project'
+        }
         onBack={onStakeholderBack}
         onUpdate={(updates) => {
           onUpdateStakeholder(selectedStakeholder.id, updates)
@@ -398,6 +408,7 @@ export function MainContentRenderer({
           onDeleteLawFirm={onDeleteLawFirm}
           onImportCSV={onImportLawFirmsCSV}
           onDeleteAll={onDeleteAllLawFirms}
+          onSelectStakeholder={onSelectStakeholderFromLawFirm}
         />
       )
     case 'themes':
