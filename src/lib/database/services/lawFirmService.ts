@@ -159,6 +159,7 @@ export const createLawFirm = async (name: string, structure: 'centralised' | 'de
         key_quotes: '',
         insights: '',
         opportunities: '',
+        short_id: nextShortId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }

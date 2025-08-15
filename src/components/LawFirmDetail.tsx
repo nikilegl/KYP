@@ -4,6 +4,7 @@ import { updateLawFirm } from '../lib/database'
 import { getStructureTagStyles } from '../utils/structureTagStyles'
 import { EditableContentSection } from './common/EditableContentSection'
 import { StakeholderAvatar } from './common/StakeholderAvatar'
+import { CopyLinkButton } from './common/CopyLinkButton'
 import type { LawFirm, Stakeholder, UserRole } from '../lib/supabase'
 
 interface LawFirmDetailProps {
@@ -100,6 +101,7 @@ export function LawFirmDetail({
               </span>
             </div>
           </div>
+          <CopyLinkButton entityType="law-firm" shortId={lawFirm.short_id || 0} />
         </div>
       </div>
 

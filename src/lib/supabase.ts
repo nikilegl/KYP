@@ -168,6 +168,7 @@ export interface LawFirm {
   key_quotes?: string
   insights?: string
   opportunities?: string
+  short_id?: number
   created_at: string
   updated_at: string
 }

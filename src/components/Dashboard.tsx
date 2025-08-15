@@ -36,6 +36,7 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
                pathname.startsWith('/user-journey/') || 
                pathname.startsWith('/design/') || 
                pathname.startsWith('/stakeholder/') || 
+               pathname.startsWith('/law-firm/') || 
                pathname.startsWith('/theme/')) {
       // For entity detail pages, we don't need to set a specific view
       // The WorkspaceDataFetcher will handle the routing

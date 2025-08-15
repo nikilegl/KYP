@@ -186,6 +186,7 @@ export function WorkspaceDataFetcher({
         setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
         return
       }
 
@@ -200,6 +201,7 @@ export function WorkspaceDataFetcher({
         setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
         return
       }
 
@@ -213,6 +215,7 @@ export function WorkspaceDataFetcher({
         setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
         return
       }
 
@@ -226,6 +229,7 @@ export function WorkspaceDataFetcher({
         setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
         return
       }
 
@@ -239,6 +243,7 @@ export function WorkspaceDataFetcher({
         setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
         return
       }
 
@@ -252,6 +257,7 @@ export function WorkspaceDataFetcher({
         setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
         return
       }
 
@@ -405,6 +411,18 @@ export function WorkspaceDataFetcher({
           }
         } else {
           console.log('🔵 WorkspaceDataFetcher: Design not found, navigating to /')
+          navigate('/')
+        }
+      } else if (pathname.startsWith('/law-firm/')) {
+        console.log('🔵 WorkspaceDataFetcher: Processing law-firm route with shortId:', shortId)
+        const lawFirm = await getLawFirmByShortId(shortId)
+        console.log('🔵 WorkspaceDataFetcher: Law firm lookup result:', lawFirm)
+        if (lawFirm) {
+          setSelectedLawFirm(lawFirm)
+          setCurrentView('law-firm-detail')
+          console.log('🔵 WorkspaceDataFetcher: Set currentView to law-firm-detail')
+        } else {
+          console.log('🔵 WorkspaceDataFetcher: Law firm not found, navigating to /')
           navigate('/')
         }
       }
@@ -586,6 +604,13 @@ export function WorkspaceDataFetcher({
     setCurrentView('projects')
     setIsNavigatingBack(true)
     navigate('/')
+  }
+
+  const handleBackFromLawFirm = () => {
+    setSelectedLawFirm(null)
+    setCurrentView('law-firms')
+    setIsNavigatingBack(true)
+    navigate('/law-firms')
   }
 
   // Project handlers
@@ -969,6 +994,7 @@ export function WorkspaceDataFetcher({
       selectedNoteTemplate={selectedNoteTemplate}
       selectedDesignForProject={selectedDesignForProject}
       selectedDesign={selectedDesign}
+      selectedLawFirm={selectedLawFirm}
       allProjectProgressStatus={allProjectProgressStatus}
       allUserStories={allUserStories}
       allUserJourneys={allUserJourneys}
@@ -1013,6 +1039,7 @@ export function WorkspaceDataFetcher({
       onDeleteNoteTemplate={handleDeleteNoteTemplate}
       onSelectNoteTemplate={handleSelectNoteTemplate}
       onBackFromDesign={handleBackFromDesign}
+      onBackFromLawFirm={handleBackFromLawFirm}
       onCreateTask={handleCreateTaskForUserStory}
       onUpdateTask={handleUpdateTaskForUserStory}
       onDeleteTask={handleDeleteTaskForUserStory}

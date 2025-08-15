@@ -18,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/user-story/:shortId" element={<App />} />
         <Route path="/theme/:shortId" element={<App />} />
         <Route path="/design/:shortId" element={<App />} />
+        <Route path="/law-firm/:shortId" element={<App />} />
         <Route path="/law-firms" element={<App />} />
         <Route path="/themes" element={<App />} />
         <Route path="/stakeholders" element={<App />} />

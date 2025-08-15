@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { Plus, Upload, Trash2, Shield } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { LawFirmTable } from './LawFirmManager/LawFirmTable'
 import { LawFirmFilters } from './LawFirmManager/LawFirmFilters'
 import type { LawFirm } from '../lib/supabase'
 import { getCurrentUserRole } from '../lib/database'
-import { LawFirmDetail } from './LawFirmDetail'
 import type { Stakeholder, UserRole } from '../lib/supabase'
 
 interface LawFirmManagerProps {
@@ -31,9 +31,9 @@ export function LawFirmManager({
   onDeleteAll,
   onSelectStakeholder
 }: LawFirmManagerProps) {
+  const navigate = useNavigate()
   const [showLawFirmForm, setShowLawFirmForm] = useState(false)
   const [editingLawFirm, setEditingLawFirm] = useState<LawFirm | null>(null)
-  const [selectedLawFirm, setSelectedLawFirm] = useState<LawFirm | null>(null)
   const [newLawFirm, setNewLawFirm] = useState({ 
     name: '', 
     structure: 'decentralised' as 'centralised' | 'decentralised',
@@ -55,25 +55,6 @@ export function LawFirmManager({
     }
     loadUserRole()
   }, [])
-
-  // If a law firm is selected for detail view, show the detail component
-  if (selectedLawFirm) {
-    return (
-      <LawFirmDetail
-        lawFirm={selectedLawFirm}
-        stakeholders={stakeholders}
-        userRoles={userRoles}
-        onBack={() => setSelectedLawFirm(null)}
-        onUpdate={(updates) => {
-          // Update the law firm in the parent component
-          onUpdateLawFirm(selectedLawFirm.id, updates)
-          // Update the selected law firm state
-          setSelectedLawFirm({ ...selectedLawFirm, ...updates })
-        }}
-        onSelectStakeholder={onSelectStakeholder ? (stakeholder: Stakeholder) => onSelectStakeholder(stakeholder, selectedLawFirm) : undefined}
-      />
-    )
-  }
 
   const handleCreateLawFirm = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -131,7 +112,7 @@ export function LawFirmManager({
   }
 
   const handleRowClick = (firm: LawFirm) => {
-    setSelectedLawFirm(firm)
+    navigate(`/law-firm/${firm.short_id}`)
   }
 
   const filteredLawFirms = lawFirms.filter(firm => {

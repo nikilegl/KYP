@@ -66,6 +66,7 @@ interface MainContentRendererProps {
   selectedNoteTemplate: NoteTemplate | null
   selectedDesign: Design | null
   selectedDesignForProject: Design | null
+  selectedLawFirm: LawFirm | null
   allProjectProgressStatus: ProjectProgressStatus[]
   allUserStories: UserStory[]
   allUserJourneys: UserJourney[]
@@ -125,6 +126,7 @@ interface MainContentRendererProps {
   onDeleteNoteTemplate: (templateId: string) => Promise<void>
   onSelectNoteTemplate: (template: NoteTemplate) => void
   onBackFromDesign: () => void
+  onBackFromLawFirm: () => void
   
   onUpdateUserStory: (userStoryId: string, updates: { name?: string; description?: string; estimated_complexity?: number; priority_rating?: 'must' | 'should' | 'could' | 'would'; reason?: string; assigned_to_user_id?: string | null; status?: string }) => Promise<void>
   onStoriesReordered?: () => Promise<void>
@@ -165,6 +167,7 @@ export function MainContentRenderer({
   selectedNoteTemplate,
   selectedDesign,
   selectedDesignForProject,
+  selectedLawFirm,
   allProjectProgressStatus,
   allUserStories,
   allUserJourneys,
@@ -209,6 +212,7 @@ export function MainContentRenderer({
   onDeleteNoteTemplate,
   onSelectNoteTemplate,
   onBackFromDesign,
+  onBackFromLawFirm,
   onAddUserStoryComment,
   onEditUserStoryComment,
   onDeleteUserStoryComment,
@@ -357,6 +361,21 @@ export function MainContentRenderer({
       <ThemeDetail
         themeShortId={selectedTheme.short_id || 0}
         onBack={() => console.log('Back from theme')}
+      />
+    )
+  }
+
+  if (currentView === 'law-firm-detail' && selectedLawFirm) {
+    return (
+      <LawFirmDetail
+        lawFirm={selectedLawFirm}
+        stakeholders={stakeholders}
+        userRoles={userRoles}
+        onBack={onBackFromLawFirm}
+        onUpdate={(updates) => {
+          onUpdateLawFirm(selectedLawFirm.id, updates)
+        }}
+        onSelectStakeholder={onSelectStakeholderFromLawFirm}
       />
     )
   }
