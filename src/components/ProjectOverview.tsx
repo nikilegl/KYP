@@ -1,7 +1,7 @@
 import React from 'react'
 import { Check, X } from 'lucide-react'
 import { FolderOpen, Users, FileText, Edit, AlertTriangle, TrendingUp, CheckSquare, Star, BarChart, Palette, ArrowRight } from 'lucide-react'
-import { UserRoleTag } from './common/UserRoleTag'
+import { StakeholderAvatar } from './common/StakeholderAvatar'
 import { StructureTag } from '../utils/structureTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
 import { PROGRESS_QUESTIONS } from '../lib/database'
@@ -229,15 +229,45 @@ export function ProjectOverview({
                 }
                 
                 return (
-                  <div className="flex flex-wrap gap-2 w-full">
-                    {Array.from(roleBreakdown.entries()).map(([roleName, data]) => (
-                      <UserRoleTag
-                        key={roleName}
-                        userRole={data.userRole}
-                        count={data.count}
-                        size="md"
-                      />
-                    ))}
+                  <div className="space-y-3 w-full">
+                    {(() => {
+                      // Calculate max count for scaling bars
+                      const maxCount = Math.max(...Array.from(roleBreakdown.values()).map(data => data.count))
+                      
+                      return Array.from(roleBreakdown.entries()).map(([roleName, data]) => {
+                        const percentage = maxCount > 0 ? (data.count / maxCount) * 100 : 0
+                        
+                        return (
+                          <div key={roleName} className="flex items-center gap-3">
+                            {/* Icon and Role Name - Fixed width */}
+                            <div className="flex items-center gap-2 w-48 flex-shrink-0">
+                              <StakeholderAvatar userRole={data.userRole} size="sm" />
+                              <span className="text-sm font-medium text-gray-900 truncate">
+                                {data.userRole.name}
+                              </span>
+                            </div>
+                            
+                            {/* Horizontal Bar Container */}
+                            <div className="flex-1 flex items-center gap-3">
+                              <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                                <div 
+                                  className="h-full rounded-full transition-all duration-300 ease-out"
+                                  style={{ 
+                                    width: `${percentage}%`,
+                                    backgroundColor: data.userRole.colour
+                                  }}
+                                />
+                              </div>
+                              
+                              {/* Count */}
+                              <span className="text-sm font-bold text-gray-900 w-8 text-right">
+                                {data.count}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })
+                    })()}
                   </div>
                 )
               })()}
@@ -247,53 +277,85 @@ export function ProjectOverview({
           {/* Law Firms Section */}
           <div className="w-full">
             <h4 className="text-sm font-semibold text-gray-700 mb-3">Law Firms</h4>
-            <div className="flex flex-wrap gap-2 w-full">
+            <div className="space-y-3 w-full">
               {(() => {
-                const structureBreakdown = new Map<string, number>()
+                // Calculate law firm structure breakdown
+                const centralisedCount = assignedStakeholders.filter(stakeholder => {
+                  const lawFirm = lawFirms.find(firm => firm.id === stakeholder.law_firm_id)
+                  return lawFirm?.structure === 'centralised'
+                }).length
                 
-                assignedStakeholders.forEach(stakeholder => {
-                  if (stakeholder.law_firm_id) {
-                    const lawFirm = lawFirms.find(firm => firm.id === stakeholder.law_firm_id)
-                    const structure = lawFirm?.structure === 'centralised' ? 'Centralised' : 
-                                    lawFirm?.structure === 'decentralised' ? 'Decentralised' : 
-                                    'Unknown Structure'
-                    
-                    if (structureBreakdown.has(structure)) {
-                      structureBreakdown.set(structure, structureBreakdown.get(structure)! + 1)
-                    } else {
-                      structureBreakdown.set(structure, 1)
-                    }
-                  } else {
-                    // Stakeholder without law firm
-                    if (structureBreakdown.has('No Firm Assigned')) {
-                      structureBreakdown.set('No Firm Assigned', structureBreakdown.get('No Firm Assigned')! + 1)
-                    } else {
-                      structureBreakdown.set('No Firm Assigned', 1)
-                    }
-                  }
-                })
+                const decentralisedCount = assignedStakeholders.filter(stakeholder => {
+                  const lawFirm = lawFirms.find(firm => firm.id === stakeholder.law_firm_id)
+                  return lawFirm?.structure === 'decentralised'
+                }).length
                 
-                if (structureBreakdown.size === 0) {
+                const maxLawFirmCount = Math.max(centralisedCount, decentralisedCount)
+                
+                if (centralisedCount === 0 && decentralisedCount === 0) {
                   return (
                     <p className="text-sm text-gray-500">No stakeholders assigned</p>
                   )
                 }
                 
-                return Array.from(structureBreakdown.entries()).map(([structure, count]) => (
-                  <div key={structure}>
-                    {structure === 'Centralised' || structure === 'Decentralised' ? (
-                      <StructureTag 
-                        structure={structure.toLowerCase() as 'centralised' | 'decentralised'}
-                        count={count}
-                      />
-                    ) : (
-                      <div className="flex items-center gap-3 px-4 py-2 rounded-full">
-                        <span className="text-sm font-medium text-gray-600">{structure}</span>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm font-medium bg-gray-400">
-                          {count}
-                        </div>
+                const lawFirmTypes = []
+                
+                if (decentralisedCount > 0) {
+                  lawFirmTypes.push({
+                    type: 'Decentralised',
+                    count: decentralisedCount,
+                    percentage: maxLawFirmCount > 0 ? (decentralisedCount / maxLawFirmCount) * 100 : 0
+                  })
+                }
+                
+                if (centralisedCount > 0) {
+                  lawFirmTypes.push({
+                    type: 'Centralised',
+                    count: centralisedCount,
+                    percentage: maxLawFirmCount > 0 ? (centralisedCount / maxLawFirmCount) * 100 : 0
+                  })
+                }
+                
+                return lawFirmTypes.map(({ type, count, percentage }) => (
+                  <div key={type} className="flex items-center gap-3">
+                    {/* Icon and Type Name - Fixed width */}
+                    <div className="flex items-center gap-2 w-48 flex-shrink-0">
+                      {/* Custom Icon */}
+                      <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center relative">
+                        {type === 'Centralised' ? (
+                          <div 
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: '#253658' }}
+                          />
+                        ) : (
+                          <div 
+                            className="w-3 h-3 rounded-full border-2 border-dashed"
+                            style={{ borderColor: '#253658' borderWidth:'1px' }}
+                          />
+                        )}
                       </div>
-                    )}
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {type}
+                      </span>
+                    </div>
+                    
+                    {/* Horizontal Bar Container */}
+                    <div className="flex-1 flex items-center gap-3">
+                      <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-300 ease-out"
+                          style={{ 
+                            width: `${percentage}%`,
+                            backgroundColor: '#C5CAD3'
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Count */}
+                      <span className="text-sm font-bold text-gray-900 w-8 text-right">
+                        {count}
+                      </span>
+                    </div>
                   </div>
                 ))
               })()}
