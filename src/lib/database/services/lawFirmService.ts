@@ -11,7 +11,12 @@ export const getLawFirms = async (options?: {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_law_firms')
-      return stored ? JSON.parse(stored) : []
+      const lawFirms = stored ? JSON.parse(stored) : []
+      // Ensure all law firms have short_id for local storage
+      return lawFirms.map((firm: LawFirm, index: number) => ({
+        ...firm,
+        short_id: firm.short_id || (index + 1)
+      }))
     } catch {
       return []
     }
@@ -28,6 +33,7 @@ export const getLawFirms = async (options?: {
         structure,
         status,
         top_4,
+        short_id,
         created_at,
         updated_at
       `)
@@ -91,6 +97,7 @@ export const getLawFirmsPaginated = async (options?: {
         structure,
         status,
         top_4,
+        short_id,
         created_at,
         updated_at
       `)
@@ -148,6 +155,7 @@ export const createLawFirm = async (name: string, structure: 'centralised' | 'de
     // Local storage fallback
     try {
       const lawFirms = JSON.parse(localStorage.getItem('kyp_law_firms') || '[]')
+      const nextShortId = Math.max(0, ...lawFirms.map((f: LawFirm) => f.short_id || 0)) + 1
       const newLawFirm: LawFirm = {
         id: `firm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         workspace_id: 'default-workspace',
