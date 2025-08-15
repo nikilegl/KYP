@@ -28,6 +28,7 @@ import {
   updateCustomUserRole,
   deleteUserRole,
   getLawFirms,
+  getLawFirmByShortId,
   createLawFirm,
   updateLawFirm,
   deleteLawFirm,
