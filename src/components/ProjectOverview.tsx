@@ -321,15 +321,15 @@ export function ProjectOverview({
                     {/* Icon and Type Name - Fixed width */}
                     <div className="flex items-center gap-2 w-48 flex-shrink-0">
                       {/* Custom Icon */}
-                      <div className="w-3 h-3 bg-gray-200 rounded-full flex items-center justify-center relative">
+                      <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center relative">
                         {type === 'Centralised' ? (
                           <div 
-                            className="w-4 h-4 rounded-full"
+                            className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: '#253658' }}
                           />
                         ) : (
                           <div 
-                            className="w-4 h-4 rounded-full border-2 border-dashed"
+                            className="w-3 h-3 rounded-full border-2 border-dashed"
                             style={{ borderColor: '#253658' }}
                           />
                         )}
