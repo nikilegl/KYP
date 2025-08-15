@@ -480,11 +480,16 @@ export function WorkspaceDataFetcher({
       
       // Calculate stakeholder notes count
       const stakeholderNotesCount: Record<string, number> = {}
+      console.log('📊 WorkspaceDataFetcher: allNoteStakeholders data:', allNoteStakeholders)
+      console.log('📊 WorkspaceDataFetcher: Number of notes with stakeholders:', Object.keys(allNoteStakeholders).length)
+      
       Object.values(allNoteStakeholders).forEach(stakeholderIds => {
         stakeholderIds.forEach(stakeholderId => {
           stakeholderNotesCount[stakeholderId] = (stakeholderNotesCount[stakeholderId] || 0) + 1
         })
       })
+      
+      console.log('📊 WorkspaceDataFetcher: Final stakeholder notes count:', stakeholderNotesCount)
       setStakeholderNotesCountMap(stakeholderNotesCount)
     } catch (error) {
       if (error instanceof SupabaseAuthError) {
