@@ -1,7 +1,7 @@
 import React from 'react'
 import { Check, X } from 'lucide-react'
 import { FolderOpen, Users, FileText, Edit, AlertTriangle, TrendingUp, CheckSquare, Star, BarChart, Palette, ArrowRight } from 'lucide-react'
-import { UserRoleTag } from './common/UserRoleTag'
+import { StakeholderAvatar } from './common/StakeholderAvatar'
 import { StructureTag } from '../utils/structureTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
 import { PROGRESS_QUESTIONS } from '../lib/database'
@@ -229,15 +229,45 @@ export function ProjectOverview({
                 }
                 
                 return (
-                  <div className="flex flex-wrap gap-2 w-full">
-                    {Array.from(roleBreakdown.entries()).map(([roleName, data]) => (
-                      <UserRoleTag
-                        key={roleName}
-                        userRole={data.userRole}
-                        count={data.count}
-                        size="md"
-                      />
-                    ))}
+                  <div className="space-y-3 w-full">
+                    {(() => {
+                      // Calculate max count for scaling bars
+                      const maxCount = Math.max(...Array.from(roleBreakdown.values()).map(data => data.count))
+                      
+                      return Array.from(roleBreakdown.entries()).map(([roleName, data]) => {
+                        const percentage = maxCount > 0 ? (data.count / maxCount) * 100 : 0
+                        
+                        return (
+                          <div key={roleName} className="flex items-center gap-3">
+                            {/* Icon and Role Name - Fixed width */}
+                            <div className="flex items-center gap-2 w-48 flex-shrink-0">
+                              <StakeholderAvatar userRole={data.userRole} size="sm" />
+                              <span className="text-sm font-medium text-gray-900 truncate">
+                                {data.userRole.name}
+                              </span>
+                            </div>
+                            
+                            {/* Horizontal Bar Container */}
+                            <div className="flex-1 flex items-center gap-3">
+                              <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                                <div 
+                                  className="h-full rounded-full transition-all duration-300 ease-out"
+                                  style={{ 
+                                    width: `${percentage}%`,
+                                    backgroundColor: data.userRole.colour
+                                  }}
+                                />
+                              </div>
+                              
+                              {/* Count */}
+                              <span className="text-sm font-bold text-gray-900 w-8 text-right">
+                                {data.count}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })
+                    })()}
                   </div>
                 )
               })()}
