@@ -697,11 +697,10 @@ export function WorkspaceDataFetcher({
       onViewChange('stakeholders')
       setIsNavigatingBack(true)
       navigate('/')
-    } else if (stakeholderDetailOrigin === 'law-firm') {
+    } else if (stakeholderDetailOrigin === 'law-firm' && originLawFirm) {
       setSelectedStakeholder(null)
-      onViewChange('law-firms')
-      setIsNavigatingBack(true)
-      navigate('/')
+      // Don't set isNavigatingBack to true because we want the route to be processed normally
+      navigate(`/law-firm/${originLawFirm.short_id}`)
     } else {
       setSelectedStakeholder(null)
       onViewChange('projects')
