@@ -346,7 +346,7 @@ export function ProjectOverview({
                           className="h-full rounded-full transition-all duration-300 ease-out"
                           style={{ 
                             width: `${percentage}%`,
-                            backgroundColor: '#A9AFBD'
+                            backgroundColor: '#C5CAD3'
                           }}
                         />
                       </div>
