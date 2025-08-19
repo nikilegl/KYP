@@ -36,7 +36,7 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
             content: decision.comment_text,
             source_type: 'note',
             source_id: note.id,
-            source_name: note.title,
+            source_name: note.name,
             source_short_id: note.short_id,
             created_at: decision.created_at,
             updated_at: decision.updated_at,
@@ -126,7 +126,7 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
         *,
         research_notes!inner (
           id,
-          title,
+          name,
           short_id,
           project_id
         )
@@ -144,7 +144,7 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
           content: decision.comment_text,
           source_type: 'note',
           source_id: decision.research_notes.id,
-          source_name: decision.research_notes.title,
+          source_name: decision.research_notes.name,
           source_short_id: decision.research_notes.short_id,
           created_at: decision.created_at,
           updated_at: decision.updated_at,
