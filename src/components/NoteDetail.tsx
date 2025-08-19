@@ -80,6 +80,7 @@ export function NoteDetail({
   const [noteStakeholderIds, setNoteStakeholderIds] = useState<string[]>([])
   const [showEditModal, setShowEditModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [localNote, setLocalNote] = useState<ResearchNote | null>(note)
   const [noteLinks, setNoteLinks] = useState<NoteLink[]>([])
   const [noteTasks, setNoteTasks] = useState<Task[]>([])
   const [noteThemes, setNoteThemes] = useState<Theme[]>([])
@@ -113,6 +114,11 @@ export function NoteDetail({
       loadLinkedDesigns()
     }
   }, [note, isCreating])
+
+  // Update localNote when note prop changes
+  useEffect(() => {
+    setLocalNote(note)
+  }, [note])
   const loadNoteStakeholders = async () => {
     if (!note) return
     
@@ -401,7 +407,7 @@ export function NoteDetail({
     
     setSaving(true)
     try {
-      const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id)
+      const newComment = await createResearchNoteComment(note.id, commentText, currentUser.id, false)
       if (newComment) {
         setNoteComments([newComment, ...noteComments])
       }
@@ -414,16 +420,31 @@ export function NoteDetail({
   }
 
   const handleAddDecision = async (decisionText: string) => {
-    if (!note || !currentUser) return
+    if (!localNote) return
     
     setSaving(true)
     try {
-      const newComment = await createResearchNoteComment(note.id, decisionText, currentUser.id, true)
-      if (newComment) {
-        await loadNoteComments() // Reload to get fresh data
+      const currentDecisions = localNote.decision_text || []
+      // Create a decision with timestamp like in UserStoryDetail and AssetDetail
+      const newDecisionWithTimestamp = `${new Date().toISOString()}|${decisionText}`
+      const updatedDecisions = [...currentDecisions, newDecisionWithTimestamp]
+      
+      // Update local state immediately for UI responsiveness
+      const updatedNote = { ...localNote, decision_text: updatedDecisions }
+      setLocalNote(updatedNote)
+      
+      // Update the note in the database
+      const savedNote = await updateResearchNote(localNote.id, {
+        decision_text: updatedDecisions
+      })
+      
+      if (savedNote) {
+        onUpdate(savedNote, noteStakeholderIds)
       }
     } catch (error) {
       console.error('Error adding decision:', error)
+      // Revert local state on error
+      setLocalNote(localNote)
       throw error
     } finally {
       setSaving(false)
@@ -463,22 +484,36 @@ export function NoteDetail({
   }
 
   const handleEditDecision = async (decisionIndex: number, decisionText: string) => {
+    if (!localNote) return
+    
     setSaving(true)
     try {
-      // Get the decision comments in chronological order
-      const decisionComments = noteComments
-        .filter(comment => comment.is_decision)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      const currentDecisions = localNote.decision_text || []
+      const updatedDecisions = [...currentDecisions]
       
-      if (decisionIndex < decisionComments.length) {
-        const decisionToEdit = decisionComments[decisionIndex]
-        const updatedComment = await updateResearchNoteComment(decisionToEdit.id, decisionText)
-        if (updatedComment) {
-          await loadNoteComments() // Reload to get fresh data
-        }
+      // Extract the original timestamp if it exists, otherwise use current time
+      const originalDecision = updatedDecisions[decisionIndex]
+      const timestampMatch = originalDecision?.match(/^(.+?)\|(.+)$/)
+      const originalTimestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
+      
+      // Preserve the original timestamp but update the text
+      updatedDecisions[decisionIndex] = `${originalTimestamp}|${decisionText}`
+      
+      // Update local state immediately for UI responsiveness
+      const updatedNote = { ...localNote, decision_text: updatedDecisions }
+      setLocalNote(updatedNote)
+      
+      const savedNote = await updateResearchNote(localNote.id, {
+        decision_text: updatedDecisions
+      })
+      
+      if (savedNote) {
+        onUpdate(savedNote, noteStakeholderIds)
       }
     } catch (error) {
       console.error('Error editing decision:', error)
+      // Revert local state on error
+      setLocalNote(localNote)
       throw error
     } finally {
       setSaving(false)
@@ -486,22 +521,28 @@ export function NoteDetail({
   }
 
   const handleDeleteDecision = async (decisionIndex: number) => {
+    if (!localNote) return
+    
     setSaving(true)
     try {
-      // Get the decision comments in chronological order
-      const decisionComments = noteComments
-        .filter(comment => comment.is_decision)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      const currentDecisions = localNote.decision_text || []
+      const updatedDecisions = currentDecisions.filter((_, index) => index !== decisionIndex)
       
-      if (decisionIndex < decisionComments.length) {
-        const decisionToDelete = decisionComments[decisionIndex]
-        const success = await deleteResearchNoteComment(decisionToDelete.id)
-        if (success) {
-          await loadNoteComments() // Reload to get fresh data
-        }
+      // Update local state immediately for UI responsiveness
+      const updatedNote = { ...localNote, decision_text: updatedDecisions }
+      setLocalNote(updatedNote)
+      
+      const savedNote = await updateResearchNote(localNote.id, {
+        decision_text: updatedDecisions
+      })
+      
+      if (savedNote) {
+        onUpdate(savedNote, noteStakeholderIds)
       }
     } catch (error) {
       console.error('Error deleting decision:', error)
+      // Revert local state on error
+      setLocalNote(localNote)
       throw error
     } finally {
       setSaving(false)
@@ -734,6 +775,7 @@ export function NoteDetail({
           entityId={note.id}
           entityType="research note"
           comments={noteComments
+            .filter(comment => !comment.is_decision) // Only show regular comments, not decisions
             .map(comment => ({
               id: comment.id,
               user_id: comment.user_id,
@@ -741,9 +783,7 @@ export function NoteDetail({
               created_at: comment.created_at,
               updated_at: comment.updated_at
             }))}
-          decisions={noteComments
-            .filter(comment => comment.is_decision)
-            .map(comment => `${comment.created_at}|${comment.comment_text}`)}
+          decisions={localNote?.decision_text || []}
           user={currentUser || null}
           allUsers={availableUsers}
           showHistory={showHistory}

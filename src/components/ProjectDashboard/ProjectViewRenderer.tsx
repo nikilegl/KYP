@@ -16,10 +16,11 @@ import {
   BookOpen,
   Palette,
   Clipboard,
-  CheckSquare
+  CheckSquare,
+  Clock
 } from 'lucide-react'
 import { ProjectOverview } from '../ProjectOverview'
-import { ProblemOverviewSection } from '../ProblemOverviewSection'
+
 import { AssignedStakeholders } from '../AssignedStakeholders'
 import { ResearchNotesSection } from '../ResearchNotesSection'
 import { PromptBuilderSection } from '../PromptBuilderSection'
@@ -33,6 +34,7 @@ import { DesignsSection } from '../AssetsSection'
 import { AssetDetail } from '../AssetDetail'
 import { ProjectTaskManager } from '../ProjectTaskManager'
 import { ProjectProgressSection } from '../ProjectProgressSection'
+import { DecisionHistory } from '../DecisionHistory'
 import type { 
   Project, 
   Stakeholder, 
@@ -320,7 +322,7 @@ export function ProjectViewRenderer({
     { id: 'user-stories', label: 'User Stories', icon: BookOpen },
     { id: 'user-flows', label: 'User Journeys', icon: Workflow },    
     { id: 'designs', label: 'Designs', icon: Palette },    
-   
+    { id: 'decision-history', label: 'Decision History', icon: Clock },
    
     { id: 'project-tasks', label: 'Project Tasks', icon: CheckSquare },
     { id: 'project-progress', label: 'Project Progress', icon: Clipboard },
@@ -467,15 +469,7 @@ export function ProjectViewRenderer({
             onViewNote={handleViewNote}
           />
         )
-      case 'problem-overview':
-        return (
-          <ProblemOverviewSection 
-            project={project}
-            problemOverview={problemOverview}
-            onProblemOverviewChange={onProblemOverviewChange}
-            onSaveProblemOverview={onSaveProblemOverview}
-          />
-        )
+
       case 'project-progress':
         return (
           <ProjectProgressSection 
@@ -572,6 +566,30 @@ export function ProjectViewRenderer({
               console.log('🔵 ProjectViewRenderer: onSelectDesign called with design:', design)
               console.log('🔵 ProjectViewRenderer: Navigating to:', `/design/${design.short_id}`)
               navigate(`/design/${design.short_id}`)
+            }}
+          />
+        )
+      case 'decision-history':
+        return (
+          <DecisionHistory 
+            project={project}
+            onNavigateToSource={(sourceType, sourceId) => {
+              // Navigate to the source based on type
+              if (sourceType === 'note') {
+                const note = notes.find(n => n.id === sourceId)
+                if (note) {
+                  handleViewNote(note)
+                }
+              } else if (sourceType === 'user_story') {
+                const userStory = userStories.find(us => us.id === sourceId)
+                if (userStory) {
+                  navigate(`/user-story/${userStory.short_id}`)
+                }
+              } else if (sourceType === 'design') {
+                // Navigate to design detail page by source ID
+                // Note: Designs are not in the current props, so we'll navigate by ID
+                navigate(`/design/${sourceId}`)
+              }
             }}
           />
         )
