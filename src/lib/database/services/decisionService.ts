@@ -120,37 +120,48 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
     const decisions: ProjectDecision[] = []
     
     // Get decisions from notes (research_note_comments where is_decision = true)
-    const { data: noteDecisions, error: noteError } = await supabase
-      .from('research_note_comments')
-      .select(`
-        *,
-        research_notes!inner (
-          id,
-          name,
-          short_id,
-          project_id
-        )
-      `)
-      .eq('research_notes.project_id', projectId)
-      .eq('is_decision', true)
-      .order('created_at', { ascending: false })
+    // Try to get decisions from notes (research_note_comments where is_decision = true)
+    // Handle case where is_decision column might not exist yet
+    try {
+      const { data: noteDecisions, error: noteError } = await supabase
+        .from('research_note_comments')
+        .select(`
+          *,
+          research_notes!inner (
+            id,
+            name,
+            short_id,
+            project_id
+          )
+        `)
+        .eq('research_notes.project_id', projectId)
+        .eq('is_decision', true)
+        .order('created_at', { ascending: false })
 
-    if (noteError) throw noteError
+      if (noteError) throw noteError
 
-    if (noteDecisions) {
-      noteDecisions.forEach((decision: any) => {
-        decisions.push({
-          id: `note-${decision.id}`,
-          content: decision.comment_text,
-          source_type: 'note',
-          source_id: decision.research_notes.id,
-          source_name: decision.research_notes.name,
-          source_short_id: decision.research_notes.short_id,
-          created_at: decision.created_at,
-          updated_at: decision.updated_at,
-          user_id: decision.user_id
+      if (noteDecisions) {
+        noteDecisions.forEach((decision: any) => {
+          decisions.push({
+            id: `note-${decision.id}`,
+            content: decision.comment_text,
+            source_type: 'note',
+            source_id: decision.research_notes.id,
+            source_name: decision.research_notes.name,
+            source_short_id: decision.research_notes.short_id,
+            created_at: decision.created_at,
+            updated_at: decision.updated_at,
+            user_id: decision.user_id
+          })
         })
-      })
+      }
+    } catch (error: any) {
+      // If the is_decision column doesn't exist, skip note decisions for now
+      if (error.message?.includes('is_decision') || error.code === '42703') {
+        console.warn('is_decision column not found in research_note_comments table. Skipping note decisions.')
+      } else {
+        throw error
+      }
     }
     
     // Get decisions from user stories
