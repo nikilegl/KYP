@@ -4,6 +4,7 @@ import { FolderOpen, Users, FileText, Edit, AlertTriangle, TrendingUp, CheckSqua
 import { StakeholderAvatar } from './common/StakeholderAvatar'
 import { StructureTag } from '../utils/structureTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
+import { EditableContentSection } from './common/EditableContentSection'
 import { PROGRESS_QUESTIONS } from '../lib/database'
 import type { Project, ResearchNote, UserStory, UserJourney, Design, Stakeholder, UserRole, LawFirm, Task, ProblemOverview } from '../lib/supabase'
 import type { ProjectProgressStatus } from '../lib/supabase'
@@ -110,6 +111,18 @@ export function ProjectOverview({
     setShowRiskButtons(false)
   }
 
+  const handleSaveWhatIsTheProblem = async (content: string) => {
+    if (onSaveProblemOverview) {
+      await onSaveProblemOverview({ what_is_the_problem: content })
+    }
+  }
+
+  const handleSaveShouldWeSolveIt = async (content: string) => {
+    if (onSaveProblemOverview) {
+      await onSaveProblemOverview({ should_we_solve_it: content })
+    }
+  }
+
   const getProjectProgressPercentage = (): number => {
     const projectProgressStatuses = allProjectProgressStatus.filter(status => status.project_id === project.id)
     const totalQuestions = Object.keys(PROGRESS_QUESTIONS).length
@@ -156,13 +169,20 @@ export function ProjectOverview({
           </div>
         </div>
         
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* User Roles Section */}
           <div className="w-full">
             <h4 className="text-sm font-semibold text-gray-700 mb-3">User Roles</h4>
             <div className="space-y-2">
               {(() => {
                 const roleBreakdown = new Map<string, { count: number, userRole: UserRole }>()
+                
+                // First, add all internal user roles with count 0
+                userRoles.forEach(userRole => {
+                  if (userRole.internal) {
+                    roleBreakdown.set(userRole.name, { count: 0, userRole: userRole })
+                  }
+                })
                 
                 assignedStakeholders.forEach(stakeholder => {
                   if (stakeholder.user_role_id) {
@@ -234,7 +254,21 @@ export function ProjectOverview({
                       // Calculate max count for scaling bars
                       const maxCount = Math.max(...Array.from(roleBreakdown.values()).map(data => data.count))
                       
-                      return Array.from(roleBreakdown.entries()).map(([roleName, data]) => {
+                      return Array.from(roleBreakdown.entries())
+                        .sort(([, dataA], [, dataB]) => {
+                          // Sort non-internal roles first, then internal roles
+                          const aIsInternal = dataA.userRole.internal || false
+                          const bIsInternal = dataB.userRole.internal || false
+                          
+                          if (aIsInternal === bIsInternal) {
+                            // If both are internal or both are non-internal, sort by name
+                            return dataA.userRole.name.localeCompare(dataB.userRole.name)
+                          }
+                          
+                          // Non-internal roles (false) come before internal roles (true)
+                          return aIsInternal ? 1 : -1
+                        })
+                        .map(([roleName, data]) => {
                         const percentage = maxCount > 0 ? (data.count / maxCount) * 100 : 0
                         
                         return (
@@ -274,9 +308,9 @@ export function ProjectOverview({
             </div>
           </div>
           
-          {/* Law Firms Section */}
+          {/* Law Firm Types Section */}
           <div className="w-full">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3">Law Firms</h4>
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Law Firm Types</h4>
             <div className="space-y-3 w-full">
               {(() => {
                 // Calculate law firm structure breakdown
@@ -364,129 +398,31 @@ export function ProjectOverview({
         </div>
       </div>
 
-      {/* Problem Assessment Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Project Progress Card */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <BarChart size={20} className="text-purple-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Project Progress</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Completion</span>
-              <span className="text-2xl font-bold text-purple-600">{getProjectProgressPercentage()}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
-                className="bg-purple-600 h-3 rounded-full transition-all duration-300"
-                style={{ width: `${getProjectProgressPercentage()}%` }}
-              ></div>
-            </div>
-            <div className="text-sm text-gray-600">
-              {getCompletedQuestionsCount()} of {Object.keys(PROGRESS_QUESTIONS).length} milestones completed
-            </div>
-          </div>
+            {/* Problem Definition Section - HIDDEN (can be restored later)
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Problem Definition</h3>
+          <p className="text-sm text-gray-600">Define and assess the problem for {project.name}</p>
         </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <EditableContentSection
+            title="What is the problem?"
+            initialContent={problemOverview.what_is_the_problem || ''}
+            placeholder="Describe the problem you're trying to solve..."
+            onSave={handleSaveWhatIsTheProblem}
+          />
 
-        {/* How well do we understand the problem? */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <AlertTriangle size={20} className="text-blue-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">How well do we understand the problem?</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Rating</span>
-              <span className="text-2xl font-bold text-blue-600">{problemOverview.understanding_rating}/10</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={problemOverview.understanding_rating}
-              onChange={(e) => handleUnderstandingRatingChange(parseInt(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-            />
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Poor understanding</span>
-              <span>Complete understanding</span>
-            </div>
-            {showUnderstandingButtons && (
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={handleSaveUnderstandingRating}
-                  disabled={savingUnderstanding}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-                >
-                  <Check size={16} />
-                  {savingUnderstanding ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={handleCancelUnderstandingRating}
-                  disabled={savingUnderstanding}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all"
-                >
-                  <X size={16} />
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* What is the level of risk? */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-              <TrendingUp size={20} className="text-red-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">What is the level of risk?</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Risk Level</span>
-              <span className="text-2xl font-bold text-red-600">{problemOverview.risk_level}/10</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={problemOverview.risk_level}
-              onChange={(e) => handleRiskLevelChange(parseInt(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-            />
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Low risk</span>
-              <span>High risk</span>
-            </div>
-            {showRiskButtons && (
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={handleSaveRiskLevel}
-                  disabled={savingRisk}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-                >
-                  <Check size={16} />
-                  {savingRisk ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={handleCancelRiskLevel}
-                  disabled={savingRisk}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all"
-                >
-                  <X size={16} />
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
+          <EditableContentSection
+            title="Should we solve it?"
+            initialContent={problemOverview.should_we_solve_it || ''}
+            placeholder="Explain why this problem is worth solving..."
+            onSave={handleSaveShouldWeSolveIt}
+          />
         </div>
       </div>
+      */}     
+
       <div className="bg-white rounded-xl p-6 border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Notes & Calls</h3>
         <div className="space-y-3">
