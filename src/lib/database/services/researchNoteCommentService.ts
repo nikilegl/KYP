@@ -11,13 +11,16 @@ export interface ResearchNoteComment {
 }
 
 export const getResearchNoteComments = async (researchNoteId: string): Promise<ResearchNoteComment[]> => {
-  if (!isSupabaseConfigured || !supabase) {
+  // TEMPORARY: Force localStorage until database is fixed
+  if (!isSupabaseConfigured || !supabase || true) {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_research_note_comments')
-      const comments = stored ? JSON.parse(stored) : []
-      return comments.filter((comment: ResearchNoteComment) => comment.research_note_id === researchNoteId)
-    } catch {
+      const allComments = stored ? JSON.parse(stored) : []
+      const filteredComments = allComments.filter((comment: ResearchNoteComment) => comment.research_note_id === researchNoteId)
+      return filteredComments
+    } catch (error) {
+      console.error('Error reading from localStorage:', error)
       return []
     }
   }
@@ -32,7 +35,7 @@ export const getResearchNoteComments = async (researchNoteId: string): Promise<R
     if (error) throw error
     return data || []
   } catch (error) {
-    console.error('Error fetching research note comments:', error)
+    console.error('Error fetching research note comments from Supabase:', error)
     return []
   }
 }
@@ -43,7 +46,8 @@ export const createResearchNoteComment = async (
   userId: string,
   isDecision: boolean = false
 ): Promise<ResearchNoteComment | null> => {
-  if (!isSupabaseConfigured || !supabase) {
+  // TEMPORARY: Force localStorage until database is fixed
+  if (!isSupabaseConfigured || !supabase || true) {
     // Local storage fallback
     try {
       const newComment: ResearchNoteComment = {
@@ -92,7 +96,8 @@ export const updateResearchNoteComment = async (
   commentId: string,
   commentText: string
 ): Promise<ResearchNoteComment | null> => {
-  if (!isSupabaseConfigured || !supabase) {
+  // TEMPORARY: Force localStorage until database is fixed
+  if (!isSupabaseConfigured || !supabase || true) {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_research_note_comments')
@@ -131,7 +136,8 @@ export const updateResearchNoteComment = async (
 }
 
 export const deleteResearchNoteComment = async (commentId: string): Promise<boolean> => {
-  if (!isSupabaseConfigured || !supabase) {
+  // TEMPORARY: Force localStorage until database is fixed
+  if (!isSupabaseConfigured || !supabase || true) {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_research_note_comments')
