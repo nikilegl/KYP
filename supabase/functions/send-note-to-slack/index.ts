@@ -162,7 +162,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get the request origin for constructing the note link
-    const origin = req.headers.get('origin') || 'https://your-platform.com'
+    const origin = req.headers.get('origin') || 'https://kyp-legl.netlify.app'
     const noteLink = `${origin}/note/${note.short_id}`
 
     // Strip HTML from summary for Slack
