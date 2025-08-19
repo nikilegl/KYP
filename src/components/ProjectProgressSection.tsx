@@ -54,12 +54,7 @@ export function ProjectProgressSection({
   const [assets, setAssets] = useState<Asset[]>([])
 
   const questions: QuestionConfig[] = [
-    {
-      key: PROGRESS_QUESTIONS.PROBLEM_DEFINITION,
-      title: 'Has Problem Definition been completed?',
-      isDynamic: true,
-      dynamicInfo: 'Auto-completed when all Problem Definition fields are filled'
-    },
+
     {
       key: PROGRESS_QUESTIONS.CENTRALISED_DECENTRALISED,
       title: 'Have both centralised and decentralised firms been included in discovery?',

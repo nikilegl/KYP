@@ -321,7 +321,7 @@ export function ProjectViewRenderer({
     { id: 'user-flows', label: 'User Journeys', icon: Workflow },    
     { id: 'designs', label: 'Designs', icon: Palette },    
    
-    { id: 'problem-overview', label: 'Problem Definition', icon: AlertTriangle },
+   
     { id: 'project-tasks', label: 'Project Tasks', icon: CheckSquare },
     { id: 'project-progress', label: 'Project Progress', icon: Clipboard },
     { id: 'prompt-builder', label: 'Prompt Builder', icon: Zap },
