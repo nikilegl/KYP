@@ -78,11 +78,15 @@ export function NoteSummaryCard({
         {/* Decision Text */}
         {note.decision_text && note.decision_text.length > 0 && (
           <div className="mb-4">
-            {note.decision_text.map((decision, index) => (
-              <div key={index} className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
-                <p className="text-green-800 font-medium">{decision}</p>
-              </div>
-            ))}
+            {note.decision_text.map((decision, index) => {
+              // Extract decision text without timestamp (format: "timestamp|decision_text")
+              const decisionText = decision.includes('|') ? decision.split('|').slice(1).join('|') : decision
+              return (
+                <div key={index} className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
+                  <p className="text-green-800 font-medium">{decisionText}</p>
+                </div>
+              )
+            })}
           </div>
         )}
         
