@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../../supabase'
-import type { ResearchNote, UserStory, Design, ResearchNoteComment } from '../../supabase'
+import type { ResearchNote, UserStory, Design } from '../../supabase'
 
 export interface ProjectDecision {
   id: string
@@ -14,35 +14,39 @@ export interface ProjectDecision {
 }
 
 export const getProjectDecisions = async (projectId: string): Promise<ProjectDecision[]> => {
+  console.log('🔵 getProjectDecisions called for project:', projectId)
+  
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       const decisions: ProjectDecision[] = []
       
-      // Get decisions from notes (research_note_comments where is_decision = true)
+      // Get decisions from notes (research_notes.decision_text column)
       const notes = JSON.parse(localStorage.getItem('kyp_research_notes') || '[]') as ResearchNote[]
-      const noteComments = JSON.parse(localStorage.getItem('kyp_research_note_comments') || '[]') as ResearchNoteComment[]
-      
       const projectNotes = notes.filter(note => note.project_id === projectId)
       
       projectNotes.forEach(note => {
-        const noteDecisions = noteComments.filter(comment => 
-          comment.research_note_id === note.id && comment.is_decision
-        )
-        
-        noteDecisions.forEach(decision => {
-          decisions.push({
-            id: `note-${decision.id}`,
-            content: decision.comment_text,
-            source_type: 'note',
-            source_id: note.id,
-            source_name: note.name,
-            source_short_id: note.short_id,
-            created_at: decision.created_at,
-            updated_at: decision.updated_at,
-            user_id: decision.user_id
+        if (note.decision_text && note.decision_text.length > 0) {
+          note.decision_text.forEach((decisionText, index) => {
+            if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
+              decisions.push({
+                id: `note-${note.id}-${index}`,
+                content: content,
+                source_type: 'note',
+                source_id: note.id,
+                source_name: note.name,
+                source_short_id: note.short_id,
+                created_at: note.created_at,
+                updated_at: note.updated_at
+              })
+            }
           })
-        })
+        }
       })
       
       // Get decisions from user stories
@@ -53,9 +57,14 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
         if (story.decision_text && story.decision_text.length > 0) {
           story.decision_text.forEach((decisionText, index) => {
             if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
               decisions.push({
                 id: `user-story-${story.id}-${index}`,
-                content: decisionText,
+                content: content,
                 source_type: 'user_story',
                 source_id: story.id,
                 source_name: story.name,
@@ -70,9 +79,14 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
         if (story.decision_text2 && story.decision_text2.length > 0) {
           story.decision_text2.forEach((decisionText, index) => {
             if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
               decisions.push({
                 id: `user-story-2-${story.id}-${index}`,
-                content: decisionText,
+                content: content,
                 source_type: 'user_story',
                 source_id: story.id,
                 source_name: story.name,
@@ -93,9 +107,14 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
         if (design.decision_text && design.decision_text.length > 0) {
           design.decision_text.forEach((decisionText, index) => {
             if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
               decisions.push({
                 id: `design-${design.id}-${index}`,
-                content: decisionText,
+                content: content,
                 source_type: 'design',
                 source_id: design.id,
                 source_name: design.name,
@@ -109,6 +128,7 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
       })
       
       // Sort by created_at (newest first)
+      console.log('🔵 Total decisions found (localStorage):', decisions.length)
       return decisions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     } catch (error) {
       console.error('Error fetching decisions locally:', error)
@@ -119,49 +139,44 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
   try {
     const decisions: ProjectDecision[] = []
     
-    // Get decisions from notes (research_note_comments where is_decision = true)
-    // Try to get decisions from notes (research_note_comments where is_decision = true)
-    // Handle case where is_decision column might not exist yet
-    try {
-      const { data: noteDecisions, error: noteError } = await supabase
-        .from('research_note_comments')
-        .select(`
-          *,
-          research_notes!inner (
-            id,
-            name,
-            short_id,
-            project_id
-          )
-        `)
-        .eq('research_notes.project_id', projectId)
-        .eq('is_decision', true)
-        .order('created_at', { ascending: false })
+    // Get decisions from notes (research_notes.decision_text column)
+    const { data: notes, error: noteError } = await supabase
+      .from('research_notes')
+      .select('*')
+      .eq('project_id', projectId)
+      .not('decision_text', 'is', null)
+      .order('created_at', { ascending: false })
 
-      if (noteError) throw noteError
+    if (noteError) throw noteError
 
-      if (noteDecisions) {
-        noteDecisions.forEach((decision: any) => {
-          decisions.push({
-            id: `note-${decision.id}`,
-            content: decision.comment_text,
-            source_type: 'note',
-            source_id: decision.research_notes.id,
-            source_name: decision.research_notes.name,
-            source_short_id: decision.research_notes.short_id,
-            created_at: decision.created_at,
-            updated_at: decision.updated_at,
-            user_id: decision.user_id
+    if (notes) {
+      console.log('🔵 Found', notes.length, 'notes with decision_text')
+      notes.forEach((note: ResearchNote) => {
+        if (note.decision_text && note.decision_text.length > 0) {
+          console.log(`🔵 Note "${note.name}" has ${note.decision_text.length} decisions:`, note.decision_text)
+          note.decision_text.forEach((decisionText, index) => {
+            if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
+              decisions.push({
+                id: `note-${note.id}-${index}`,
+                content: content,
+                source_type: 'note',
+                source_id: note.id,
+                source_name: note.name,
+                source_short_id: note.short_id,
+                created_at: note.created_at,
+                updated_at: note.updated_at
+              })
+            }
           })
-        })
-      }
-    } catch (error: any) {
-      // If the is_decision column doesn't exist, skip note decisions for now
-      if (error.message?.includes('is_decision') || error.code === '42703') {
-        console.warn('is_decision column not found in research_note_comments table. Skipping note decisions.')
-      } else {
-        throw error
-      }
+        }
+      })
+    } else {
+      console.log('🔵 No notes found with decision_text')
     }
     
     // Get decisions from user stories
@@ -175,13 +190,19 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
     if (userStoryError) throw userStoryError
 
     if (userStories) {
+      console.log('🔵 Found', userStories.length, 'user stories with decision_text')
       userStories.forEach((story: UserStory) => {
         if (story.decision_text && story.decision_text.length > 0) {
           story.decision_text.forEach((decisionText, index) => {
             if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
               decisions.push({
                 id: `user-story-${story.id}-${index}`,
-                content: decisionText,
+                content: content,
                 source_type: 'user_story',
                 source_id: story.id,
                 source_name: story.name,
@@ -196,9 +217,14 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
         if (story.decision_text2 && story.decision_text2.length > 0) {
           story.decision_text2.forEach((decisionText, index) => {
             if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
               decisions.push({
                 id: `user-story-2-${story.id}-${index}`,
-                content: decisionText,
+                content: content,
                 source_type: 'user_story',
                 source_id: story.id,
                 source_name: story.name,
@@ -212,9 +238,9 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
       })
     }
     
-    // Get decisions from design assets
+    // Get decisions from design assets (assets table)
     const { data: designs, error: designError } = await supabase
-      .from('designs')
+      .from('assets')
       .select('*')
       .eq('project_id', projectId)
       .not('decision_text', 'is', null)
@@ -223,13 +249,19 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
     if (designError) throw designError
 
     if (designs) {
+      console.log('🔵 Found', designs.length, 'designs with decision_text')
       designs.forEach((design: Design) => {
         if (design.decision_text && design.decision_text.length > 0) {
           design.decision_text.forEach((decisionText, index) => {
             if (decisionText && decisionText.trim()) {
+              // Parse timestamp|text format if present
+              const content = decisionText.includes('|') 
+                ? decisionText.split('|').slice(1).join('|')
+                : decisionText
+              
               decisions.push({
                 id: `design-${design.id}-${index}`,
-                content: decisionText,
+                content: content,
                 source_type: 'design',
                 source_id: design.id,
                 source_name: design.name,
@@ -244,6 +276,7 @@ export const getProjectDecisions = async (projectId: string): Promise<ProjectDec
     }
     
     // Sort by created_at (newest first)
+    console.log('🔵 Total decisions found:', decisions.length)
     return decisions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   } catch (error) {
     console.error('Error fetching project decisions:', error)

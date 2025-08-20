@@ -172,8 +172,10 @@ export const DecisionHistory: React.FC<DecisionHistoryProps> = ({
             >
               {/* Decision Header */}
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
+                <div className="mt-1.5">
                   {getSourceIcon(decision.source_type)}
+                  </div>
                   <div>
                     <button
                       onClick={() => handleSourceClick(decision)}
@@ -206,8 +208,8 @@ export const DecisionHistory: React.FC<DecisionHistoryProps> = ({
 
               {/* Decision Content */}
               <div className="pl-7">
-                <div className="bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500">
-                  <p className="text-gray-900 whitespace-pre-wrap">{decision.content}</p>
+                <div className="bg-green-100 border border-green-300 rounded-lg p-4">
+                  <p className="text-green-800 font-medium whitespace-pre-wrap">{decision.content}</p>
                 </div>
               </div>
             </div>
