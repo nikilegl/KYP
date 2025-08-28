@@ -397,3 +397,12 @@ export interface UserStoryComment {
   created_at: string
   updated_at: string
 }
+
+export interface UserProjectPreference {
+  id: string
+  user_id: string
+  project_id: string
+  order_index: number
+  created_at: string
+  updated_at: string
+}
