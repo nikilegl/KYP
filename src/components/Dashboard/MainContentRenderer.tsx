@@ -76,7 +76,7 @@ interface MainContentRendererProps {
   
   // Project handlers
   onCreateProject: (name: string, overview?: string) => Promise<void>
-  onUpdateProject: (projectId: string, updates: { name?: string; overview?: string }) => Promise<void>
+  onUpdateProject: (project: Project) => Promise<void>
   onDeleteProject: (projectId: string) => Promise<void>
   onSelectProject: (project: Project) => void
   onBackToWorkspace: () => void

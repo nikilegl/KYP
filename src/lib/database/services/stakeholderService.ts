@@ -88,8 +88,6 @@ export const createStakeholder = async (
         visitor_id: visitorId || null,
         department: department || null,
         pendo_role: pendoRole || null,
-        department: null,
-        pendo_role: null,
         short_id: nextShortId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

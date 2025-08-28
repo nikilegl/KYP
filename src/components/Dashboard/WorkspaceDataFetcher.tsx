@@ -623,10 +623,10 @@ export function WorkspaceDataFetcher({
     }
   }
 
-  const handleUpdateProject = async (projectId: string, updates: { name?: string; overview?: string }) => {
-    const updatedProject = await updateProject(projectId, updates)
+  const handleUpdateProject = async (project: Project) => {
+    const updatedProject = await updateProject(project.id, { name: project.name, overview: project.overview })
     if (updatedProject) {
-      setProjects(projects.map(p => p.id === projectId ? updatedProject : p))
+      setProjects(projects.map(p => p.id === project.id ? updatedProject : p))
     }
   }
 
