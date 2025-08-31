@@ -125,7 +125,7 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#6b42d1' }}>
               <Palette size={20} className="text-white" />
             </div>
             <div>
@@ -148,9 +148,14 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
                     onClick={() => setSelectedComponent(item.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
                       isActive 
-                        ? 'bg-purple-50 text-purple-700 border border-purple-200' 
+                        ? 'text-gray-700 hover:bg-gray-50' 
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
+                    style={isActive ? {
+                      backgroundColor: '#f3f0ff',
+                      color: '#6b42d1',
+                      border: '1px solid #ddd6fe'
+                    } : {}}
                   >
                     <Icon size={18} />
                     <span className="font-medium">{item.label}</span>
