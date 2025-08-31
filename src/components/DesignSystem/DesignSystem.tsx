@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
-import { Palette, Square, Type, Layout, Layers, Zap, LucideIcon } from 'lucide-react'
+import { Palette, Square, Type, Layout, Layers, Zap, LucideIcon, Maximize2, Table } from 'lucide-react'
 import { ButtonShowcase } from './components/ButtonShowcase'
 import { TypographyShowcase } from './components/TypographyShowcase'
 import { ColorShowcase } from './components/ColorShowcase'
+import { ModalShowcase } from './components/ModalShowcase'
+import { DataTableShowcase } from './components/DataTableShowcase'
 
 interface NavigationItem {
   id: string
@@ -76,6 +78,18 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
       component: <ColorShowcase />
     },
     {
+      id: 'modals',
+      label: 'Modals',
+      icon: Maximize2,
+      component: <ModalShowcase />
+    },
+    {
+      id: 'tables',
+      label: 'Data Tables',
+      icon: Layout,
+      component: <DataTableShowcase />
+    },
+    {
       id: 'layout',
       label: 'Layout',
       icon: Layout,
@@ -98,7 +112,14 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
   const currentComponent = navigationItems.find(item => item.id === selectedComponent)?.component
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden w-full min-w-full">
+    <div className="h-screen flex overflow-hidden w-full min-w-full" style={{
+      backgroundImage: `
+        linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px)
+      `,
+      backgroundSize: '20px 20px',
+      backgroundColor: '#f9fafb'
+    }}>
       {/* Left Navigation */}
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
         {/* Header */}
@@ -142,8 +163,8 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
       </div>
 
       {/* Content Area */}
-      <main className="flex-1 overflow-auto w-full min-w-full">
-        <div className="p-8 w-full max-w-none min-w-full !max-w-none">
+      <main className="flex-1 overflow-auto w-full">
+        <div className="p-8 w-full max-w-none !max-w-none">
           {currentComponent}
         </div>
       </main>
