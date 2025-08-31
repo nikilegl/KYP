@@ -43,11 +43,13 @@ export function Modal({
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
       document.body.style.overflow = 'hidden'
+      document.body.classList.add('modal-open')
     }
 
     return () => {
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = 'unset'
+      document.body.classList.remove('modal-open')
     }
   }, [isOpen, onClose, closeOnEscape])
 
@@ -69,7 +71,7 @@ export function Modal({
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="modal-overlay bg-black bg-opacity-50 flex items-center justify-center p-4"
       onClick={handleOverlayClick}
     >
       <div 
@@ -207,7 +209,6 @@ export function FormModal({
             </Button>
             <Button
               type="submit"
-              form="modal-form"
               variant="primary"
               disabled={loading}
               loading={loading}
@@ -217,7 +218,7 @@ export function FormModal({
           </div>
         }
     >
-      <form id="modal-form" onSubmit={onSubmit} className="p-6">
+      <form onSubmit={onSubmit} className="p-6">
         {children}
       </form>
     </Modal>

@@ -5,6 +5,7 @@ import { TypographyShowcase } from './components/TypographyShowcase'
 import { ColorShowcase } from './components/ColorShowcase'
 import { ModalShowcase } from './components/ModalShowcase'
 import { DataTableShowcase } from './components/DataTableShowcase'
+import { CardShowcase } from './components/CardShowcase'
 
 interface NavigationItem {
   id: string
@@ -88,6 +89,12 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
       label: 'Data Tables',
       icon: Layout,
       component: <DataTableShowcase />
+    },
+    {
+      id: 'cards',
+      label: 'Cards',
+      icon: Square,
+      component: <CardShowcase />
     },
     {
       id: 'layout',
