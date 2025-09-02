@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ArrowLeft, Calendar, User as UserIcon, Trash2 } from 'lucide-react'
+import { ArrowLeft, Edit, Calendar, User as UserIcon, Trash2 } from 'lucide-react'
 import { CopyLinkButton } from '../common/CopyLinkButton'
 import { ConfirmModal } from '../DesignSystem/components/Modal'
 import type { Example, WorkspaceUser } from '../../lib/supabase'
@@ -7,11 +7,12 @@ import type { Example, WorkspaceUser } from '../../lib/supabase'
 interface ExampleHeaderProps {
   example: Example
   onBack: () => void
+  onEdit: () => void
   onDelete: () => void
   availableUsers: WorkspaceUser[]
 }
 
-export function ExampleHeader({ example, onBack, onDelete, availableUsers }: ExampleHeaderProps) {
+export function ExampleHeader({ example, onBack, onEdit, onDelete, availableUsers }: ExampleHeaderProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   
   const formatDate = (dateString: string) => {
@@ -45,6 +46,13 @@ export function ExampleHeader({ example, onBack, onDelete, availableUsers }: Exa
         </button>
         
         <div className="flex items-center gap-3">
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            <Edit size={16} />
+            Edit
+          </button>
           <button
             onClick={handleDeleteClick}
             className="flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"

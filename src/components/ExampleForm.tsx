@@ -277,7 +277,7 @@ export const ExampleForm: React.FC<ExampleFormProps> = ({
               variant="primary"
               size="default"
             >
-              {isEditing ? 'Update Example' : 'Create Example'}
+              {isEditing ? 'Save' : 'Create Example'}
             </Button>
           </div>
         </form>

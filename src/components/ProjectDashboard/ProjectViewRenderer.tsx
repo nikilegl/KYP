@@ -37,6 +37,12 @@ import { AssetDetail } from '../AssetDetail'
 import { ProjectTaskManager } from '../ProjectTaskManager'
 import { ProjectProgressSection } from '../ProjectProgressSection'
 import { DecisionHistory } from '../DecisionHistory'
+import { ExampleForm } from '../ExampleForm'
+import { 
+  createExample, 
+  updateExample, 
+  deleteExample
+} from '../../lib/database'
 import type { 
   Project, 
   Stakeholder, 
@@ -219,6 +225,7 @@ export function ProjectViewRenderer({
   const [selectedUserJourney, setSelectedUserJourney] = useState<UserJourney | null>(initialSelectedUserJourney)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(initialSelectedDesign)
   const [selectedExample, setSelectedExample] = useState<Example | null>(null)
+  const [editingExample, setEditingExample] = useState<Example | null>(null)
   const [refreshingStakeholders, setRefreshingStakeholders] = useState(false)
 
   // Handle changes to initialSelectedDesign after component mount
@@ -330,6 +337,49 @@ export function ProjectViewRenderer({
   const handleBackFromExample = () => {
     setSelectedExample(null)
     setCurrentView('examples')
+  }
+
+  const handleEditExample = (example: Example) => {
+    setEditingExample(example)
+  }
+
+  const handleCreateExample = async (exampleData: Omit<Example, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const newExample = await createExample(exampleData)
+      // Refresh the examples list by going back to examples view
+      setCurrentView('examples')
+    } catch (error) {
+      console.error('Error creating example:', error)
+      throw error
+    }
+  }
+
+  const handleUpdateExample = async (exampleData: Omit<Example, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!editingExample) {
+      throw new Error('No example being edited')
+    }
+    
+    try {
+      const updatedExample = await updateExample(editingExample.id, exampleData)
+      setSelectedExample(updatedExample)
+      setEditingExample(null)
+    } catch (error) {
+      console.error('Error updating example:', error)
+      throw error
+    }
+  }
+
+  const handleDeleteExample = async (example: Example) => {
+    try {
+      await deleteExample(example.id)
+      handleBackFromExample()
+    } catch (error) {
+      console.error('Error deleting example:', error)
+    }
+  }
+
+  const handleCloseForm = () => {
+    setEditingExample(null)
   }
 
   const menuItems = [
@@ -473,11 +523,8 @@ export function ProjectViewRenderer({
         <ExampleDetailPage
           example={selectedExample}
           onBack={handleBackFromExample}
-          onDelete={async () => {
-            // TODO: Implement delete functionality
-            console.log('Delete example:', selectedExample.id)
-            handleBackFromExample()
-          }}
+          onEdit={() => handleEditExample(selectedExample)}
+          onDelete={() => handleDeleteExample(selectedExample)}
           user={user}
           availableUsers={workspaceUsers}
         />
@@ -742,6 +789,16 @@ export function ProjectViewRenderer({
           {renderContent()}
         </div>
       </main>
+
+      {/* Example Form Modal */}
+      {editingExample && (
+        <ExampleForm
+          projectId={project.id}
+          example={editingExample}
+          onSubmit={editingExample ? handleUpdateExample : handleCreateExample}
+          onClose={handleCloseForm}
+        />
+      )}
     </div>
   )
 }

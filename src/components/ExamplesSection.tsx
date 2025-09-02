@@ -101,10 +101,14 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({ projectId, onV
     }
   }
 
-  const handleUpdateExample = async (id: string, updates: Partial<Example>) => {
+  const handleUpdateExample = async (exampleData: Omit<Example, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!editingExample) {
+      throw new Error('No example being edited')
+    }
+    
     try {
-      const updatedExample = await updateExample(id, updates)
-      setExamples(prev => prev.map(ex => ex.id === id ? updatedExample : ex))
+      const updatedExample = await updateExample(editingExample.id, exampleData)
+      setExamples(prev => prev.map(ex => ex.id === editingExample.id ? updatedExample : ex))
       setEditingExample(null)
       setSelectedExample(updatedExample)
     } catch (error) {
@@ -185,7 +189,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({ projectId, onV
   const columns: Column<Example>[] = [
     {
       key: 'short_id',
-      header: 'Example',
+      header: '#',
       sortable: true,
       width: '80px',
       render: (example) => (

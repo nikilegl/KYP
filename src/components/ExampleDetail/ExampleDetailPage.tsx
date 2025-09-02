@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { User, Target, ArrowRight, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Edit, Save, X } from 'lucide-react'
+import { User, Target, ArrowRight, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Save, X } from 'lucide-react'
 import { ExampleHeader } from './ExampleHeader'
 import { HistorySection } from '../common/HistorySection'
 import { getExampleComments, createExampleComment, updateExampleComment, deleteExampleComment, updateExample } from '../../lib/database'
@@ -10,6 +10,7 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 interface ExampleDetailPageProps {
   example: Example
   onBack: () => void
+  onEdit: () => void
   onDelete: () => void
   user: SupabaseUser | null
   availableUsers: WorkspaceUser[]
@@ -18,6 +19,7 @@ interface ExampleDetailPageProps {
 export function ExampleDetailPage({ 
   example, 
   onBack, 
+  onEdit,
   onDelete,
   user,
   availableUsers
@@ -46,6 +48,20 @@ export function ExampleDetailPage({
     outcome: example.outcome
   })
   const [currentExample, setCurrentExample] = useState<Example>(example)
+
+  // Update currentExample when the example prop changes
+  useEffect(() => {
+    setCurrentExample(example)
+    // Also update editValues to reflect the new data
+    setEditValues({
+      actor: example.actor,
+      goal: example.goal,
+      entry_point: example.entry_point,
+      actions: example.actions,
+      error: example.error,
+      outcome: example.outcome
+    })
+  }, [example])
 
   // Load comments when component mounts
   useEffect(() => {
@@ -143,13 +159,6 @@ export function ExampleDetailPage({
   }
 
   // Edit handlers
-  const handleStartEdit = (field: string) => {
-    setEditingField(field)
-    setEditValues(prev => ({
-      ...prev,
-      [field]: currentExample[field as keyof Example] as string
-    }))
-  }
 
   const handleCancelEdit = () => {
     setEditingField(null)
@@ -211,24 +220,13 @@ export function ExampleDetailPage({
     
     return (
       <div className="bg-white rounded-lg p-6 border">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center mb-4">
           <div className="flex items-center space-x-3">
             <div className={iconColor}>
               {icon}
             </div>
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           </div>
-          {!isEditing && (
-            <Button
-              variant="ghost"
-              size="small"
-              icon={Edit}
-              onClick={() => handleStartEdit(field)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              {''}
-            </Button>
-          )}
         </div>
         
         {isEditing ? (
@@ -276,6 +274,7 @@ export function ExampleDetailPage({
       <ExampleHeader 
         example={currentExample} 
         onBack={onBack} 
+        onEdit={onEdit}
         onDelete={onDelete}
         availableUsers={availableUsers}
       />
