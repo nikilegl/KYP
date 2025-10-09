@@ -385,10 +385,12 @@ export function ProjectManager({
   // Memoized event handlers to prevent unnecessary re-renders
   const handleCreateProject = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('handleCreateProject called with:', { name: newProject.name, overview: newProject.overview })
     setCreatingProject(true)
     
     try {
       await onCreateProject(newProject.name, newProject.overview || undefined)
+      console.log('Project creation successful, closing modal')
       setNewProject({ name: '', overview: '' })
       setShowProjectForm(false)
       // Refresh preferences to include the new project

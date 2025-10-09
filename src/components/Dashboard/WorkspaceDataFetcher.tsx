@@ -631,9 +631,20 @@ export function WorkspaceDataFetcher({
 
   // Project handlers
   const handleCreateProject = async (name: string, overview?: string) => {
-    const project = await createProject(name, overview)
-    if (project) {
-      setProjects([project, ...projects])
+    console.log('Creating project:', { name, overview })
+    try {
+      const project = await createProject(name, overview)
+      console.log('Project created:', project)
+      if (project) {
+        setProjects([project, ...projects])
+        console.log('Project added to state')
+      } else {
+        console.error('Project creation returned null')
+        alert('Failed to create project. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error in handleCreateProject:', error)
+      alert('Failed to create project. Please try again.')
     }
   }
 
