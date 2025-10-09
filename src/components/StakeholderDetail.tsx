@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { ArrowLeft, FileText, GitBranch, Edit, Star } from 'lucide-react'
 import { UserRoleTag } from './common/UserRoleTag'
 import { CopyLinkButton } from './common/CopyLinkButton'
-import { updateStakeholder, getProjectsForStakeholder, getResearchNotesForStakeholder, getUserJourneysForStakeholder, getProjects, assignStakeholderToProject } from '../lib/database'
+import { updateStakeholder, getProjectsForStakeholder, getResearchNotesForStakeholder, getProjects, assignStakeholderToProject } from '../lib/database'
 import { getStructureTagStyles } from '../utils/structureTagStyles'
 import { StakeholderSummary } from './StakeholderDetail/StakeholderSummary'
 import { StakeholderNotes } from './StakeholderDetail/StakeholderNotes'
 import { StakeholderProjects } from './StakeholderDetail/StakeholderProjects'
 import { StakeholderForm } from './StakeholderManager/StakeholderForm'
-import type { Stakeholder, UserRole, LawFirm, Project, ResearchNote, UserJourney } from '../lib/supabase'
+import type { Stakeholder, UserRole, LawFirm, Project, ResearchNote } from '../lib/supabase'
 
 interface StakeholderDetailProps {
   stakeholder: Stakeholder
@@ -33,7 +33,6 @@ export function StakeholderDetail({
 }: StakeholderDetailProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [researchNotes, setResearchNotes] = useState<ResearchNote[]>([])
-  const [userJourneys, setUserJourneys] = useState<UserJourney[]>([])
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingStakeholderData, setEditingStakeholderData] = useState({
@@ -54,15 +53,13 @@ export function StakeholderDetail({
   const loadStakeholderData = async () => {
     try {
       setLoading(true)
-      const [projectsData, notesData, journeysData] = await Promise.all([
+      const [projectsData, notesData] = await Promise.all([
         getProjectsForStakeholder(stakeholder.id),
-        getResearchNotesForStakeholder(stakeholder.id),
-        getUserJourneysForStakeholder(stakeholder.id)
+        getResearchNotesForStakeholder(stakeholder.id)
       ])
       
       setProjects(projectsData)
       setResearchNotes(notesData)
-      setUserJourneys(journeysData)
     } catch (error) {
       console.error('Error loading stakeholder data:', error)
     } finally {
@@ -130,10 +127,6 @@ export function StakeholderDetail({
     window.location.href = `/note/${note.short_id}`
   }
 
-  const handleJourneyClick = (journey: UserJourney) => {
-    // Navigate to the user journey detail page
-    window.location.href = `/user-journey/${journey.short_id}`
-  }
 
   const getUserRole = () => {
     if (!stakeholder.user_role_id) return null
@@ -216,7 +209,6 @@ export function StakeholderDetail({
           <StakeholderSummary
             projects={projects}
             researchNotes={researchNotes}
-            userJourneys={userJourneys}
           />
 
           <StakeholderNotes
@@ -269,43 +261,6 @@ export function StakeholderDetail({
             )}
           </div>
 
-          {/* User Journeys */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              User Journeys ({userJourneys.length})
-            </h3>
-            
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : userJourneys.length > 0 ? (
-              <div className="space-y-3">
-                {userJourneys.map((journey) => (
-                  <div 
-                    key={journey.id} 
-                    className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                    onClick={() => handleJourneyClick(journey)}
-                  >
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <GitBranch size={20} className="text-green-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{journey.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Created {new Date(journey.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <GitBranch size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">Not assigned to any user journeys yet.</p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

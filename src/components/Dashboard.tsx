@@ -20,8 +20,10 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
     
     if (pathname === '/') {
       setCurrentDashboardView('projects')
-    } else if (pathname === '/workspace-dashboard') {
-      setCurrentDashboardView('workspace-dashboard')
+    } else if (pathname === '/user-journeys') {
+      setCurrentDashboardView('user-journeys')
+    } else if (pathname === '/user-journey-creator') {
+      setCurrentDashboardView('user-journey-creator')
     } else if (pathname === '/law-firms') {
       setCurrentDashboardView('law-firms')
     } else if (pathname === '/themes') {
@@ -59,8 +61,11 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
       case 'projects':
         navigate('/')
         break
-      case 'workspace-dashboard':
-        navigate('/workspace-dashboard')
+      case 'user-journeys':
+        navigate('/user-journeys')
+        break
+      case 'user-journey-creator':
+        navigate('/user-journey-creator')
         break
       case 'law-firms':
         navigate('/law-firms')

@@ -39,8 +39,6 @@ import {
   createUserPermission,
   updateUserPermission,
   deleteUserPermission,
-  getUserJourneys,
-  getUserJourneyByShortId,
   getUserStories,
   getUserStoryByShortId,
   getUserStoryRoles,
@@ -69,7 +67,6 @@ import type {
   UserRole,
   LawFirm,
   UserPermission,
-  UserJourney,
   UserStory,
   Theme,
   NoteTemplate,
@@ -104,7 +101,6 @@ export function WorkspaceDataFetcher({
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedStakeholder, setSelectedStakeholder] = useState<Stakeholder | null>(null)
   const [selectedNote, setSelectedNote] = useState<ResearchNote | null>(null)
-  const [selectedUserJourney, setSelectedUserJourney] = useState<UserJourney | null>(null)
   const [selectedUserStory, setSelectedUserStory] = useState<UserStory | null>(null)
   const [noteStakeholderIds, setNoteStakeholderIds] = useState<string[]>([])
   const [userStoryRoleIds, setUserStoryRoleIds] = useState<string[]>([])
@@ -132,7 +128,6 @@ export function WorkspaceDataFetcher({
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([])
   const [allProjectProgressStatus, setAllProjectProgressStatus] = useState<ProjectProgressStatus[]>([])
   const [allUserStories, setAllUserStories] = useState<UserStory[]>([])
-  const [allUserJourneys, setAllUserJourneys] = useState<UserJourney[]>([])
   const [allDesigns, setAllDesigns] = useState<Design[]>([])
   const [userStoryComments, setUserStoryComments] = useState<UserStoryComment[]>([])
   
@@ -185,7 +180,6 @@ export function WorkspaceDataFetcher({
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
@@ -200,7 +194,6 @@ export function WorkspaceDataFetcher({
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
@@ -214,7 +207,6 @@ export function WorkspaceDataFetcher({
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
@@ -228,7 +220,6 @@ export function WorkspaceDataFetcher({
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
@@ -242,7 +233,6 @@ export function WorkspaceDataFetcher({
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
@@ -256,26 +246,38 @@ export function WorkspaceDataFetcher({
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
         return
       }
 
-      if (pathname === '/workspace-dashboard') {
-        console.log('🔵 WorkspaceDataFetcher: Processing workspace-dashboard path')
-        setCurrentView('workspace-dashboard')
-        onViewChange('workspace-dashboard')
+      if (pathname === '/user-journeys') {
+        console.log('🔵 WorkspaceDataFetcher: Processing user-journeys path')
+        setCurrentView('user-journeys')
+        onViewChange('user-journeys')
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
-        setSelectedUserJourney(null)
         setSelectedUserStory(null)
         setSelectedDesignForProject(null)
         setSelectedLawFirm(null)
         return
       }
+
+      if (pathname === '/user-journey-creator') {
+        console.log('🔵 WorkspaceDataFetcher: Processing user-journey-creator path')
+        setCurrentView('user-journey-creator')
+        onViewChange('user-journey-creator')
+        setSelectedProject(null)
+        setSelectedStakeholder(null)
+        setSelectedNote(null)
+        setSelectedUserStory(null)
+        setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
+        return
+      }
+
 
       const shortId = routeParams.shortId ? parseInt(routeParams.shortId) : null
       console.log('🔵 WorkspaceDataFetcher: Extracted shortId:', shortId, 'from routeParams:', routeParams)
@@ -327,30 +329,6 @@ export function WorkspaceDataFetcher({
             setCurrentView('note-detail')
             const stakeholderIds = await getResearchNoteStakeholders(note.id)
             setNoteStakeholderIds(stakeholderIds)
-          }
-        } else {
-          navigate('/')
-        }
-      } else if (pathname.startsWith('/user-journey/')) {
-        const userJourney = await getUserJourneyByShortId(shortId)
-        if (userJourney) {
-          // Check if user journey belongs to a project
-          if (userJourney.project_id) {
-            const project = await getProjectById(userJourney.project_id)
-            if (project) {
-              // Show project dashboard with user journey detail
-              setSelectedProject(project)
-              setSelectedUserJourney(userJourney)
-              setCurrentView('project-dashboard')
-            } else {
-              // Project not found, show standalone user journey detail
-              setSelectedUserJourney(userJourney)
-              setCurrentView('user-journey-detail')
-            }
-          } else {
-            // User journey doesn't belong to a project, show standalone detail
-            setSelectedUserJourney(userJourney)
-            setCurrentView('user-journey-detail')
           }
         } else {
           navigate('/')
@@ -465,7 +443,6 @@ export function WorkspaceDataFetcher({
         noteTemplatesData,
         allProjectProgressStatusData,
         allUserStoriesData,
-        allUserJourneysData,
         allDesignsData
       ] = await Promise.all([
         getWorkspaces(),
@@ -481,7 +458,6 @@ export function WorkspaceDataFetcher({
         getNoteTemplates(),
         getAllProjectProgressStatus(),
         getUserStories(),
-        getUserJourneys(),
         getDesigns()
       ])
       
@@ -498,7 +474,6 @@ export function WorkspaceDataFetcher({
       setNoteTemplates(noteTemplatesData)
       setAllProjectProgressStatus(allProjectProgressStatusData)
       setAllUserStories(allUserStoriesData)
-      setAllUserJourneys(allUserJourneysData)
       setAllDesigns(allDesignsData)
       
       // Debug: Log workspaceUsers data
@@ -548,7 +523,7 @@ export function WorkspaceDataFetcher({
   }
 
   const handleThemeCreate = (newTheme: Theme) => {
-    const themeWithCounts = { ...newTheme, contentCounts: { userStories: 0, userJourneys: 0, researchNotes: 0, assets: 0 } }
+    const themeWithCounts = { ...newTheme, contentCounts: { userStories: 0, researchNotes: 0, assets: 0 } }
     setThemesWithCounts([themeWithCounts, ...themesWithCounts])
     setThemes([newTheme, ...themes])
   }
@@ -631,13 +606,10 @@ export function WorkspaceDataFetcher({
 
   // Project handlers
   const handleCreateProject = async (name: string, overview?: string) => {
-    console.log('Creating project:', { name, overview })
     try {
       const project = await createProject(name, overview)
-      console.log('Project created:', project)
       if (project) {
         setProjects([project, ...projects])
-        console.log('Project added to state')
       } else {
         console.error('Project creation returned null')
         alert('Failed to create project. Please try again.')
@@ -1010,7 +982,6 @@ export function WorkspaceDataFetcher({
       selectedProject={selectedProject}
       selectedStakeholder={selectedStakeholder}
       selectedNote={selectedNote}
-      selectedUserJourney={selectedUserJourney}
       selectedUserStory={selectedUserStory}
       noteStakeholderIds={noteStakeholderIds}
       userStoryRoleIds={userStoryRoleIds}
@@ -1023,7 +994,6 @@ export function WorkspaceDataFetcher({
       selectedLawFirm={selectedLawFirm}
       allProjectProgressStatus={allProjectProgressStatus}
       allUserStories={allUserStories}
-      allUserJourneys={allUserJourneys}
       allDesigns={allDesigns}
       user={user}
       userStoryComments={userStoryComments}

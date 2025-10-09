@@ -4,12 +4,11 @@ import { CopyLinkButton } from './common/CopyLinkButton'
 import { 
   getThemeByShortId, 
   getUserStoriesByThemeId, 
-  getUserJourneysByThemeId, 
   getResearchNotesByThemeId,
   getAssetsByThemeId as getDesignsByThemeId,
   getProjects
 } from '../lib/database'
-import type { Theme, UserStory, UserJourney, ResearchNote, Project, Design } from '../lib/supabase'
+import type { Theme, UserStory, ResearchNote, Project, Design } from '../lib/supabase'
 
 interface ThemeDetailProps {
   themeShortId: number
@@ -19,7 +18,6 @@ interface ThemeDetailProps {
 export function ThemeDetail({ themeShortId, onBack }: ThemeDetailProps) {
   const [theme, setTheme] = useState<Theme | null>(null)
   const [userStories, setUserStories] = useState<UserStory[]>([])
-  const [userJourneys, setUserJourneys] = useState<UserJourney[]>([])
   const [researchNotes, setResearchNotes] = useState<ResearchNote[]>([])
   const [designs, setDesigns] = useState<Design[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -47,15 +45,13 @@ export function ThemeDetail({ themeShortId, onBack }: ThemeDetailProps) {
       setProjects(projectsData)
       
       // Load associated content
-      const [userStoriesData, userJourneysData, researchNotesData, designsData] = await Promise.all([
+      const [userStoriesData, researchNotesData, designsData] = await Promise.all([
         getUserStoriesByThemeId(themeData.id),
-        getUserJourneysByThemeId(themeData.id),
         getResearchNotesByThemeId(themeData.id),
         getDesignsByThemeId(themeData.id)
       ])
       
       setUserStories(userStoriesData)
-      setUserJourneys(userJourneysData)
       setResearchNotes(researchNotesData)
       setDesigns(designsData)
     } catch (error) {
@@ -73,9 +69,6 @@ export function ThemeDetail({ themeShortId, onBack }: ThemeDetailProps) {
     window.location.href = `/user-story/${userStory.short_id}`
   }
 
-  const handleUserJourneyClick = (userJourney: UserJourney) => {
-    window.location.href = `/user-journey/${userJourney.short_id}`
-  }
 
   const handleResearchNoteClick = (researchNote: ResearchNote) => {
     window.location.href = `/note/${researchNote.short_id}`
@@ -104,7 +97,7 @@ export function ThemeDetail({ themeShortId, onBack }: ThemeDetailProps) {
     )
   }
 
-  const totalContent = userStories.length + userJourneys.length + researchNotes.length + designs.length
+  const totalContent = userStories.length + researchNotes.length + designs.length
 
   return (
     <div className="h-full flex flex-col w-full">
@@ -158,17 +151,6 @@ export function ThemeDetail({ themeShortId, onBack }: ThemeDetailProps) {
               </div>
             </div>
             
-            <div className="bg-white rounded-xl p-6 border border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <GitBranch size={20} className="text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{userJourneys.length}</p>
-                  <p className="text-sm text-gray-600">User Journeys</p>
-                </div>
-              </div>
-            </div>
             
             <div className="bg-white rounded-xl p-6 border border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -238,48 +220,6 @@ export function ThemeDetail({ themeShortId, onBack }: ThemeDetailProps) {
             )}
           </div>
 
-          {/* User Journeys */}
-          <div className="bg-white rounded-xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              User Journeys ({userJourneys.length})
-            </h3>
-            
-            {userJourneys.length > 0 ? (
-              <div className="space-y-3">
-                {userJourneys.map((journey) => {
-                  const project = getProjectById(journey.project_id)
-                  return (
-                    <div 
-                      key={journey.id} 
-                      className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                      onClick={() => handleUserJourneyClick(journey)}
-                    >
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <GitBranch size={20} className="text-green-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{journey.name}</p>
-                        {project && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <FolderOpen size={14} className="text-blue-600" />
-                            <span className="text-sm text-gray-600">{project.name}</span>
-                          </div>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1">
-                          Created {new Date(journey.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <GitBranch size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">No user journeys tagged with this theme yet.</p>
-              </div>
-            )}
-          </div>
 
           {/* Research Notes */}
           <div className="bg-white rounded-xl p-6 border border-gray-200">

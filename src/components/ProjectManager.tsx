@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { FolderOpen, Plus, Loader2, Edit, Trash2, FileText, BookOpen, GitBranch, Palette, GripVertical } from 'lucide-react'
 import { getProjectStakeholders, getProjectStakeholdersBatch } from '../lib/database/services/projectService'
-import type { Project, ProjectProgressStatus, UserStory, UserJourney, Design, Stakeholder, ResearchNote, ProblemOverview } from '../lib/supabase'
+import type { Project, ProjectProgressStatus, UserStory, Design, Stakeholder, ResearchNote, ProblemOverview } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Button, Card, CardHeader, CardTitle, CardContent, CardFooter, CardStats, CardStatItem } from './DesignSystem'
 import { FormModal } from './DesignSystem/components/Modal'
@@ -40,7 +40,6 @@ interface ProjectManagerProps {
   problemOverviews?: ProblemOverview[]
   allProjectProgressStatus?: ProjectProgressStatus[]
   allUserStories?: UserStory[]
-  allUserJourneys?: UserJourney[]
   allDesigns?: Design[]
   onCreateProject: (name: string, overview?: string) => Promise<void>
   onSelectProject: (project: Project) => void
@@ -54,7 +53,6 @@ interface ProjectData {
   problemOverview?: ProblemOverview
   progressStatuses: ProjectProgressStatus[]
   userStories: UserStory[]
-  userJourneys: UserJourney[]
   designs: Design[]
   stakeholderCount: number
 }
@@ -200,7 +198,6 @@ const SortableProjectCard = React.memo(function SortableProjectCard({
           <CardStats>
             <CardStatItem icon={<FileText size={16} />} label="Notes" value={projectData.notes.length} />
             <CardStatItem icon={<BookOpen size={16} />} label="Stories" value={projectData.userStories.length} />
-            <CardStatItem icon={<GitBranch size={16} />} label="Journeys" value={projectData.userJourneys.length} />
             <CardStatItem icon={<Palette size={16} />} label="Designs" value={projectData.designs.length} />
           </CardStats>
         </CardContent>
@@ -223,7 +220,6 @@ export function ProjectManager({
   problemOverviews = [],
   allProjectProgressStatus = [],
   allUserStories = [],
-  allUserJourneys = [],
   allDesigns = [],
   onCreateProject, 
   onSelectProject,
@@ -265,7 +261,6 @@ export function ProjectManager({
       const projectProblemOverview = problemOverviews.find(po => po.project_id === project.id)
       const projectProgressStatuses = allProjectProgressStatus.filter(ps => ps.project_id === project.id)
       const projectUserStories = allUserStories.filter(us => us.project_id === project.id)
-      const projectUserJourneys = allUserJourneys.filter(uj => uj.project_id === project.id)
       const projectDesigns = allDesigns.filter(d => d.project_id === project.id)
       
       dataMap.set(project.id, {
@@ -273,14 +268,13 @@ export function ProjectManager({
         problemOverview: projectProblemOverview,
         progressStatuses: projectProgressStatuses,
         userStories: projectUserStories,
-        userJourneys: projectUserJourneys,
         designs: projectDesigns,
         stakeholderCount: stakeholderCounts[project.id] || 0
       })
     })
     
     return dataMap
-  }, [projects, notes, problemOverviews, allProjectProgressStatus, allUserStories, allUserJourneys, allDesigns, stakeholderCounts])
+  }, [projects, notes, problemOverviews, allProjectProgressStatus, allUserStories, allDesigns, stakeholderCounts])
 
   // Load stakeholder counts efficiently - batch load all at once
   useEffect(() => {
@@ -385,12 +379,10 @@ export function ProjectManager({
   // Memoized event handlers to prevent unnecessary re-renders
   const handleCreateProject = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('handleCreateProject called with:', { name: newProject.name, overview: newProject.overview })
     setCreatingProject(true)
     
     try {
       await onCreateProject(newProject.name, newProject.overview || undefined)
-      console.log('Project creation successful, closing modal')
       setNewProject({ name: '', overview: '' })
       setShowProjectForm(false)
       // Refresh preferences to include the new project
@@ -668,7 +660,6 @@ export function ProjectManager({
                 notes: [],
                 progressStatuses: [],
                 userStories: [],
-                userJourneys: [],
                 designs: [],
                 stakeholderCount: 0
               }}

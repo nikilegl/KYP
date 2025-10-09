@@ -142,10 +142,7 @@ export const getProjectById = async (projectId: string): Promise<Project | null>
 }
 
 export const createProject = async (name: string, overview?: string): Promise<Project | null> => {
-  console.log('createProject called with:', { name, overview, isSupabaseConfigured, supabase: !!supabase })
-  
   if (!isSupabaseConfigured || !supabase) {
-    console.log('Using local storage fallback')
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_projects')
@@ -162,7 +159,6 @@ export const createProject = async (name: string, overview?: string): Promise<Pr
       
       const updatedProjects = [newProject, ...projects]
       localStorage.setItem('kyp_projects', JSON.stringify(updatedProjects))
-      console.log('Project created in local storage:', newProject)
       return newProject
     } catch (error) {
       console.error('Error in local storage fallback:', error)
@@ -171,7 +167,6 @@ export const createProject = async (name: string, overview?: string): Promise<Pr
   }
 
   try {
-    console.log('Using Supabase to create project')
     const { data, error } = await supabase
       .from('projects')
       .insert([
@@ -187,7 +182,6 @@ export const createProject = async (name: string, overview?: string): Promise<Pr
       console.error('Supabase error:', error)
       throw error
     }
-    console.log('Project created in Supabase:', data)
     return data
   } catch (error) {
     console.error('Error creating project:', error)
