@@ -26,8 +26,6 @@ import {
   createUserStoryComment,
   updateUserStoryComment,
   deleteUserStoryComment,
-  getUserJourneys,
-  getUserJourneyStakeholders,
   getThemes,
   getWorkspaceUsers,
   getNoteTemplates,
@@ -48,7 +46,6 @@ import type {
   UserStory, 
   Theme, 
   WorkspaceUser,
-  UserJourney,
   UserPermission,
   NoteTemplate,
   ProjectProgressStatus,
@@ -62,7 +59,6 @@ interface ProjectDataFetcherProps {
   initialSelectedNote?: ResearchNote | null
   initialView?: string
   initialSelectedUserStory?: UserStory | null
-  initialSelectedUserJourney?: UserJourney | null
   initialUserStoryRoleIds?: string[]
   initialSelectedDesign?: Design | null
   workspaceUsers: WorkspaceUser[]
@@ -79,7 +75,6 @@ export function ProjectDataFetcher({
   initialSelectedNote = null,
   initialView = 'dashboard',
   initialSelectedUserStory = null,
-  initialSelectedUserJourney = null,
   initialUserStoryRoleIds = [],
   initialSelectedDesign = null,
   workspaceUsers,
@@ -151,7 +146,6 @@ export function ProjectDataFetcher({
         lawFirmsData,
         researchNotesData,
         userStoriesData,
-        userJourneysData,
         themesData,
         noteTemplatesData,
         examplesData,
@@ -163,7 +157,6 @@ export function ProjectDataFetcher({
         getLawFirms(),
         getResearchNotes(),
         getUserStories(project.id),
-        getUserJourneys(project.id),
         getThemes(),
         getNoteTemplates(),
         getExamples(project.id),
@@ -175,7 +168,6 @@ export function ProjectDataFetcher({
       setUserPermissions(userPermissionsData)
       setLawFirms(lawFirmsData)
       setUserStories(userStoriesData)
-      setUserJourneys(userJourneysData)
       setThemes(themesData)
       setNoteTemplates(noteTemplatesData)
       setExamples(examplesData)
@@ -192,14 +184,6 @@ export function ProjectDataFetcher({
         roleMap[story.id] = roleIds
       }
       setStoryRoles(roleMap)
-      
-      // Load stakeholder assignments for all user journeys
-      const journeyStakeholderMap: Record<string, string[]> = {}
-      for (const journey of userJourneysData) {
-        const stakeholderIds = await getUserJourneyStakeholders(journey.id)
-        journeyStakeholderMap[journey.id] = stakeholderIds
-      }
-      setUserJourneyStakeholders(journeyStakeholderMap)
       
       // Load stakeholder assignments for all notes
       const stakeholderMap: Record<string, string[]> = {}
@@ -362,15 +346,6 @@ export function ProjectDataFetcher({
           }
         }
         
-        // Check user journeys if not found in notes
-        if (!isStakeholderStillUsed) {
-          for (const [journeyId, stakeholderIds] of Object.entries(userJourneyStakeholders)) {
-            if (stakeholderIds.includes(stakeholderId)) {
-              isStakeholderStillUsed = true
-              break
-            }
-          }
-        }
         
         // If stakeholder is not used anywhere else, remove from project
         if (!isStakeholderStillUsed && assignedStakeholders.includes(stakeholderId)) {
@@ -712,59 +687,55 @@ export function ProjectDataFetcher({
   }
 
   return (
-            <ProjectViewRenderer
-          project={project}
-          initialSelectedNote={initialSelectedNote}
-          initialView={initialView}
-          initialSelectedUserStory={initialSelectedUserStory}
-          initialSelectedUserJourney={initialSelectedUserJourney}
-          initialUserStoryRoleIds={initialUserStoryRoleIds}
-          initialSelectedDesign={initialSelectedDesign}
-          workspaceUsers={workspaceUsers}
-          user={user}
-          userStoryComments={userStoryComments}
-          onBack={onBack}
-          onNavigateToWorkspace={onNavigateToWorkspace}
-          onSignOut={onSignOut}
-          loading={loading}
-          allStakeholders={allStakeholders}
-          userRoles={userRoles}
-          userPermissions={userPermissions}
-          lawFirms={lawFirms}
-          assignedStakeholders={assignedStakeholders}
-          memoizedAssignedStakeholders={memoizedAssignedStakeholders}
-          getUnassignedStakeholders={getUnassignedStakeholders}
-          notes={notes}
-          userStories={userStories}
-          storyRoles={storyRoles}
-          userJourneys={userJourneys}
-          userJourneyStakeholders={userJourneyStakeholders}
-          themes={themes}
-          noteTemplates={noteTemplates}
-          problemOverview={problemOverview}
-          noteStakeholders={noteStakeholders}
-          projectTasks={projectTasks}
-          allProjectProgressStatus={allProjectProgressStatus}
-          examplesCount={examplesCount}
-          onProblemOverviewChange={handleProblemOverviewChange}
-          onSaveProblemOverview={handleSaveProblemOverview}
-          onAssignStakeholder={handleAssignStakeholder}
-          onRemoveStakeholder={handleRemoveStakeholder}
-          onRemoveStakeholderFromNoteAndConditionallyProject={handleRemoveStakeholderFromNoteAndConditionallyProject}
-          onCreateNote={handleCreateNote}
-          onThemeCreate={handleThemeCreate}
-          onUpdateNote={handleUpdateNote}
-          onDeleteNote={handleDeleteNote}
-          onAddUserStoryComment={handleAddUserStoryComment}
-          onEditUserStoryComment={handleEditUserStoryComment}
-          onDeleteUserStoryComment={handleDeleteUserStoryComment}
-          onCreateUserStory={handleCreateUserStory}
-          onUpdateUserStory={handleUpdateUserStory}
-          onDeleteUserStory={handleDeleteUserStory}
-          onStoriesReordered={handleStoriesReordered}
-          onCreateTask={onCreateTask || handleCreateTaskForUserStory}
-          onUpdateTask={onUpdateTask || handleUpdateTaskForUserStory}
-          onDeleteTask={onDeleteTask || handleDeleteTaskForUserStory}
-        />
+    <ProjectViewRenderer
+      project={project}
+      initialSelectedNote={initialSelectedNote}
+      initialView={initialView}
+      initialSelectedUserStory={initialSelectedUserStory}
+      initialUserStoryRoleIds={initialUserStoryRoleIds}
+      initialSelectedDesign={initialSelectedDesign}
+      workspaceUsers={workspaceUsers}
+      user={user}
+      userStoryComments={userStoryComments}
+      onBack={onBack}
+      onNavigateToWorkspace={onNavigateToWorkspace}
+      onSignOut={onSignOut}
+      loading={loading}
+      allStakeholders={allStakeholders}
+      userRoles={userRoles}
+      userPermissions={userPermissions}
+      lawFirms={lawFirms}
+      assignedStakeholders={assignedStakeholders}
+      memoizedAssignedStakeholders={memoizedAssignedStakeholders}
+      getUnassignedStakeholders={getUnassignedStakeholders}
+      notes={notes}
+      userStories={userStories}
+      storyRoles={storyRoles}
+      themes={themes}
+      noteTemplates={noteTemplates}
+      problemOverview={problemOverview}
+      noteStakeholders={noteStakeholders}
+      projectTasks={projectTasks}
+      allProjectProgressStatus={allProjectProgressStatus}
+      onProblemOverviewChange={handleProblemOverviewChange}
+      onSaveProblemOverview={handleSaveProblemOverview}
+      onAssignStakeholder={handleAssignStakeholder}
+      onRemoveStakeholder={handleRemoveStakeholder}
+      onRemoveStakeholderFromNoteAndConditionallyProject={handleRemoveStakeholderFromNoteAndConditionallyProject}
+      onCreateNote={handleCreateNote}
+      onThemeCreate={handleThemeCreate}
+      onUpdateNote={handleUpdateNote}
+      onDeleteNote={handleDeleteNote}
+      onAddUserStoryComment={handleAddUserStoryComment}
+      onEditUserStoryComment={handleEditUserStoryComment}
+      onDeleteUserStoryComment={handleDeleteUserStoryComment}
+      onCreateUserStory={handleCreateUserStory}
+      onUpdateUserStory={handleUpdateUserStory}
+      onDeleteUserStory={handleDeleteUserStory}
+      onStoriesReordered={handleStoriesReordered}
+      onCreateTask={onCreateTask || handleCreateTaskForUserStory}
+      onUpdateTask={onUpdateTask || handleUpdateTaskForUserStory}
+      onDeleteTask={onDeleteTask || handleDeleteTaskForUserStory}
+    />
   )
 }

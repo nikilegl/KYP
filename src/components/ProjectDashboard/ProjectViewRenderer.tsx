@@ -24,13 +24,11 @@ import { ProjectOverview } from '../ProjectOverview'
 import { AssignedStakeholders } from '../AssignedStakeholders'
 import { ResearchNotesSection } from '../ResearchNotesSection'
 import { PromptBuilderSection } from '../PromptBuilderSection'
-import { UserFlowsSection } from '../UserFlowsSection'
 import { UserStoriesSection } from '../UserStoriesSection'
 import { ExamplesSection } from '../ExamplesSection'
 import { ExampleDetailPage } from '../ExampleDetail/ExampleDetailPage'
 import { StakeholderDetail } from '../StakeholderDetail'
 import { UserStoryDetail } from '../UserStoryDetail'
-import { UserJourneyEditor } from '../UserJourneyEditor'
 import { NoteDetail } from '../NoteDetail'
 import { DesignsSection } from '../AssetsSection'
 import { AssetDetail } from '../AssetDetail'
@@ -53,7 +51,6 @@ import type {
   UserStory, 
   Theme, 
   WorkspaceUser,
-  UserJourney,
   UserPermission,
   Example,
   NoteTemplate,
@@ -69,7 +66,6 @@ interface ProjectViewRendererProps {
   initialSelectedNote?: ResearchNote | null
   initialView?: string
   initialSelectedUserStory?: UserStory | null
-  initialSelectedUserJourney?: UserJourney | null
   initialUserStoryRoleIds?: string[]
   initialSelectedDesign?: Design | null
   workspaceUsers: WorkspaceUser[]
@@ -91,8 +87,6 @@ interface ProjectViewRendererProps {
   notes: ResearchNote[]
   userStories: UserStory[]
   storyRoles: Record<string, string[]>
-  userJourneys: UserJourney[]
-  userJourneyStakeholders: Record<string, string[]>
   themes: Theme[]
   noteTemplates: NoteTemplate[]
   problemOverview: ProblemOverview
@@ -154,7 +148,6 @@ export function ProjectViewRenderer({
   initialSelectedNote = null,
   initialView = 'dashboard',
   initialSelectedUserStory = null,
-  initialSelectedUserJourney = null,
   initialUserStoryRoleIds = [],
   initialSelectedDesign = null,
   workspaceUsers,
@@ -174,8 +167,6 @@ export function ProjectViewRenderer({
   notes,
   userStories,
   storyRoles,
-  userJourneys,
-  userJourneyStakeholders,
   themes,
   noteTemplates,
   problemOverview,
@@ -210,7 +201,6 @@ export function ProjectViewRenderer({
     if (initialView !== 'dashboard') return initialView
     if (initialSelectedNote) return 'note-detail'
     if (initialSelectedUserStory) return 'user-story-detail'
-    if (initialSelectedUserJourney) return 'user-journey-detail'
     if (initialSelectedDesign) return 'design-detail'
     return 'dashboard'
   })
@@ -222,7 +212,6 @@ export function ProjectViewRenderer({
   const [isCreatingNote, setIsCreatingNote] = useState(false)
   const [selectedUserStory, setSelectedUserStory] = useState<UserStory | null>(initialSelectedUserStory)
   const [selectedUserStoryRoles, setSelectedUserStoryRoles] = useState<string[]>(initialUserStoryRoleIds)
-  const [selectedUserJourney, setSelectedUserJourney] = useState<UserJourney | null>(initialSelectedUserJourney)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(initialSelectedDesign)
   const [selectedExample, setSelectedExample] = useState<Example | null>(null)
   const [editingExample, setEditingExample] = useState<Example | null>(null)
@@ -251,7 +240,6 @@ export function ProjectViewRenderer({
     setIsCreatingNote(false)
     setSelectedUserStory(null)
     setSelectedUserStoryRoles([])
-    setSelectedUserJourney(null)
     setSelectedDesign(null)
     
     // Set the new current view
@@ -263,29 +251,20 @@ export function ProjectViewRenderer({
     
     try {
       // Get current project stakeholders
-      const { getProjectStakeholders, removeStakeholderFromProject, getResearchNotes, getUserJourneys, getResearchNoteStakeholders, getUserJourneyStakeholders } = await import('../../lib/database')
+      const { getProjectStakeholders, removeStakeholderFromProject, getResearchNotes, getResearchNoteStakeholders } = await import('../../lib/database')
       const currentProjectStakeholders = await getProjectStakeholders(project.id)
       
       // Get all notes for this project and their stakeholder associations
       const projectNotes = await getResearchNotes()
       const filteredProjectNotes = projectNotes.filter(note => note.project_id === project.id)
       
-      // Get all user journeys for this project and their stakeholder associations
-      const projectUserJourneys = await getUserJourneys(project.id)
-      
-      // Build a set of all stakeholder IDs that are currently linked to notes or user journeys
+      // Build a set of all stakeholder IDs that are currently linked to notes
       const linkedStakeholderIds = new Set<string>()
       
       // Add stakeholders from notes
       for (const note of filteredProjectNotes) {
         const noteStakeholderIds = await getResearchNoteStakeholders(note.id)
         noteStakeholderIds.forEach(id => linkedStakeholderIds.add(id))
-      }
-      
-      // Add stakeholders from user journeys
-      for (const journey of projectUserJourneys) {
-        const journeyStakeholderIds = await getUserJourneyStakeholders(journey.id)
-        journeyStakeholderIds.forEach(id => linkedStakeholderIds.add(id))
       }
       
       // Find stakeholders that are assigned to project but not linked to any content
@@ -386,7 +365,6 @@ export function ProjectViewRenderer({
     { id: 'dashboard', label: 'Overview', icon: FolderOpen },
     { id: 'notes', label: 'Notes & Calls', icon: FileText },  
     { id: 'user-stories', label: 'User Stories', icon: BookOpen },
-    { id: 'user-flows', label: 'User Journeys', icon: Workflow },    
     { id: 'designs', label: 'Designs', icon: Palette },    
     { id: 'examples', label: 'Examples', icon: BookOpen },
     { id: 'decision-history', label: 'Decision History', icon: Clock },
@@ -460,21 +438,6 @@ export function ProjectViewRenderer({
       )
     }
 
-    // If a user journey is selected for detail view, show the detail component
-    if (selectedUserJourney) {
-      return (
-        <UserJourneyEditor
-          journey={selectedUserJourney}
-          assignedStakeholders={memoizedAssignedStakeholders}
-          userRoles={userRoles}
-          lawFirms={lawFirms}
-          onBack={() => {
-            setSelectedUserJourney(null)
-            setCurrentView('user-flows')
-          }}
-        />
-      )
-    }
 
     // If a note is selected for detail view, show the note detail component
     if (selectedDesign) {
@@ -715,7 +678,7 @@ export function ProjectViewRenderer({
   }
 
   const workspaceMenuItems = [
-    { id: 'projects', label: 'Projects', icon: FolderOpen },
+    { id: 'projects', label: 'Epics', icon: FolderOpen },
     { id: 'law-firms', label: 'Law Firms', icon: Building2 },
     { id: 'user-roles', label: 'User Roles', icon: UserCheck },
     { id: 'stakeholders', label: 'Stakeholders', icon: Users },
@@ -745,7 +708,7 @@ export function ProjectViewRenderer({
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-3"
           >
             <ArrowLeft size={20} />
-            All Projects
+            All Epics
           </button>
           <h1 className="text-lg font-semibold text-gray-900 truncate">{project.name}</h1>
           <p className="text-sm text-gray-500">Project Dashboard</p>

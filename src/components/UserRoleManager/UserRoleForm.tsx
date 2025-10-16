@@ -21,20 +21,25 @@ interface UserRoleFormProps {
     name: string
     colour: string
     icon: string
+    glossy_icon?: string
   }
   loading: boolean
-  onUpdate: (updates: Partial<{ name: string; colour: string; icon: string }>) => void
+  uploadingIcon?: boolean
+  onUpdate: (updates: Partial<{ name: string; colour: string; icon: string; glossy_icon?: string }>) => void
   onSubmit: (e: React.FormEvent) => void
   onClose: () => void
+  onGlossyIconUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 export function UserRoleForm({
   isEditing,
   userRole,
   loading,
+  uploadingIcon = false,
   onUpdate,
   onSubmit,
-  onClose
+  onClose,
+  onGlossyIconUpload
 }: UserRoleFormProps) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -77,6 +82,55 @@ export function UserRoleForm({
                 placeholder="👤"
                 disabled={loading}
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Glossy Icon (SVG)</label>
+              <p className="text-xs text-gray-500 mb-2">Upload an SVG file for the glossy icon</p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('glossy-icon-upload')?.click()}
+                  disabled={loading || uploadingIcon}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {uploadingIcon ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Upload SVG
+                    </>
+                  )}
+                </button>
+                <input
+                  id="glossy-icon-upload"
+                  type="file"
+                  accept=".svg,image/svg+xml"
+                  onChange={onGlossyIconUpload}
+                  className="hidden"
+                  disabled={loading || uploadingIcon}
+                />
+                {userRole.glossy_icon && (
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 flex items-center justify-center"
+                      dangerouslySetInnerHTML={{ __html: userRole.glossy_icon }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onUpdate({ glossy_icon: undefined })}
+                      disabled={loading}
+                      className="text-sm text-red-600 hover:text-red-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div>

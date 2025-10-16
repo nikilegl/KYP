@@ -160,7 +160,8 @@ export const createProject = async (name: string, overview?: string): Promise<Pr
       const updatedProjects = [newProject, ...projects]
       localStorage.setItem('kyp_projects', JSON.stringify(updatedProjects))
       return newProject
-    } catch {
+    } catch (error) {
+      console.error('Error in local storage fallback:', error)
       return null
     }
   }
@@ -177,7 +178,10 @@ export const createProject = async (name: string, overview?: string): Promise<Pr
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase error:', error)
+      throw error
+    }
     return data
   } catch (error) {
     console.error('Error creating project:', error)

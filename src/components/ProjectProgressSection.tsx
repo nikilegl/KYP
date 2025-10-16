@@ -11,9 +11,9 @@ import {
   PROGRESS_QUESTIONS,
   type ProgressQuestionKey
 } from '../lib/database'
-import { getUserJourneys, getAssets } from '../lib/database'
+import { getAssets } from '../lib/database'
 import type { Project, ProjectProgressStatus, ProjectProgressComment, ProblemOverview, Stakeholder, UserRole, LawFirm, Task } from '../lib/supabase'
-import type { UserJourney, Asset } from '../lib/supabase'
+import type { Asset } from '../lib/supabase'
 
 interface ProjectProgressSectionProps {
   project: Project
@@ -50,7 +50,6 @@ export function ProjectProgressSection({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [pendingCompletion, setPendingCompletion] = useState<Record<string, boolean>>({})
-  const [userJourneys, setUserJourneys] = useState<UserJourney[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
 
   const questions: QuestionConfig[] = [
@@ -108,12 +107,8 @@ export function ProjectProgressSection({
 
   const loadAdditionalData = async () => {
     try {
-      const [userJourneysData, assetsData] = await Promise.all([
-        getUserJourneys(project.id),
-        getAssets(project.id)
-      ])
+      const assetsData = await getAssets(project.id)
       
-      setUserJourneys(userJourneysData)
       setAssets(assetsData)
     } catch (error) {
       console.error('Error loading additional data:', error)
@@ -376,8 +371,8 @@ export function ProjectProgressSection({
       
       case PROGRESS_QUESTIONS.CORE_JOURNEYS:
         return {
-          info: `Current: ${userJourneys.length} user journeys created`,
-          highlight: userJourneys.length < 2
+          info: `Current: 0 user journeys created`,
+          highlight: true
         }
       
       case PROGRESS_QUESTIONS.DESIGNS_ASSETS:

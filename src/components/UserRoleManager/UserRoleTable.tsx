@@ -1,6 +1,5 @@
 import React from 'react'
 import { Users, Edit, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
-import { UserRoleIconDisplay } from './UserRoleIconDisplay'
 import type { UserRole, Stakeholder } from '../../lib/supabase'
 
 interface UserRoleTableProps {
@@ -89,6 +88,9 @@ export function UserRoleTable({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Icon
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Glossy Icon
+              </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => handleSort('name')}
@@ -114,7 +116,24 @@ export function UserRoleTable({
             {sortedUserRoles.map((role) => (
               <tr key={role.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <UserRoleIconDisplay userRole={role} size="md" />
+                  <div 
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${role.colour}20` }}
+                  >
+                    <span style={{ fontSize: 18, lineHeight: 1 }}>
+                      {role.icon || '👤'}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {role.glossy_icon ? (
+                    <div 
+                      className="w-8 h-8 flex items-center justify-center"
+                      dangerouslySetInnerHTML={{ __html: role.glossy_icon }}
+                    />
+                  ) : (
+                    <span className="text-xs text-gray-400">—</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <button

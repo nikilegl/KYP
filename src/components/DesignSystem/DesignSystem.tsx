@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Palette, Square, Type, Layout, Layers, Zap, LucideIcon, Maximize2, Table } from 'lucide-react'
+import { Palette, Square, Type, Layout, Layers, Zap, LucideIcon, Maximize2, Table, GitBranch, ToggleLeft } from 'lucide-react'
 import { ButtonShowcase } from './components/ButtonShowcase'
 import { TypographyShowcase } from './components/TypographyShowcase'
 import { ColorShowcase } from './components/ColorShowcase'
@@ -7,6 +7,9 @@ import { ModalShowcase } from './components/ModalShowcase'
 import { DataTableShowcase } from './components/DataTableShowcase'
 import { CardShowcase } from './components/CardShowcase'
 import { BlockNoteShowcase } from './components/BlockNoteShowcase'
+import { UserJourneyNodeShowcase } from './components/UserJourneyNodeShowcase'
+import { SegmentedControlShowcase } from './components/SegmentedControlShowcase'
+
 
 interface NavigationItem {
   id: string
@@ -15,8 +18,11 @@ interface NavigationItem {
   component: React.ReactNode
 }
 
+import type { UserRole } from '../../lib/supabase'
+
 interface DesignSystemProps {
   onSignOut: () => void
+  userRoles?: UserRole[]
 }
 
 
@@ -57,7 +63,7 @@ function UtilitiesShowcase() {
   )
 }
 
-export function DesignSystem({ onSignOut }: DesignSystemProps) {
+export function DesignSystem({ onSignOut, userRoles = [] }: DesignSystemProps) {
   const [selectedComponent, setSelectedComponent] = useState('buttons')
 
   const navigationItems: NavigationItem[] = [
@@ -66,6 +72,12 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
       label: 'Buttons',
       icon: Square,
       component: <ButtonShowcase />
+    },
+    {
+      id: 'segmented-control',
+      label: 'Segmented Control',
+      icon: ToggleLeft,
+      component: <SegmentedControlShowcase />
     },
     {
       id: 'typography',
@@ -120,6 +132,12 @@ export function DesignSystem({ onSignOut }: DesignSystemProps) {
       label: 'Utilities',
       icon: Zap,
       component: <UtilitiesShowcase />
+    },
+    {
+      id: 'user-journey-nodes',
+      label: 'Journey Nodes',
+      icon: GitBranch,
+      component: <UserJourneyNodeShowcase userRoles={userRoles} />
     }
   ]
 
