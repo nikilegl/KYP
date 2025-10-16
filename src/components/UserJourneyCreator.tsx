@@ -38,9 +38,8 @@ const initialNodes: Node[] = [
     selectable: false,
     data: {
       label: 'User Starts Journey',
-      description: 'User begins their interaction',
       type: 'start',
-      variant: 'default'
+      variant: ''
     },
   },
   {
@@ -49,22 +48,9 @@ const initialNodes: Node[] = [
     position: { x: 100, y: 125 },
     selectable: false,
     data: {
-      label: 'Initial Action',
-      description: 'User performs first action',
+      label: 'Middle Step',
       type: 'process',
-      variant: 'default'
-    },
-  },
-  {
-    id: '3',
-    type: 'decision',
-    position: { x: 400, y: 125 },
-    selectable: false,
-    data: {
-      label: 'Decision Point',
-      description: 'User makes a choice',
-      type: 'decision',
-      variant: 'default'
+      variant: ''
     },
   },
   {
@@ -74,9 +60,8 @@ const initialNodes: Node[] = [
     selectable: false,
     data: {
       label: 'Journey Complete',
-      description: 'User reaches goal',
       type: 'end',
-      variant: 'default'
+      variant: ''
     },
   },
 ]
@@ -84,9 +69,7 @@ const initialNodes: Node[] = [
 // Initial edges for the flow
 const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', data: {} },
-  { id: 'e1-3', source: '1', target: '3', data: {} },
   { id: 'e2-4', source: '2', target: '4', data: {} },
-  { id: 'e3-4', source: '3', target: '4', data: {} },
 ]
 
 interface UserJourneyCreatorProps {
@@ -110,9 +93,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [nodeToDelete, setNodeToDelete] = useState<string | null>(null)
   const [configForm, setConfigForm] = useState({
     label: '',
-    description: '',
-    variant: 'default' as 'default' | 'outlined' | 'filled',
+    type: 'process' as 'start' | 'process' | 'decision' | 'end',
+    variant: '' as 'CMS' | 'Legl' | 'End client' | 'Back end' | '',
     userRole: null as UserRole | null,
+    bulletPoints: [] as string[],
     customProperties: {} as Record<string, unknown>
   })
   const [showEdgeLabelModal, setShowEdgeLabelModal] = useState(false)
@@ -187,20 +171,35 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
 
   // Add new node
   const addNode = useCallback((type: 'start' | 'process' | 'decision' | 'end') => {
+    const typeLabels = {
+      start: 'Start',
+      process: 'Middle',
+      decision: 'Decision',
+      end: 'End'
+    }
     const newNode: Node = {
       id: `${Date.now()}`,
       type,
       position: { x: Math.random() * 400, y: Math.random() * 400 },
       selectable: false,
       data: {
-        label: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-        description: `Description for ${type} step`,
+        label: `New ${typeLabels[type]}`,
         type,
-        variant: 'default'
+        variant: ''
       },
     }
     setNodes((nds) => [...nds, newNode])
   }, [setNodes])
+
+  // Smart add node - adds start if no start exists, otherwise adds middle
+  const smartAddNode = useCallback(() => {
+    const hasStartNode = nodes.some(node => node.type === 'start')
+    if (hasStartNode) {
+      addNode('process')
+    } else {
+      addNode('start')
+    }
+  }, [nodes, addNode])
 
   // Save journey
   const saveJourney = useCallback(async () => {
@@ -313,9 +312,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       setConfiguringNode(node)
       setConfigForm({
         label: (node.data?.label as string) || '',
-        description: (node.data?.description as string) || '',
-        variant: (node.data?.variant as 'default' | 'outlined' | 'filled') || 'default',
+        type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
+        variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | '') || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
+        bulletPoints: (node.data?.bulletPoints as string[]) || [],
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
       })
       setShowConfigModal(true)
@@ -331,10 +331,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         node.id === configuringNode.id
           ? {
               ...node,
+              type: configForm.type, // Update the node type for React Flow
               data: {
                 ...node.data,
-                ...configForm,
-                type: node.data?.type || 'process'
+                ...configForm
               }
             }
           : node
@@ -363,6 +363,30 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       const { [key]: _, ...rest } = prev.customProperties
       return { ...prev, customProperties: rest }
     })
+  }, [])
+
+  // Add bullet point to node
+  const addBulletPoint = useCallback(() => {
+    setConfigForm(prev => ({
+      ...prev,
+      bulletPoints: [...prev.bulletPoints, '']
+    }))
+  }, [])
+
+  // Update bullet point
+  const updateBulletPoint = useCallback((index: number, newText: string) => {
+    setConfigForm(prev => ({
+      ...prev,
+      bulletPoints: prev.bulletPoints.map((bp, i) => i === index ? newText : bp)
+    }))
+  }, [])
+
+  // Remove bullet point from node
+  const removeBulletPoint = useCallback((index: number) => {
+    setConfigForm(prev => ({
+      ...prev,
+      bulletPoints: prev.bulletPoints.filter((_, i) => i !== index)
+    }))
   }, [])
 
   // Delete node with confirmation
@@ -563,7 +587,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             Export
           </Button>
           <Button
-            onClick={() => setShowSaveModal(true)}
+            onClick={() => {
+              // If name has been changed from default or description is filled, save directly
+              if (journeyName !== 'User Journey 01' || journeyDescription.trim()) {
+                saveJourney()
+              } else {
+                setShowSaveModal(true)
+              }
+            }}
             className="flex items-center gap-2"
           >
             <Save size={16} />
@@ -573,69 +604,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         </div>
       </div>
 
-      {/* Project Selection */}
-      <div className="bg-white p-4 rounded-lg border">
-        <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700">
-            Project
-          </label>
-          <select
-            value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="flex-1 max-w-md px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">No project (standalone)</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Node Tools */}
-      <div className="bg-white p-4 rounded-lg border">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Add Nodes:</span>
-          <Button
-            variant="outline"
-            size="small"
-            onClick={() => addNode('start')}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Start
-          </Button>
-          <Button
-            variant="outline"
-            size="small"
-            onClick={() => addNode('process')}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Process
-          </Button>
-          <Button
-            variant="outline"
-            size="small"
-            onClick={() => addNode('decision')}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            Decision
-          </Button>
-          <Button
-            variant="outline"
-            size="small"
-            onClick={() => addNode('end')}
-            className="flex items-center gap-2"
-          >
-            <Plus size={16} />
-            End
-          </Button>
-        </div>
-      </div>
+      
 
       {/* React Flow Canvas */}
       <div className="bg-white rounded-lg border" style={{ height: '600px' }}>
@@ -661,7 +630,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           <Controls />
           <MiniMap />
           <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-          
+          <Panel position="top-right">
+            <Button
+              variant="primary"
+              onClick={smartAddNode}
+              className="flex items-center gap-2"
+            >
+              <Plus size={16} />
+              Add Node
+            </Button>
+          </Panel>
         </ReactFlow>
       </div>
 
@@ -671,8 +649,24 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           isOpen={showConfigModal}
           onClose={() => setShowConfigModal(false)}
           title="Edit Node"
+          footerContent={
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => setShowConfigModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={saveNodeConfiguration}
+              >
+                Save
+              </Button>
+            </div>
+          }
         >
-          <div className="space-y-6">
+          <div className="p-6 space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Node Label
@@ -687,29 +681,71 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
+                Node Type
               </label>
-              <input
-                type="text"
-                value={configForm.description}
-                onChange={(e) => setConfigForm(prev => ({ ...prev, description: e.target.value }))}
+              <select
+                value={configForm.type}
+                onChange={(e) => setConfigForm(prev => ({ ...prev, type: e.target.value as 'start' | 'process' | 'decision' | 'end' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              >
+                <option value="start">Start</option>
+                <option value="process">Middle</option>
+                <option value="end">End</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Bullet Points
+              </label>
+              <div className="space-y-2">
+                {configForm.bulletPoints.map((bullet, index) => (
+                  <div key={index} className="flex items-start gap-2 group">
+                    <span className="text-gray-500 mt-2.5">•</span>
+                    <input
+                      type="text"
+                      value={bullet}
+                      onChange={(e) => updateBulletPoint(index, e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      placeholder="Enter bullet point text"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => removeBulletPoint(index)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="small"
+                  onClick={addBulletPoint}
+                  className="w-full"
+                >
+                  <Plus size={16} className="mr-2" />
+                  Add Bullet Point
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Variant
+                  Platform
                 </label>
                 <select
                   value={configForm.variant}
-                  onChange={(e) => setConfigForm(prev => ({ ...prev, variant: e.target.value as 'default' | 'outlined' | 'filled' }))}
+                  onChange={(e) => setConfigForm(prev => ({ ...prev, variant: e.target.value as 'CMS' | 'Legl' | 'End client' | 'Back end' | '' }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="default">Default</option>
-                  <option value="outlined">Outlined</option>
-                  <option value="filled">Filled</option>
+                  <option value="">None</option>
+                  <option value="CMS">CMS</option>
+                  <option value="Legl">Legl</option>
+                  <option value="End client">End client</option>
+                  <option value="Back end">Back end</option>
                 </select>
               </div>
 
@@ -761,21 +797,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 </Button>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4">
-              <Button
-                variant="ghost"
-                onClick={() => setShowConfigModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={saveNodeConfiguration}
-              >
-                Save
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
@@ -817,31 +838,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             setEdgeLabel('')
           }}
           title="Edge Label"
-        >
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Label Text
-              </label>
-              <input
-                type="text"
-                value={edgeLabel}
-                onChange={(e) => setEdgeLabel(e.target.value)}
-                placeholder="e.g., 'Yes', 'No', 'Next', 'Cancel'"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    saveEdgeLabel()
-                  }
-                }}
-              />
-              <p className="mt-2 text-sm text-gray-500">
-                Add a label to describe this connection or transition
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t">
+          footerContent={
+            <div className="flex items-center justify-between w-full">
               <Button
                 variant="ghost"
                 onClick={deleteEdgeLabel}
@@ -867,6 +865,30 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   Save Label
                 </Button>
               </div>
+            </div>
+          }
+        >
+          <div className="p-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Label Text
+              </label>
+              <input
+                type="text"
+                value={edgeLabel}
+                onChange={(e) => setEdgeLabel(e.target.value)}
+                placeholder="e.g., 'Yes', 'No', 'Next', 'Cancel'"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveEdgeLabel()
+                  }
+                }}
+              />
+              <p className="mt-2 text-sm text-gray-500">
+                Add a label to describe this connection or transition
+              </p>
             </div>
           </div>
         </Modal>

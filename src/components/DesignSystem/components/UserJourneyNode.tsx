@@ -8,11 +8,11 @@ export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end'
 
 export interface UserJourneyNodeData {
   label: string
-  description?: string
   type: UserJourneyNodeType
   userRole?: UserRole
+  bulletPoints?: string[]
   customProperties?: Record<string, unknown>
-  variant?: 'default' | 'outlined' | 'filled'
+  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | ''
 }
 
 interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
@@ -25,11 +25,11 @@ interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
 export function UserJourneyNode({ data, selected, showHandles = false, onEdit, onDelete }: UserJourneyNodeProps) {
   const {
     label,
-    description,
     type,
     userRole,
+    bulletPoints = [],
     customProperties = {},
-    variant = 'default'
+    variant = ''
   } = data || {}
 
   // Type-specific colors for icons and tags
@@ -99,7 +99,7 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
       case 'start':
         return 'Start'
       case 'process':
-        return 'Process'
+        return 'Middle'
       case 'decision':
         return 'Decision'
       case 'end':
@@ -144,11 +144,6 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
           <div className="text-base font-semibold text-gray-900 truncate">
             {label}
           </div>
-          {description && (
-            <div className="text-sm text-gray-500 truncate mt-0.5">
-              {description}
-            </div>
-          )}
         </div>
 
         {/* Action buttons */}
@@ -182,13 +177,38 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
         </div>
       </div>
 
-      {/* User Role Tag */}
-      {userRole && (
+      {/* Bullet Points */}
+      {bulletPoints && bulletPoints.length > 0 && (
         <div className="mt-2 pt-2 border-t border-gray-100">
-          <UserRoleTag
-            userRole={userRole}
-            size="sm"
-          />
+          <ul className="space-y-1">
+            {bulletPoints.map((bullet, index) => (
+              <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
+                <span className="text-gray-400 mt-0.5">•</span>
+                <span className="flex-1">{bullet}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* User Role Tag and Platform Label */}
+      {(userRole || variant) && (
+        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+          <div>
+            {userRole && (
+              <UserRoleTag
+                userRole={userRole}
+                size="sm"
+              />
+            )}
+          </div>
+          <div>
+            {variant && (
+              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                {variant}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
