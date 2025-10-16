@@ -20,6 +20,7 @@ import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
+import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import type { UserRole, Project } from '../lib/supabase'
@@ -29,48 +30,11 @@ import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById }
 // This will be moved inside the component
 
 
-// Initial nodes for the flow
-const initialNodes: Node[] = [
-  {
-    id: '1',
-    type: 'start',
-    position: { x: 250, y: 25 },
-    selectable: false,
-    data: {
-      label: 'User Starts Journey',
-      type: 'start',
-      variant: ''
-    },
-  },
-  {
-    id: '2',
-    type: 'process',
-    position: { x: 100, y: 125 },
-    selectable: false,
-    data: {
-      label: 'Middle Step',
-      type: 'process',
-      variant: ''
-    },
-  },
-  {
-    id: '4',
-    type: 'end',
-    position: { x: 250, y: 250 },
-    selectable: false,
-    data: {
-      label: 'Journey Complete',
-      type: 'end',
-      variant: ''
-    },
-  },
-]
+// Initial nodes for the flow (empty by default)
+const initialNodes: Node[] = []
 
-// Initial edges for the flow
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', data: {} },
-  { id: 'e2-4', source: '2', target: '4', data: {} },
-]
+// Initial edges for the flow (empty by default)
+const initialEdges: Edge[] = []
 
 interface UserJourneyCreatorProps {
   userRoles?: UserRole[]
@@ -94,7 +58,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [configForm, setConfigForm] = useState({
     label: '',
     type: 'process' as 'start' | 'process' | 'decision' | 'end',
-    variant: '' as 'CMS' | 'Legl' | 'End client' | 'Back end' | '',
+    variant: 'Legl' as 'CMS' | 'Legl' | 'End client' | 'Back end' | '',
     userRole: null as UserRole | null,
     bulletPoints: [] as string[],
     customProperties: {} as Record<string, unknown>
@@ -185,7 +149,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       data: {
         label: `New ${typeLabels[type]}`,
         type,
-        variant: ''
+        variant: 'Legl'
       },
     }
     setNodes((nds) => [...nds, newNode])
@@ -310,12 +274,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     const node = nodes.find(n => n.id === nodeId)
     if (node) {
       setConfiguringNode(node)
+      const existingBulletPoints = (node.data?.bulletPoints as string[]) || []
       setConfigForm({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
-        variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | '') || '',
+        variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | '') || 'Legl',
         userRole: (node.data?.userRole as UserRole | null) || null,
-        bulletPoints: (node.data?.bulletPoints as string[]) || [],
+        bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
       })
       setShowConfigModal(true)
@@ -409,6 +374,27 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     setNodeToDelete(null)
   }, [])
 
+  // Duplicate node
+  const duplicateNode = useCallback((nodeId: string) => {
+    const nodeToDuplicate = nodes.find((node) => node.id === nodeId)
+    if (!nodeToDuplicate) return
+
+    const newNodeId = `node-${Date.now()}`
+    const newNode = {
+      ...nodeToDuplicate,
+      id: newNodeId,
+      position: {
+        x: nodeToDuplicate.position.x + 50,
+        y: nodeToDuplicate.position.y + 50
+      },
+      data: {
+        ...nodeToDuplicate.data
+      }
+    }
+
+    setNodes((nds) => [...nds, newNode])
+  }, [nodes, setNodes])
+
   // Handle edge label editing
   const handleEdgeLabelClick = useCallback((edgeId: string) => {
     const edge = edges.find(e => e.id === edgeId)
@@ -488,6 +474,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             console.log('Edit clicked for node:', props.id)
             configureNode(props.id)
           }}
+          onDuplicate={() => {
+            console.log('Duplicate clicked for node:', props.id)
+            duplicateNode(props.id)
+          }}
           onDelete={() => {
             console.log('Delete clicked for node:', props.id)
             handleDeleteNode(props.id)
@@ -500,6 +490,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         {...props} 
         showHandles={true}
         onEdit={() => configureNode(props.id)}
+        onDuplicate={() => duplicateNode(props.id)}
         onDelete={() => handleDeleteNode(props.id)}
       />
     ),
@@ -508,6 +499,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         {...props} 
         showHandles={true}
         onEdit={() => configureNode(props.id)}
+        onDuplicate={() => duplicateNode(props.id)}
         onDelete={() => handleDeleteNode(props.id)}
       />
     ),
@@ -516,10 +508,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         {...props} 
         showHandles={true}
         onEdit={() => configureNode(props.id)}
+        onDuplicate={() => duplicateNode(props.id)}
         onDelete={() => handleDeleteNode(props.id)}
       />
     ),
-  }), [configureNode, handleDeleteNode])
+  }), [configureNode, duplicateNode, handleDeleteNode])
 
   if (loading) {
     return (
@@ -533,9 +526,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   }
 
   return (
-    <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+    <div className="flex-1 flex flex-col p-6 overflow-hidden">
       {/* Header */}
-      <div className="space-y-4">
+      <div className="space-y-4 mb-6">
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
@@ -564,7 +557,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           </div>
           <div className="flex items-center gap-3">
           <Button
-            variant="secondary"
+            variant="outline"
             onClick={() => document.getElementById('import-file')?.click()}
             className="flex items-center gap-2"
           >
@@ -579,7 +572,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             className="hidden"
           />
           <Button
-            variant="secondary"
+            variant="outline"
             onClick={exportJourney}
             className="flex items-center gap-2"
           >
@@ -604,10 +597,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         </div>
       </div>
 
-      
-
       {/* React Flow Canvas */}
-      <div className="bg-white rounded-lg border" style={{ height: '600px' }}>
+      <div className="flex-1 bg-white rounded-lg border overflow-hidden" style={{ minHeight: 0 }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -626,13 +617,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           selectNodesOnDrag={false}
           edgesReconnectable={true}
           edgesFocusable={true}
+          snapToGrid={true}
+          snapGrid={[15, 15]}
+          style={{ width: '100%', height: '100%' }}
         >
           <Controls />
           <MiniMap />
           <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
           <Panel position="top-right">
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={smartAddNode}
               className="flex items-center gap-2"
             >
@@ -669,13 +663,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           <div className="p-6 space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Node Label
+                Description
               </label>
-              <input
-                type="text"
+              <textarea
                 value={configForm.label}
                 onChange={(e) => setConfigForm(prev => ({ ...prev, label: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                placeholder="Enter node description..."
               />
             </div>
 
@@ -683,15 +678,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Node Type
               </label>
-              <select
+              <SegmentedControl
+                options={[
+                  { value: 'start', label: 'Start' },
+                  { value: 'process', label: 'Middle' },
+                  { value: 'end', label: 'End' }
+                ]}
                 value={configForm.type}
-                onChange={(e) => setConfigForm(prev => ({ ...prev, type: e.target.value as 'start' | 'process' | 'decision' | 'end' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="start">Start</option>
-                <option value="process">Middle</option>
-                <option value="end">End</option>
-              </select>
+                onChange={(value) => setConfigForm(prev => ({ ...prev, type: value as 'start' | 'process' | 'decision' | 'end' }))}
+              />
             </div>
 
             <div>
@@ -769,7 +764,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               </div>
             </div>
 
-            <div>
+            <div className="hidden">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Custom Properties
               </label>
@@ -803,12 +798,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Node</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this node? This action cannot be undone.
-            </p>
+        <Modal
+          isOpen={showDeleteConfirm}
+          onClose={cancelDeleteNode}
+          title="Delete Node"
+          size="sm"
+          footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
                 variant="ghost"
@@ -824,8 +819,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 Delete
               </Button>
             </div>
+          }
+        >
+          <div className="p-6">
+            <p className="text-gray-600">
+              Are you sure you want to delete this node? This action cannot be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edge Label Modal */}

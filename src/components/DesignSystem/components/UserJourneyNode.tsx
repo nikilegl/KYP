@@ -1,6 +1,6 @@
 import React from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { Edit, Trash2 } from 'lucide-react'
+import { Edit, Trash2, Copy } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
 import type { UserRole } from '../../../lib/supabase'
 
@@ -19,52 +19,32 @@ interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
   selected?: boolean
   showHandles?: boolean
   onEdit?: () => void
+  onDuplicate?: () => void
   onDelete?: () => void
 }
 
-export function UserJourneyNode({ data, selected, showHandles = false, onEdit, onDelete }: UserJourneyNodeProps) {
+export function UserJourneyNode({ data, selected, showHandles = false, onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
   const {
     label,
     type,
     userRole,
     bulletPoints = [],
     customProperties = {},
-    variant = ''
+    variant = 'Legl'
   } = data || {}
 
-  // Type-specific colors for icons and tags
-  const typeColors = {
-    start: {
-      icon: '#10B981',
-      iconBg: '#D1FAE5',
-      tag: '#10B981',
-      tagBg: '#D1FAE5',
-      tagText: '#065F46'
-    },
-    process: {
-      icon: '#3B82F6',
-      iconBg: '#DBEAFE',
-      tag: '#3B82F6',
-      tagBg: '#DBEAFE',
-      tagText: '#1E40AF'
-    },
-    decision: {
-      icon: '#F59E0B',
-      iconBg: '#FEF3C7',
-      tag: '#F59E0B',
-      tagBg: '#FEF3C7',
-      tagText: '#92400E'
-    },
-    end: {
-      icon: '#EF4444',
-      iconBg: '#FEE2E2',
-      tag: '#EF4444',
-      tagBg: '#FEE2E2',
-      tagText: '#991B1B'
+  // Platform-specific border color
+  const getBorderColor = () => {
+    if (variant === 'End client') {
+      return '#4A70FA'
+    } else if (variant === 'Legl') {
+      return '#01B88E'
+    } else {
+      return '#5A6698'
     }
   }
 
-  const colors = typeColors[type] || typeColors.process
+  const borderColor = getBorderColor()
 
   // Handle positioning for different node types
   const getHandlePositions = () => {
@@ -113,7 +93,7 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
     <div
       className={`
         px-4 py-3
-        min-w-[280px]
+        w-[320px]
         bg-white
         border border-gray-200
         rounded-lg
@@ -125,7 +105,7 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
       `}
       style={{
         borderLeftWidth: '4px',
-        borderLeftColor: colors.icon
+        borderLeftColor: borderColor
       }}
     >
       {/* Connection Handles - only show when in React Flow context */}
@@ -141,7 +121,7 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
 
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="text-base font-semibold text-gray-900 truncate">
+          <div className="text-base font-semibold text-gray-900 break-words">
             {label}
           </div>
         </div>
@@ -157,6 +137,16 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
             title="Edit node"
           >
             <Edit size={14} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDuplicate?.()
+            }}
+            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-all"
+            title="Duplicate node"
+          >
+            <Copy size={14} />
           </button>
           <button
             onClick={(e) => {

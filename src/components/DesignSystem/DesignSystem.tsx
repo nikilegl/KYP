@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Palette, Square, Type, Layout, Layers, Zap, LucideIcon, Maximize2, Table, GitBranch } from 'lucide-react'
+import { Palette, Square, Type, Layout, Layers, Zap, LucideIcon, Maximize2, Table, GitBranch, ToggleLeft } from 'lucide-react'
 import { ButtonShowcase } from './components/ButtonShowcase'
 import { TypographyShowcase } from './components/TypographyShowcase'
 import { ColorShowcase } from './components/ColorShowcase'
@@ -7,6 +7,7 @@ import { ModalShowcase } from './components/ModalShowcase'
 import { DataTableShowcase } from './components/DataTableShowcase'
 import { CardShowcase } from './components/CardShowcase'
 import { UserJourneyNodeShowcase } from './components/UserJourneyNodeShowcase'
+import { SegmentedControlShowcase } from './components/SegmentedControlShowcase'
 
 interface NavigationItem {
   id: string
@@ -69,6 +70,12 @@ export function DesignSystem({ onSignOut, userRoles = [] }: DesignSystemProps) {
       label: 'Buttons',
       icon: Square,
       component: <ButtonShowcase />
+    },
+    {
+      id: 'segmented-control',
+      label: 'Segmented Control',
+      icon: ToggleLeft,
+      component: <SegmentedControlShowcase />
     },
     {
       id: 'typography',

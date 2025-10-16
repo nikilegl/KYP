@@ -64,9 +64,6 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
       case 'user-journeys':
         navigate('/user-journeys')
         break
-      case 'user-journey-creator':
-        navigate('/user-journey-creator')
-        break
       case 'law-firms':
         navigate('/law-firms')
         break
