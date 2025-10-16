@@ -198,28 +198,27 @@ export function FormModal({
       onClose={onClose}
       title={title}
       size={size}
-              footerContent={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={onClose}
-              disabled={loading}
-            >
-              {cancelText}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={loading}
-              loading={loading}
-            >
-              {submitText}
-            </Button>
-          </div>
-        }
     >
       <form onSubmit={onSubmit} className="p-6">
         {children}
+        <div className="flex items-center justify-end gap-3 mt-6">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+            disabled={loading}
+          >
+            {cancelText}
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={loading}
+            loading={loading}
+          >
+            {submitText}
+          </Button>
+        </div>
       </form>
     </Modal>
   )

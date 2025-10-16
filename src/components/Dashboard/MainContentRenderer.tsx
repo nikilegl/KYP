@@ -1,6 +1,7 @@
 import React from 'react'
-import { WorkspaceDashboard } from '../WorkspaceDashboard'
 import { ProjectManager } from '../ProjectManager'
+import { UserJourneysManager } from '../UserJourneysManager'
+import { UserJourneyCreator } from '../UserJourneyCreator'
 import { LawFirmManager } from '../LawFirmManager'
 import { ThemeManager } from '../ThemeManager'
 import { ThemeDetail } from '../ThemeDetail'
@@ -12,7 +13,6 @@ import { TeamManager } from '../TeamManager'
 import { ProjectDashboard } from '../ProjectDashboard'
 import { StakeholderDetail } from '../StakeholderDetail'
 import { NoteDetail } from '../NoteDetail'
-import { UserJourneyEditor } from '../UserJourneyEditor'
 import { UserStoryDetail } from '../UserStoryDetail'
 import { NoteTemplateManager } from '../NoteTemplateManager'
 import { NoteTemplateDetail } from '../NoteTemplateDetail'
@@ -28,7 +28,6 @@ import type {
   UserRole,
   LawFirm,
   UserPermission,
-  UserJourney,
   UserStory,
   Theme,
   NoteTemplate,
@@ -58,7 +57,6 @@ interface MainContentRendererProps {
   selectedProject: Project | null
   selectedStakeholder: Stakeholder | null
   selectedNote: ResearchNote | null
-  selectedUserJourney: UserJourney | null
   selectedUserStory: UserStory | null
   noteStakeholderIds: string[]
   userStoryRoleIds: string[]
@@ -71,7 +69,6 @@ interface MainContentRendererProps {
   selectedLawFirm: LawFirm | null
   allProjectProgressStatus: ProjectProgressStatus[]
   allUserStories: UserStory[]
-  allUserJourneys: UserJourney[]
   allDesigns: Design[]
   user: User | null
   
@@ -159,7 +156,6 @@ export function MainContentRenderer({
   selectedProject,
   selectedStakeholder,
   selectedNote,
-  selectedUserJourney,
   selectedUserStory,
   noteStakeholderIds,
   userStoryRoleIds,
@@ -172,7 +168,6 @@ export function MainContentRenderer({
   selectedLawFirm,
   allProjectProgressStatus,
   allUserStories,
-  allUserJourneys,
   allDesigns,
   user,
   userStoryComments,
@@ -240,7 +235,6 @@ export function MainContentRenderer({
         initialSelectedNote={selectedNote}
         initialView={selectedNote ? 'note-detail' : 'dashboard'}
         initialSelectedUserStory={selectedUserStory}
-        initialSelectedUserJourney={selectedUserJourney}
         initialUserStoryRoleIds={userStoryRoleIds}
         initialSelectedDesign={selectedDesign}
         workspaceUsers={workspaceUsers}
@@ -268,7 +262,7 @@ export function MainContentRenderer({
             ? 'Back to Stakeholders' 
             : stakeholderDetailOrigin === 'law-firm' && originLawFirm
               ? `Back to ${originLawFirm.name}`
-              : 'Back to Project'
+              : 'Back to Epic'
         }
         onBack={onStakeholderBack}
         onUpdate={(updates) => {
@@ -307,17 +301,6 @@ export function MainContentRenderer({
     )
   }
 
-  if (currentView === 'user-journey-detail' && selectedUserJourney) {
-    return (
-      <UserJourneyEditor
-        journey={selectedUserJourney}
-        assignedStakeholders={stakeholders}
-        userRoles={userRoles}
-        lawFirms={lawFirms}
-        onBack={() => console.log('Back from user journey')}
-      />
-    )
-  }
 
   if (currentView === 'user-story-detail' && selectedUserStory) {
     console.log('🔵 MainContentRenderer: workspaceUsers being passed to UserStoryDetail:', workspaceUsers)
@@ -396,13 +379,6 @@ export function MainContentRenderer({
 
 
   switch (currentView) {
-    case 'workspace-dashboard':
-      return (
-        <WorkspaceDashboard 
-          workspaceUsers={workspaceUsers}
-          onSignOut={onSignOut}
-        />
-      )
     case 'projects':
       return (
         <ProjectManager 
@@ -410,13 +386,20 @@ export function MainContentRenderer({
           notes={notes}
           allProjectProgressStatus={allProjectProgressStatus}
           allUserStories={allUserStories}
-          allUserJourneys={allUserJourneys}
           allDesigns={allDesigns}
           onCreateProject={onCreateProject}
           onSelectProject={onSelectProject}
           onUpdateProject={onUpdateProject}
           onDeleteProject={onDeleteProject}
         />
+      )
+    case 'user-journeys':
+      return (
+        <UserJourneysManager />
+      )
+    case 'user-journey-creator':
+      return (
+        <UserJourneyCreator userRoles={userRoles} />
       )
     case 'law-firms':
       return (
@@ -486,7 +469,7 @@ export function MainContentRenderer({
       )
     case 'design-system':
       return (
-        <DesignSystem onSignOut={onSignOut} />
+        <DesignSystem onSignOut={onSignOut} userRoles={userRoles} />
       )
     case 'stakeholders':
       return (
@@ -510,7 +493,6 @@ export function MainContentRenderer({
           notes={notes}
           allProjectProgressStatus={allProjectProgressStatus}
           allUserStories={allUserStories}
-          allUserJourneys={allUserJourneys}
           allDesigns={allDesigns}
           onCreateProject={onCreateProject}
           onSelectProject={onSelectProject}

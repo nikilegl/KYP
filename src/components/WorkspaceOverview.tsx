@@ -18,7 +18,7 @@ export function WorkspaceOverview({
   lawFirms 
 }: WorkspaceOverviewProps) {
   const stats = [
-    { label: 'Projects', value: projects.length.toString(), icon: FolderOpen, color: 'bg-blue-500' },
+    { label: 'Epics', value: projects.length.toString(), icon: FolderOpen, color: 'bg-blue-500' },
     { label: 'Stakeholders', value: stakeholders.length.toString(), icon: Users, color: '#6b42d1' },
     { label: 'Notes & Calls', value: notes.length.toString(), icon: FileText, color: 'bg-indigo-500' },
     { label: 'Team Members', value: workspaceUsers.filter(u => u.status === 'active').length.toString(), icon: Users, color: 'bg-emerald-500' },

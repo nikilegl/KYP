@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { FolderOpen, Plus, Loader2, Edit, Trash2, FileText, BookOpen, GitBranch, Palette, GripVertical } from 'lucide-react'
 import { getProjectStakeholders, getProjectStakeholdersBatch } from '../lib/database/services/projectService'
-import type { Project, ProjectProgressStatus, UserStory, UserJourney, Design, Stakeholder, ResearchNote, ProblemOverview } from '../lib/supabase'
+import type { Project, ProjectProgressStatus, UserStory, Design, Stakeholder, ResearchNote, ProblemOverview } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Button, Card, CardHeader, CardTitle, CardContent, CardFooter, CardStats, CardStatItem } from './DesignSystem'
 import { FormModal } from './DesignSystem/components/Modal'
@@ -40,7 +40,6 @@ interface ProjectManagerProps {
   problemOverviews?: ProblemOverview[]
   allProjectProgressStatus?: ProjectProgressStatus[]
   allUserStories?: UserStory[]
-  allUserJourneys?: UserJourney[]
   allDesigns?: Design[]
   onCreateProject: (name: string, overview?: string) => Promise<void>
   onSelectProject: (project: Project) => void
@@ -54,7 +53,6 @@ interface ProjectData {
   problemOverview?: ProblemOverview
   progressStatuses: ProjectProgressStatus[]
   userStories: UserStory[]
-  userJourneys: UserJourney[]
   designs: Design[]
   stakeholderCount: number
 }
@@ -168,7 +166,7 @@ const SortableProjectCard = React.memo(function SortableProjectCard({
                 e.stopPropagation()
                 onProjectEdit(project)
               },
-              label: 'Edit Project'
+              label: 'Edit Epic'
             },
             {
               icon: <Trash2 size={16} />,
@@ -176,7 +174,7 @@ const SortableProjectCard = React.memo(function SortableProjectCard({
                 e.stopPropagation()
                 onProjectDelete(project.id, project.name)
               },
-              label: 'Delete Project',
+              label: 'Delete Epic',
               variant: 'danger'
             }
           ]}
@@ -200,7 +198,6 @@ const SortableProjectCard = React.memo(function SortableProjectCard({
           <CardStats>
             <CardStatItem icon={<FileText size={16} />} label="Notes" value={projectData.notes.length} />
             <CardStatItem icon={<BookOpen size={16} />} label="Stories" value={projectData.userStories.length} />
-            <CardStatItem icon={<GitBranch size={16} />} label="Journeys" value={projectData.userJourneys.length} />
             <CardStatItem icon={<Palette size={16} />} label="Designs" value={projectData.designs.length} />
           </CardStats>
         </CardContent>
@@ -223,7 +220,6 @@ export function ProjectManager({
   problemOverviews = [],
   allProjectProgressStatus = [],
   allUserStories = [],
-  allUserJourneys = [],
   allDesigns = [],
   onCreateProject, 
   onSelectProject,
@@ -265,7 +261,6 @@ export function ProjectManager({
       const projectProblemOverview = problemOverviews.find(po => po.project_id === project.id)
       const projectProgressStatuses = allProjectProgressStatus.filter(ps => ps.project_id === project.id)
       const projectUserStories = allUserStories.filter(us => us.project_id === project.id)
-      const projectUserJourneys = allUserJourneys.filter(uj => uj.project_id === project.id)
       const projectDesigns = allDesigns.filter(d => d.project_id === project.id)
       
       dataMap.set(project.id, {
@@ -273,14 +268,13 @@ export function ProjectManager({
         problemOverview: projectProblemOverview,
         progressStatuses: projectProgressStatuses,
         userStories: projectUserStories,
-        userJourneys: projectUserJourneys,
         designs: projectDesigns,
         stakeholderCount: stakeholderCounts[project.id] || 0
       })
     })
     
     return dataMap
-  }, [projects, notes, problemOverviews, allProjectProgressStatus, allUserStories, allUserJourneys, allDesigns, stakeholderCounts])
+  }, [projects, notes, problemOverviews, allProjectProgressStatus, allUserStories, allDesigns, stakeholderCounts])
 
   // Load stakeholder counts efficiently - batch load all at once
   useEffect(() => {
@@ -345,21 +339,29 @@ export function ProjectManager({
             projects.find(p => p.id === pref.project_id)
           ).filter(Boolean) as Project[]
           
-          // Add any new projects that don't have preferences yet
+          // Add any new projects that don't have preferences yet - sort by most recent first
           const existingProjectIds = new Set(preferences.map(p => p.project_id))
-          const newProjects = projects.filter(p => !existingProjectIds.has(p.id))
+          const newProjects = projects
+            .filter(p => !existingProjectIds.has(p.id))
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           
-          setOrderedProjects([...ordered, ...newProjects])
+          setOrderedProjects([...newProjects, ...ordered])
         } else {
-          // Initialize preferences with current project order
-          await initializeProjectPreferences(user.id, projects.map(p => p.id))
-          setOrderedProjects([...projects])
+          // Initialize preferences with current project order - sort by most recent first
+          const sortedProjects = [...projects].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+          await initializeProjectPreferences(user.id, sortedProjects.map(p => p.id))
+          setOrderedProjects(sortedProjects)
         }
         setHasInitializedPreferences(true)
       } catch (error) {
         console.error('Error loading project preferences:', error)
-        // Fallback to original order
-        setOrderedProjects([...projects])
+        // Fallback to original order - sort by most recent first
+        const sortedProjects = [...projects].sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        setOrderedProjects(sortedProjects)
         setHasInitializedPreferences(true)
       } finally {
         setIsLoadingPreferences(false)
@@ -512,8 +514,7 @@ export function ProjectManager({
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Projects</h2>
-          <p className="text-gray-600">Manage your design and research projects</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Epics</h2>
           {isReordering && (
             <p className="text-sm text-blue-600">Saving new order...</p>
           )}
@@ -530,7 +531,7 @@ export function ProjectManager({
           variant="primary"
           size="default"
         >
-          Create Project
+          Create Epic
         </Button>
       </div>
 
@@ -538,9 +539,9 @@ export function ProjectManager({
       <FormModal
         isOpen={showProjectForm}
         onClose={() => setShowProjectForm(false)}
-        title="Create New Project"
+        title="Create New Epic"
         onSubmit={handleCreateProject}
-        submitText="Create Project"
+        submitText="Create Epic"
         cancelText="Cancel"
         loading={creatingProject}
         size="md"
@@ -575,9 +576,9 @@ export function ProjectManager({
       <FormModal
         isOpen={!!editingProject}
         onClose={() => setEditingProject(null)}
-        title="Edit Project"
+        title="Edit Epic"
         onSubmit={handleUpdateProject}
-        submitText="Update Project"
+        submitText="Update Epic"
         cancelText="Cancel"
         loading={updatingProject}
         size="md"
@@ -666,7 +667,6 @@ export function ProjectManager({
                 notes: [],
                 progressStatuses: [],
                 userStories: [],
-                userJourneys: [],
                 designs: [],
                 stakeholderCount: 0
               }}

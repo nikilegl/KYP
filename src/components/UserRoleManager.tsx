@@ -7,8 +7,8 @@ import type { UserRole } from '../lib/supabase'
 interface UserRoleManagerProps {
   userRoles: UserRole[]
   stakeholders?: Stakeholder[]
-  onCreateUserRole: (name: string, colour: string, icon?: string) => Promise<void>
-  onUpdateUserRole: (roleId: string, updates: { name?: string; colour?: string; icon?: string }) => Promise<void>
+  onCreateUserRole: (name: string, colour: string, icon?: string, glossy_icon?: string) => Promise<void>
+  onUpdateUserRole: (roleId: string, updates: { name?: string; colour?: string; icon?: string; glossy_icon?: string }) => Promise<boolean>
   onDeleteUserRole: (roleId: string) => Promise<void>
   onNavigateToStakeholders?: (userRoleId: string) => void
 }
@@ -23,18 +23,19 @@ export function UserRoleManager({
 }: UserRoleManagerProps) {
   const [showUserRoleForm, setShowUserRoleForm] = useState(false)
   const [editingUserRole, setEditingUserRole] = useState<UserRole | null>(null)
-  const [newUserRole, setNewUserRole] = useState({ name: '', colour: '#3B82F6', icon: 'Person' })
+  const [newUserRole, setNewUserRole] = useState({ name: '', colour: '#3B82F6', icon: 'Person', glossy_icon: undefined as string | undefined })
   const [creatingUserRole, setCreatingUserRole] = useState(false)
   const [updatingUserRole, setUpdatingUserRole] = useState(false)
   const [uploadingIcon, setUploadingIcon] = useState(false)
+  const [uploadingGlossyIcon, setUploadingGlossyIcon] = useState(false)
 
   const handleCreateUserRole = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreatingUserRole(true)
     
     try {
-      await onCreateUserRole(newUserRole.name, newUserRole.colour, newUserRole.icon)
-      setNewUserRole({ name: '', colour: '#3B82F6', icon: 'Person' })
+      await onCreateUserRole(newUserRole.name, newUserRole.colour, newUserRole.icon, newUserRole.glossy_icon)
+      setNewUserRole({ name: '', colour: '#3B82F6', icon: 'Person', glossy_icon: undefined })
       setShowUserRoleForm(false)
     } catch (error) {
       console.error('Error creating user role:', error)
@@ -56,7 +57,8 @@ export function UserRoleManager({
       const success = await onUpdateUserRole(editingUserRole.id, {
         name: editingUserRole.name,
         colour: safeColour,
-        icon: editingUserRole.icon
+        icon: editingUserRole.icon,
+        glossy_icon: editingUserRole.glossy_icon
       })
       
       if (success) {
@@ -139,6 +141,74 @@ export function UserRoleManager({
     }
   }
 
+  const handleGlossyIconUploadCreate = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type - only SVG
+    if (file.type !== 'image/svg+xml') {
+      alert('Please select an SVG file')
+      return
+    }
+
+    // Validate file size (1MB limit for SVG)
+    if (file.size > 1 * 1024 * 1024) {
+      alert('File size must be less than 1MB')
+      return
+    }
+
+    setUploadingGlossyIcon(true)
+
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const svgContent = e.target?.result as string
+        setNewUserRole({ ...newUserRole, glossy_icon: svgContent })
+        setUploadingGlossyIcon(false)
+      }
+      reader.readAsText(file)
+    } catch (error) {
+      console.error('Error uploading glossy icon:', error)
+      alert('Error uploading glossy icon. Please try again.')
+      setUploadingGlossyIcon(false)
+    }
+  }
+
+  const handleGlossyIconUploadEdit = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editingUserRole) return
+    
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type - only SVG
+    if (file.type !== 'image/svg+xml') {
+      alert('Please select an SVG file')
+      return
+    }
+
+    // Validate file size (1MB limit for SVG)
+    if (file.size > 1 * 1024 * 1024) {
+      alert('File size must be less than 1MB')
+      return
+    }
+
+    setUploadingGlossyIcon(true)
+
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const svgContent = e.target?.result as string
+        setEditingUserRole({ ...editingUserRole, glossy_icon: svgContent })
+        setUploadingGlossyIcon(false)
+      }
+      reader.readAsText(file)
+    } catch (error) {
+      console.error('Error uploading glossy icon:', error)
+      alert('Error uploading glossy icon. Please try again.')
+      setUploadingGlossyIcon(false)
+    }
+  }
+
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">
       <div className="flex items-center justify-between">
@@ -162,11 +232,11 @@ export function UserRoleManager({
           isEditing={false}
           userRole={newUserRole}
           loading={creatingUserRole}
-          uploadingIcon={uploadingIcon}
+          uploadingIcon={uploadingGlossyIcon}
           onUpdate={(updates) => setNewUserRole({ ...newUserRole, ...updates })}
           onSubmit={handleCreateUserRole}
           onClose={() => setShowUserRoleForm(false)}
-          onCustomIconUpload={handleCustomIconUploadCreate}
+          onGlossyIconUpload={handleGlossyIconUploadCreate}
         />
       )}
 
@@ -176,14 +246,15 @@ export function UserRoleManager({
           userRole={{
             name: editingUserRole.name,
             colour: editingUserRole.colour,
-            icon: editingUserRole.icon || 'Person'
+            icon: editingUserRole.icon || 'Person',
+            glossy_icon: editingUserRole.glossy_icon
           }}
           loading={updatingUserRole}
-          uploadingIcon={uploadingIcon}
+          uploadingIcon={uploadingGlossyIcon}
           onUpdate={(updates) => setEditingUserRole({ ...editingUserRole, ...updates })}
           onSubmit={handleUpdateUserRole}
           onClose={() => setEditingUserRole(null)}
-          onCustomIconUpload={handleCustomIconUploadEdit}
+          onGlossyIconUpload={handleGlossyIconUploadEdit}
         />
       )}
 
