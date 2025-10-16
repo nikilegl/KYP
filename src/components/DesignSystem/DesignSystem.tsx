@@ -6,8 +6,10 @@ import { ColorShowcase } from './components/ColorShowcase'
 import { ModalShowcase } from './components/ModalShowcase'
 import { DataTableShowcase } from './components/DataTableShowcase'
 import { CardShowcase } from './components/CardShowcase'
+import { BlockNoteShowcase } from './components/BlockNoteShowcase'
 import { UserJourneyNodeShowcase } from './components/UserJourneyNodeShowcase'
 import { SegmentedControlShowcase } from './components/SegmentedControlShowcase'
+
 
 interface NavigationItem {
   id: string
@@ -106,6 +108,12 @@ export function DesignSystem({ onSignOut, userRoles = [] }: DesignSystemProps) {
       label: 'Cards',
       icon: Square,
       component: <CardShowcase />
+    },
+    {
+      id: 'blocknote',
+      label: 'BlockNote Editor',
+      icon: Type,
+      component: <BlockNoteShowcase />
     },
     {
       id: 'layout',
