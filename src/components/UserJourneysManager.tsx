@@ -1,50 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Route, Edit, Trash2, Eye } from 'lucide-react'
+import { Plus, Search, Route, Edit, Trash2, Eye, FolderOpen } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
+import { getProjects, getUserJourneys, deleteUserJourney, type UserJourney, type Project } from '../lib/database'
 
-// Mock data for now - this will be replaced with real data later
-interface WorkspaceUserJourney {
-  id: string
-  name: string
-  description: string
-  status: 'draft' | 'active' | 'archived'
-  created_at: string
-  updated_at: string
-  created_by: string
+interface UserJourneyWithProject extends UserJourney {
+  project?: Project
 }
-
-// Mock data
-const mockUserJourneys: WorkspaceUserJourney[] = [
-  {
-    id: '1',
-    name: 'Customer Onboarding Journey',
-    description: 'Complete customer onboarding process from signup to first value',
-    status: 'active',
-    created_at: '2024-01-15T10:00:00Z',
-    updated_at: '2024-01-20T14:30:00Z',
-    created_by: 'user-1'
-  },
-  {
-    id: '2',
-    name: 'Support Ticket Resolution',
-    description: 'End-to-end support ticket resolution workflow',
-    status: 'draft',
-    created_at: '2024-01-18T09:15:00Z',
-    updated_at: '2024-01-19T16:45:00Z',
-    created_by: 'user-2'
-  },
-  {
-    id: '3',
-    name: 'Product Purchase Flow',
-    description: 'Customer journey from product discovery to purchase completion',
-    status: 'active',
-    created_at: '2024-01-10T11:30:00Z',
-    updated_at: '2024-01-22T08:20:00Z',
-    created_by: 'user-1'
-  }
-]
 
 interface UserJourneysManagerProps {
   // Props will be added as needed
@@ -52,29 +15,68 @@ interface UserJourneysManagerProps {
 
 export function UserJourneysManager({}: UserJourneysManagerProps) {
   const navigate = useNavigate()
-  const [userJourneys, setUserJourneys] = useState<WorkspaceUserJourney[]>(mockUserJourneys)
+  const [userJourneys, setUserJourneys] = useState<UserJourneyWithProject[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [journeyToDelete, setJourneyToDelete] = useState<UserJourneyWithProject | null>(null)
 
-  // Filter user journeys based on search term and status
+  // Load projects and journeys on mount
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const projectsData = await getProjects()
+      setProjects(projectsData)
+
+      // Load journeys for all projects
+      const allJourneys: UserJourneyWithProject[] = []
+      for (const project of projectsData) {
+        const journeys = await getUserJourneys(project.id)
+        const journeysWithProject = journeys.map(journey => ({
+          ...journey,
+          project
+        }))
+        allJourneys.push(...journeysWithProject)
+      }
+      
+      setUserJourneys(allJourneys)
+    } catch (error) {
+      console.error('Error loading user journeys:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter user journeys based on search term and project
   const filteredUserJourneys = userJourneys.filter(journey => {
     const matchesSearch = journey.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         journey.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || journey.status === statusFilter
-    return matchesSearch && matchesStatus
+                         (journey.description && journey.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    const matchesProject = projectFilter === 'all' || journey.project_id === projectFilter
+    return matchesSearch && matchesProject
   })
 
-  // Helper function to get status colors
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return { bg: '#D1FAE5', text: '#059669' }
-      case 'draft':
-        return { bg: '#FEF3C7', text: '#D97706' }
-      case 'archived':
-        return { bg: '#F3F4F6', text: '#6B7280' }
-      default:
-        return { bg: '#F3F4F6', text: '#6B7280' }
+  // Handle delete
+  const handleDeleteClick = (journey: UserJourneyWithProject) => {
+    setJourneyToDelete(journey)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!journeyToDelete) return
+    
+    const success = await deleteUserJourney(journeyToDelete.id)
+    if (success) {
+      setUserJourneys(prev => prev.filter(j => j.id !== journeyToDelete.id))
+      setShowDeleteConfirm(false)
+      setJourneyToDelete(null)
+    } else {
+      alert('Failed to delete journey')
     }
   }
 
@@ -84,7 +86,7 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
   }
 
   // Table columns configuration
-  const columns: Column<WorkspaceUserJourney>[] = [
+  const columns: Column<UserJourneyWithProject>[] = [
     {
       key: 'name',
       header: 'Name',
@@ -98,31 +100,47 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
           <div>
             <div className="font-medium text-gray-900">{journey.name}</div>
             <div className="text-sm text-gray-500 truncate max-w-xs">
-              {journey.description}
+              {journey.description || 'No description'}
             </div>
           </div>
         </div>
       )
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: 'project',
+      header: 'Project',
       sortable: true,
-      width: '120px',
-      render: (journey) => {
-        const statusColors = getStatusColor(journey.status)
-        return (
-          <span 
-            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full"
-            style={{
-              backgroundColor: statusColors.bg,
-              color: statusColors.text
-            }}
-          >
-            {journey.status.charAt(0).toUpperCase() + journey.status.slice(1)}
+      width: '200px',
+      render: (journey) => (
+        <div className="flex items-center gap-2">
+          <FolderOpen size={14} className="text-gray-400" />
+          <span className="text-sm text-gray-700">
+            {journey.project?.name || 'Unknown Project'}
           </span>
-        )
-      }
+        </div>
+      )
+    },
+    {
+      key: 'nodes_count',
+      header: 'Nodes',
+      sortable: false,
+      width: '80px',
+      render: (journey) => (
+        <div className="text-sm text-gray-600">
+          {journey.flow_data?.nodes?.length || 0}
+        </div>
+      )
+    },
+    {
+      key: 'edges_count',
+      header: 'Edges',
+      sortable: false,
+      width: '80px',
+      render: (journey) => (
+        <div className="text-sm text-gray-600">
+          {journey.flow_data?.edges?.length || 0}
+        </div>
+      )
     },
     {
       key: 'created_at',
@@ -155,25 +173,19 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="sm"
-            onClick={() => console.log('View journey:', journey.id)}
+            size="small"
+            onClick={() => navigate(`/user-journey-creator?id=${journey.id}`)}
             className="p-2"
-          >
-            <Eye size={16} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => console.log('Edit journey:', journey.id)}
-            className="p-2"
+            title="Edit journey"
           >
             <Edit size={16} />
           </Button>
           <Button
             variant="ghost"
-            size="sm"
-            onClick={() => console.log('Delete journey:', journey.id)}
+            size="small"
+            onClick={() => handleDeleteClick(journey)}
             className="p-2 text-red-600 hover:text-red-700"
+            title="Delete journey"
           >
             <Trash2 size={16} />
           </Button>
@@ -182,13 +194,24 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
     }
   ]
 
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading user journeys...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">User Journeys</h2>
-          <p className="text-gray-600">Manage workspace-level user journeys and customer experience flows</p>
+          <p className="text-gray-600">Visual flow diagrams showing user interactions and processes</p>
         </div>
         <Button
           onClick={handleCreateUserJourney}
@@ -197,6 +220,24 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
           <Plus size={20} />
           Create User Journey
         </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-lg border">
+          <div className="text-2xl font-bold text-gray-900">{userJourneys.length}</div>
+          <div className="text-sm text-gray-600">Total Journeys</div>
+        </div>
+        <div className="bg-white p-4 rounded-lg border">
+          <div className="text-2xl font-bold text-gray-900">{projects.length}</div>
+          <div className="text-sm text-gray-600">Projects</div>
+        </div>
+        <div className="bg-white p-4 rounded-lg border">
+          <div className="text-2xl font-bold text-gray-900">
+            {userJourneys.reduce((sum, j) => sum + (j.flow_data?.nodes?.length || 0), 0)}
+          </div>
+          <div className="text-sm text-gray-600">Total Nodes</div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -212,14 +253,14 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
           />
         </div>
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="draft">Draft</option>
-          <option value="archived">Archived</option>
+          <option value="all">All Projects</option>
+          {projects.map(project => (
+            <option key={project.id} value={project.id}>{project.name}</option>
+          ))}
         </select>
       </div>
 
@@ -238,15 +279,15 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
         <div className="text-center py-12">
           <Route size={48} className="mx-auto text-gray-300 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || statusFilter !== 'all' ? 'No matching user journeys' : 'No user journeys yet'}
+            {searchTerm || projectFilter !== 'all' ? 'No matching user journeys' : 'No user journeys yet'}
           </h3>
           <p className="text-gray-500 mb-6">
-            {searchTerm || statusFilter !== 'all' 
+            {searchTerm || projectFilter !== 'all' 
               ? 'Try adjusting your search or filter criteria'
-              : 'Get started by creating your first workspace user journey'
+              : 'Get started by creating your first user journey'
             }
           </p>
-          {(!searchTerm && statusFilter === 'all') && (
+          {(!searchTerm && projectFilter === 'all') && (
             <Button
               onClick={handleCreateUserJourney}
               className="flex items-center gap-2 mx-auto"
@@ -255,6 +296,36 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
               Create User Journey
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && journeyToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete User Journey</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete "<strong>{journeyToDelete.name}</strong>"? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setJourneyToDelete(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmDelete}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete Journey
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

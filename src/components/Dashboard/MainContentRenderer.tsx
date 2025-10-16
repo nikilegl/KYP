@@ -399,7 +399,7 @@ export function MainContentRenderer({
       )
     case 'user-journey-creator':
       return (
-        <UserJourneyCreator />
+        <UserJourneyCreator userRoles={userRoles} />
       )
     case 'law-firms':
       return (
@@ -469,7 +469,7 @@ export function MainContentRenderer({
       )
     case 'design-system':
       return (
-        <DesignSystem onSignOut={onSignOut} />
+        <DesignSystem onSignOut={onSignOut} userRoles={userRoles} />
       )
     case 'stakeholders':
       return (

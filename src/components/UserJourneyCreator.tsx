@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ReactFlow,
   MiniMap,
@@ -15,133 +15,19 @@ import {
   Panel,
   NodeTypes,
   EdgeTypes,
-  Handle,
-  Position,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
-import { Save, Plus, Trash2, Download, Upload, Eye, ArrowLeft } from 'lucide-react'
+import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
+import { CustomEdge } from './DesignSystem/components/CustomEdge'
+import { Save, Plus, Download, Upload, ArrowLeft } from 'lucide-react'
+import { Modal } from './DesignSystem/components/Modal'
+import type { UserRole, Project } from '../lib/supabase'
+import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
 
-// Custom node types for user journey steps
-const nodeTypes: NodeTypes = {
-  start: StartNode,
-  process: ProcessNode,
-  decision: DecisionNode,
-  end: EndNode,
-}
+// We need to define nodeTypes inside the component to access the handlers
+// This will be moved inside the component
 
-// Custom edge types
-const edgeTypes: EdgeTypes = {}
-
-// Start Node Component
-function StartNode({ data }: { data: any }) {
-  return (
-    <div className="px-4 py-2 shadow-md rounded-md bg-green-100 border-2 border-green-500">
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="bottom"
-        style={{ background: '#10B981' }}
-      />
-      <div className="flex">
-        <div className="rounded-full w-12 h-12 flex justify-center items-center bg-green-500 text-white">
-          <span className="text-lg font-bold">S</span>
-        </div>
-        <div className="ml-2">
-          <div className="text-lg font-bold text-green-800">{data.label}</div>
-          <div className="text-sm text-green-600">{data.description}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Process Node Component
-function ProcessNode({ data }: { data: any }) {
-  return (
-    <div className="px-4 py-2 shadow-md rounded-md bg-blue-100 border-2 border-blue-500">
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="top"
-        style={{ background: '#3B82F6' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="bottom"
-        style={{ background: '#3B82F6' }}
-      />
-      <div className="flex">
-        <div className="rounded w-12 h-12 flex justify-center items-center bg-blue-500 text-white">
-          <span className="text-lg font-bold">P</span>
-        </div>
-        <div className="ml-2">
-          <div className="text-lg font-bold text-blue-800">{data.label}</div>
-          <div className="text-sm text-blue-600">{data.description}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Decision Node Component
-function DecisionNode({ data }: { data: any }) {
-  return (
-    <div className="px-4 py-2 shadow-md rounded-md bg-yellow-100 border-2 border-yellow-500">
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="top"
-        style={{ background: '#EAB308' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="right"
-        style={{ background: '#EAB308' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="bottom"
-        style={{ background: '#EAB308' }}
-      />
-      <div className="flex">
-        <div className="w-12 h-12 flex justify-center items-center bg-yellow-500 text-white transform rotate-45">
-          <span className="text-lg font-bold transform -rotate-45">D</span>
-        </div>
-        <div className="ml-2">
-          <div className="text-lg font-bold text-yellow-800">{data.label}</div>
-          <div className="text-sm text-yellow-600">{data.description}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// End Node Component
-function EndNode({ data }: { data: any }) {
-  return (
-    <div className="px-4 py-2 shadow-md rounded-md bg-red-100 border-2 border-red-500">
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="top"
-        style={{ background: '#EF4444' }}
-      />
-      <div className="flex">
-        <div className="rounded-full w-12 h-12 flex justify-center items-center bg-red-500 text-white">
-          <span className="text-lg font-bold">E</span>
-        </div>
-        <div className="ml-2">
-          <div className="text-lg font-bold text-red-800">{data.label}</div>
-          <div className="text-sm text-red-600">{data.description}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // Initial nodes for the flow
 const initialNodes: Node[] = [
@@ -149,68 +35,151 @@ const initialNodes: Node[] = [
     id: '1',
     type: 'start',
     position: { x: 250, y: 25 },
-    data: { 
+    selectable: false,
+    data: {
       label: 'User Starts Journey',
-      description: 'User begins their interaction'
+      description: 'User begins their interaction',
+      type: 'start',
+      variant: 'default'
     },
   },
   {
     id: '2',
     type: 'process',
     position: { x: 100, y: 125 },
-    data: { 
+    selectable: false,
+    data: {
       label: 'Initial Action',
-      description: 'User performs first action'
+      description: 'User performs first action',
+      type: 'process',
+      variant: 'default'
     },
   },
   {
     id: '3',
     type: 'decision',
     position: { x: 400, y: 125 },
-    data: { 
+    selectable: false,
+    data: {
       label: 'Decision Point',
-      description: 'User makes a choice'
+      description: 'User makes a choice',
+      type: 'decision',
+      variant: 'default'
     },
   },
   {
     id: '4',
     type: 'end',
     position: { x: 250, y: 250 },
-    data: { 
+    selectable: false,
+    data: {
       label: 'Journey Complete',
-      description: 'User reaches goal'
+      description: 'User reaches goal',
+      type: 'end',
+      variant: 'default'
     },
   },
 ]
 
 // Initial edges for the flow
 const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', animated: true },
-  { id: 'e1-3', source: '1', target: '3', animated: true },
-  { id: 'e2-4', source: '2', target: '4', animated: true },
-  { id: 'e3-4', source: '3', target: '4', animated: true },
+  { id: 'e1-2', source: '1', target: '2', data: {} },
+  { id: 'e1-3', source: '1', target: '3', data: {} },
+  { id: 'e2-4', source: '2', target: '4', data: {} },
+  { id: 'e3-4', source: '3', target: '4', data: {} },
 ]
 
 interface UserJourneyCreatorProps {
-  // Props will be added as needed
+  userRoles?: UserRole[]
+  projectId?: string // Optional - if provided, will auto-select that project
+  journeyId?: string // Optional - if provided, will load that journey for editing
 }
 
-export function UserJourneyCreator({}: UserJourneyCreatorProps) {
+export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: UserJourneyCreatorProps) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [journeyName, setJourneyName] = useState('New User Journey')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showConfigModal, setShowConfigModal] = useState(false)
+  const [configuringNode, setConfiguringNode] = useState<Node | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [nodeToDelete, setNodeToDelete] = useState<string | null>(null)
+  const [configForm, setConfigForm] = useState({
+    label: '',
+    description: '',
+    variant: 'default' as 'default' | 'outlined' | 'filled',
+    userRole: null as UserRole | null,
+    customProperties: {} as Record<string, unknown>
+  })
+  const [showEdgeLabelModal, setShowEdgeLabelModal] = useState(false)
+  const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
+  const [edgeLabel, setEdgeLabel] = useState('')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId || '')
+  const [saving, setSaving] = useState(false)
+  const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
+  const [loading, setLoading] = useState(true)
+
+  // Load projects and journey on mount
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const projectsData = await getProjects()
+      setProjects(projectsData)
+      
+      // Check if there's an ID in the URL query params
+      const urlJourneyId = searchParams.get('id')
+      const loadJourneyId = urlJourneyId || journeyId
+      
+      if (loadJourneyId) {
+        // Load existing journey
+        const journey = await getUserJourneyById(loadJourneyId)
+        if (journey) {
+          setCurrentJourneyId(journey.id)
+          setJourneyName(journey.name)
+          setJourneyDescription(journey.description || '')
+          setSelectedProjectId(journey.project_id)
+          
+          if (journey.flow_data) {
+            // Ensure nodes are marked as not selectable
+            const nodesWithSelection = journey.flow_data.nodes.map(node => ({
+              ...node,
+              selectable: false
+            }))
+            setNodes(nodesWithSelection)
+            setEdges(journey.flow_data.edges)
+          }
+        }
+      } else {
+        // New journey - set up defaults
+        if (projectId && projectsData.find(p => p.id === projectId)) {
+          setSelectedProjectId(projectId)
+        } else if (projectsData.length > 0 && !selectedProjectId) {
+          setSelectedProjectId(projectsData[0].id)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Handle new connections
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection) => setEdges((eds) => addEdge({ ...params, data: {} }, eds)),
     [setEdges]
   )
 
   // Validate connections (optional - can be enhanced with more logic)
-  const isValidConnection = useCallback((connection: Connection) => {
+  const isValidConnection = useCallback((connection: Edge | Connection) => {
     // Basic validation - you can add more sophisticated logic here
     return connection.source !== connection.target
   }, [])
@@ -221,33 +190,73 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
       id: `${Date.now()}`,
       type,
       position: { x: Math.random() * 400, y: Math.random() * 400 },
-      data: { 
+      selectable: false,
+      data: {
         label: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-        description: `Description for ${type} step`
+        description: `Description for ${type} step`,
+        type,
+        variant: 'default'
       },
     }
     setNodes((nds) => [...nds, newNode])
   }, [setNodes])
 
-  // Delete selected nodes
-  const deleteSelectedNodes = useCallback(() => {
-    setNodes((nds) => nds.filter((node) => !node.selected))
-    setEdges((eds) => eds.filter((edge) => !edge.selected))
-  }, [setNodes, setEdges])
-
   // Save journey
-  const saveJourney = useCallback(() => {
-    const journeyData = {
-      name: journeyName,
-      description: journeyDescription,
-      nodes,
-      edges,
-      createdAt: new Date().toISOString(),
+  const saveJourney = useCallback(async () => {
+    if (!selectedProjectId) {
+      alert('Please select a project before saving')
+      return
     }
-    console.log('Saving journey:', journeyData)
-    setShowSaveModal(false)
-    // TODO: Implement actual save functionality
-  }, [journeyName, journeyDescription, nodes, edges])
+
+    if (!journeyName.trim()) {
+      alert('Please enter a journey name')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const flowData = { nodes, edges }
+      
+      if (currentJourneyId) {
+        // Update existing journey
+        const updated = await updateUserJourney(currentJourneyId, {
+          name: journeyName,
+          description: journeyDescription,
+          flow_data: flowData
+        })
+        
+        if (updated) {
+          console.log('Journey updated successfully:', updated)
+          alert('Journey updated successfully!')
+        } else {
+          alert('Failed to update journey')
+        }
+      } else {
+        // Create new journey
+        const created = await createUserJourney(
+          selectedProjectId,
+          journeyName,
+          journeyDescription,
+          flowData
+        )
+        
+        if (created) {
+          console.log('Journey created successfully:', created)
+          setCurrentJourneyId(created.id)
+          alert('Journey saved successfully!')
+        } else {
+          alert('Failed to save journey')
+        }
+      }
+      
+      setShowSaveModal(false)
+    } catch (error) {
+      console.error('Error saving journey:', error)
+      alert('An error occurred while saving the journey')
+    } finally {
+      setSaving(false)
+    }
+  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId])
 
   // Export journey as JSON
   const exportJourney = useCallback(() => {
@@ -278,7 +287,12 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
           const journeyData = JSON.parse(e.target?.result as string)
           setJourneyName(journeyData.name || 'Imported Journey')
           setJourneyDescription(journeyData.description || '')
-          setNodes(journeyData.nodes || [])
+          // Ensure imported nodes are not selectable
+          const importedNodes = (journeyData.nodes || []).map((node: Node) => ({
+            ...node,
+            selectable: false,
+          }))
+          setNodes(importedNodes)
           setEdges(journeyData.edges || [])
         } catch (error) {
           console.error('Error importing journey:', error)
@@ -288,6 +302,208 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
       reader.readAsText(file)
     }
   }, [setNodes, setEdges])
+
+  // Configure specific node (from button click)
+  const configureNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId)
+    if (node) {
+      setConfiguringNode(node)
+      setConfigForm({
+        label: (node.data?.label as string) || '',
+        description: (node.data?.description as string) || '',
+        variant: (node.data?.variant as 'default' | 'outlined' | 'filled') || 'default',
+        userRole: (node.data?.userRole as UserRole | null) || null,
+        customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
+      })
+      setShowConfigModal(true)
+    }
+  }, [nodes])
+
+  // Save node configuration
+  const saveNodeConfiguration = useCallback(() => {
+    if (!configuringNode) return
+
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === configuringNode.id
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                ...configForm,
+                type: node.data?.type || 'process'
+              }
+            }
+          : node
+      )
+    )
+
+    setShowConfigModal(false)
+    setConfiguringNode(null)
+  }, [configuringNode, configForm, setNodes])
+
+  // Add custom property to node
+  const addCustomProperty = useCallback(() => {
+    const key = prompt('Property name:')
+    const value = prompt('Property value:')
+    if (key && value) {
+      setConfigForm(prev => ({
+        ...prev,
+        customProperties: { ...prev.customProperties, [key]: value }
+      }))
+    }
+  }, [])
+
+  // Remove custom property from node
+  const removeCustomProperty = useCallback((key: string) => {
+    setConfigForm(prev => {
+      const { [key]: _, ...rest } = prev.customProperties
+      return { ...prev, customProperties: rest }
+    })
+  }, [])
+
+  // Delete node with confirmation
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodeToDelete(nodeId)
+    setShowDeleteConfirm(true)
+  }, [])
+
+  const confirmDeleteNode = useCallback(() => {
+    if (nodeToDelete) {
+      setNodes((nds) => nds.filter((node) => node.id !== nodeToDelete))
+      setEdges((eds) => eds.filter((edge) => edge.source !== nodeToDelete && edge.target !== nodeToDelete))
+    }
+    setShowDeleteConfirm(false)
+    setNodeToDelete(null)
+  }, [nodeToDelete, setNodes, setEdges])
+
+  const cancelDeleteNode = useCallback(() => {
+    setShowDeleteConfirm(false)
+    setNodeToDelete(null)
+  }, [])
+
+  // Handle edge label editing
+  const handleEdgeLabelClick = useCallback((edgeId: string) => {
+    const edge = edges.find(e => e.id === edgeId)
+    setEditingEdgeId(edgeId)
+    setEdgeLabel((edge?.data?.label as string) || '')
+    setShowEdgeLabelModal(true)
+  }, [edges])
+
+  // Save edge label
+  const saveEdgeLabel = useCallback(() => {
+    if (!editingEdgeId) return
+
+    setEdges((eds) =>
+      eds.map((edge) =>
+        edge.id === editingEdgeId
+          ? {
+              ...edge,
+              data: {
+                ...edge.data,
+                label: edgeLabel,
+              }
+            }
+          : edge
+      )
+    )
+
+    setShowEdgeLabelModal(false)
+    setEditingEdgeId(null)
+    setEdgeLabel('')
+  }, [editingEdgeId, edgeLabel, setEdges])
+
+  // Delete edge label
+  const deleteEdgeLabel = useCallback(() => {
+    if (!editingEdgeId) return
+
+    setEdges((eds) =>
+      eds.map((edge) =>
+        edge.id === editingEdgeId
+          ? {
+              ...edge,
+              data: {
+                ...edge.data,
+                label: undefined,
+              }
+            }
+          : edge
+      )
+    )
+
+    setShowEdgeLabelModal(false)
+    setEditingEdgeId(null)
+    setEdgeLabel('')
+  }, [editingEdgeId, setEdges])
+
+  // Define edge types with label handler
+  const edgeTypes: EdgeTypes = useMemo(() => ({
+    default: (props: any) => (
+      <CustomEdge
+        {...props}
+        data={{
+          ...props.data,
+          onLabelClick: handleEdgeLabelClick,
+        }}
+      />
+    ),
+  }), [handleEdgeLabelClick])
+
+  // Define node types with handlers
+  const nodeTypes: NodeTypes = useMemo(() => ({
+    start: (props: any) => {
+      console.log('Node props:', props)
+      return (
+        <UserJourneyNode 
+          {...props} 
+          showHandles={true}
+          onEdit={() => {
+            console.log('Edit clicked for node:', props.id)
+            configureNode(props.id)
+          }}
+          onDelete={() => {
+            console.log('Delete clicked for node:', props.id)
+            handleDeleteNode(props.id)
+          }}
+        />
+      )
+    },
+    process: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        onEdit={() => configureNode(props.id)}
+        onDelete={() => handleDeleteNode(props.id)}
+      />
+    ),
+    decision: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        onEdit={() => configureNode(props.id)}
+        onDelete={() => handleDeleteNode(props.id)}
+      />
+    ),
+    end: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        onEdit={() => configureNode(props.id)}
+        onDelete={() => handleDeleteNode(props.id)}
+      />
+    ),
+  }), [configureNode, handleDeleteNode])
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading journey...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">
@@ -305,7 +521,9 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">User Journey Creator</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {currentJourneyId ? 'Edit User Journey' : 'Create User Journey'}
+            </h2>
             <p className="text-gray-600">Design and visualize user journeys with an interactive flow diagram</p>
           </div>
           <div className="flex items-center gap-3">
@@ -345,10 +563,27 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
 
       {/* Journey Details */}
       <div className="bg-white p-4 rounded-lg border">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Journey Name
+              Project *
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select a project...</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Journey Name *
             </label>
             <input
               type="text"
@@ -379,7 +614,7 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
           <span className="text-sm font-medium text-gray-700">Add Nodes:</span>
           <Button
             variant="outline"
-            size="sm"
+            size="small"
             onClick={() => addNode('start')}
             className="flex items-center gap-2"
           >
@@ -388,7 +623,7 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="small"
             onClick={() => addNode('process')}
             className="flex items-center gap-2"
           >
@@ -397,7 +632,7 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="small"
             onClick={() => addNode('decision')}
             className="flex items-center gap-2"
           >
@@ -406,24 +641,13 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="small"
             onClick={() => addNode('end')}
             className="flex items-center gap-2"
           >
             <Plus size={16} />
             End
           </Button>
-          <div className="ml-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={deleteSelectedNodes}
-              className="flex items-center gap-2 text-red-600 hover:text-red-700"
-            >
-              <Trash2 size={16} />
-              Delete Selected
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -440,42 +664,257 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
           edgeTypes={edgeTypes}
           fitView
           attributionPosition="bottom-left"
+          nodesDraggable={true}
+          nodesConnectable={true}
+          nodesFocusable={false}
+          elementsSelectable={true}
+          selectNodesOnDrag={false}
+          edgesReconnectable={true}
+          edgesFocusable={true}
         >
           <Controls />
           <MiniMap />
           <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-          <Panel position="top-right">
-            <div className="bg-white p-2 rounded shadow-lg">
-              <div className="text-xs text-gray-500">
-                <div>• Drag nodes to move them</div>
-                <div>• Click and drag from handle to handle to connect</div>
-                <div>• Select nodes and press Delete to remove</div>
-                <div>• Use mouse wheel to zoom</div>
-                <div>• Green circles = Start nodes (output only)</div>
-                <div>• Blue rectangles = Process nodes (input/output)</div>
-                <div>• Yellow diamonds = Decision nodes (multiple outputs)</div>
-                <div>• Red circles = End nodes (input only)</div>
-              </div>
-            </div>
-          </Panel>
+          
         </ReactFlow>
       </div>
+
+      {/* Configuration Modal */}
+      {showConfigModal && (
+        <Modal
+          isOpen={showConfigModal}
+          onClose={() => setShowConfigModal(false)}
+          title="Configure Node"
+        >
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Node Label
+              </label>
+              <input
+                type="text"
+                value={configForm.label}
+                onChange={(e) => setConfigForm(prev => ({ ...prev, label: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description
+              </label>
+              <input
+                type="text"
+                value={configForm.description}
+                onChange={(e) => setConfigForm(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Variant
+                </label>
+                <select
+                  value={configForm.variant}
+                  onChange={(e) => setConfigForm(prev => ({ ...prev, variant: e.target.value as 'default' | 'outlined' | 'filled' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="default">Default</option>
+                  <option value="outlined">Outlined</option>
+                  <option value="filled">Filled</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  User Role
+                </label>
+                <select
+                  value={configForm.userRole?.id || ''}
+                  onChange={(e) => {
+                    const role = userRoles.find(r => r.id === e.target.value)
+                    setConfigForm(prev => ({ ...prev, userRole: role || null }))
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">None</option>
+                  {userRoles.map((role) => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Custom Properties
+              </label>
+              <div className="space-y-2">
+                {Object.entries(configForm.customProperties).map(([key, value]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{key}:</span>
+                    <span className="text-sm">{String(value)}</span>
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => removeCustomProperty(key)}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="small"
+                  onClick={addCustomProperty}
+                >
+                  <Plus size={16} className="mr-2" />
+                  Add Property
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4">
+              <Button
+                variant="ghost"
+                onClick={() => setShowConfigModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={saveNodeConfiguration}
+              >
+                Save Configuration
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Node</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this node? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={cancelDeleteNode}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmDeleteNode}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edge Label Modal */}
+      {showEdgeLabelModal && (
+        <Modal
+          isOpen={showEdgeLabelModal}
+          onClose={() => {
+            setShowEdgeLabelModal(false)
+            setEditingEdgeId(null)
+            setEdgeLabel('')
+          }}
+          title="Edge Label"
+        >
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Label Text
+              </label>
+              <input
+                type="text"
+                value={edgeLabel}
+                onChange={(e) => setEdgeLabel(e.target.value)}
+                placeholder="e.g., 'Yes', 'No', 'Next', 'Cancel'"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveEdgeLabel()
+                  }
+                }}
+              />
+              <p className="mt-2 text-sm text-gray-500">
+                Add a label to describe this connection or transition
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <Button
+                variant="ghost"
+                onClick={deleteEdgeLabel}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                Remove Label
+              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setShowEdgeLabelModal(false)
+                    setEditingEdgeId(null)
+                    setEdgeLabel('')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={saveEdgeLabel}
+                >
+                  Save Label
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Save Modal */}
       {showSaveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Save User Journey</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {currentJourneyId ? 'Update' : 'Save'} User Journey
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Journey Name
+                  Project
+                </label>
+                <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
+                  {projects.find(p => p.id === selectedProjectId)?.name || 'No project selected'}
+                </div>
+                {!selectedProjectId && (
+                  <p className="mt-1 text-sm text-red-600">Please select a project above before saving</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Journey Name *
                 </label>
                 <input
                   type="text"
                   value={journeyName}
                   onChange={(e) => setJourneyName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter journey name"
                 />
               </div>
               <div>
@@ -487,6 +926,7 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
                   onChange={(e) => setJourneyDescription(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Optional description"
                 />
               </div>
             </div>
@@ -494,13 +934,15 @@ export function UserJourneyCreator({}: UserJourneyCreatorProps) {
               <Button
                 variant="ghost"
                 onClick={() => setShowSaveModal(false)}
+                disabled={saving}
               >
                 Cancel
               </Button>
               <Button
                 onClick={saveJourney}
+                disabled={saving || !selectedProjectId || !journeyName.trim()}
               >
-                Save Journey
+                {saving ? 'Saving...' : (currentJourneyId ? 'Update Journey' : 'Save Journey')}
               </Button>
             </div>
           </div>
