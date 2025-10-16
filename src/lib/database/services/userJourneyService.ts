@@ -3,7 +3,7 @@ import type { Node, Edge } from '@xyflow/react'
 
 export interface UserJourney {
   id: string
-  project_id: string
+  project_id: string | null
   name: string
   description?: string
   flow_data?: {
@@ -15,23 +15,35 @@ export interface UserJourney {
   short_id?: number
 }
 
-export const getUserJourneys = async (projectId: string): Promise<UserJourney[]> => {
+export const getUserJourneys = async (projectId?: string | null): Promise<UserJourney[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
-      const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
-      return stored ? JSON.parse(stored) : []
+      if (projectId) {
+        const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
+        return stored ? JSON.parse(stored) : []
+      } else {
+        // Get all journeys
+        const stored = localStorage.getItem('kyp_user_journeys_all')
+        return stored ? JSON.parse(stored) : []
+      }
     } catch {
       return []
     }
   }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('user_journeys')
       .select('*')
-      .eq('project_id', projectId)
       .order('created_at', { ascending: false })
+
+    // Filter by project if provided
+    if (projectId) {
+      query = query.eq('project_id', projectId)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
     return data || []
@@ -40,13 +52,22 @@ export const getUserJourneys = async (projectId: string): Promise<UserJourney[]>
     
     // Fallback to local storage if Supabase fails
     try {
-      const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
-      return stored ? JSON.parse(stored) : []
+      if (projectId) {
+        const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
+        return stored ? JSON.parse(stored) : []
+      } else {
+        const stored = localStorage.getItem('kyp_user_journeys_all')
+        return stored ? JSON.parse(stored) : []
+      }
     } catch (fallbackError) {
       console.error('Local storage fallback also failed:', fallbackError)
       return []
     }
   }
+}
+
+export const getAllUserJourneys = async (): Promise<UserJourney[]> => {
+  return getUserJourneys(null)
 }
 
 export const getUserJourneyById = async (journeyId: string): Promise<UserJourney | null> => {
@@ -84,19 +105,20 @@ export const getUserJourneyById = async (journeyId: string): Promise<UserJourney
 }
 
 export const createUserJourney = async (
-  projectId: string,
   name: string,
   description: string = '',
-  flowData: { nodes: Node[]; edges: Edge[] }
+  flowData: { nodes: Node[]; edges: Edge[] },
+  projectId?: string | null
 ): Promise<UserJourney | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
-      const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
+      const storageKey = projectId ? `kyp_user_journeys_${projectId}` : 'kyp_user_journeys_all'
+      const stored = localStorage.getItem(storageKey)
       const journeys = stored ? JSON.parse(stored) : []
       const newJourney: UserJourney = {
         id: `local_${Date.now()}`,
-        project_id: projectId,
+        project_id: projectId || null,
         name,
         description,
         flow_data: flowData,
@@ -106,7 +128,7 @@ export const createUserJourney = async (
       }
       
       const updatedJourneys = [newJourney, ...journeys]
-      localStorage.setItem(`kyp_user_journeys_${projectId}`, JSON.stringify(updatedJourneys))
+      localStorage.setItem(storageKey, JSON.stringify(updatedJourneys))
       return newJourney
     } catch (error) {
       console.error('Error in local storage fallback:', error)
@@ -119,7 +141,7 @@ export const createUserJourney = async (
       .from('user_journeys')
       .insert([
         {
-          project_id: projectId,
+          project_id: projectId || null,
           name,
           description,
           flow_data: flowData

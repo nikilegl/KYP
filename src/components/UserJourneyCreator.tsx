@@ -20,7 +20,7 @@ import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
-import { Save, Plus, Download, Upload, ArrowLeft } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import type { UserRole, Project } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
@@ -100,8 +100,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [journeyName, setJourneyName] = useState('New User Journey')
+  const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
+  const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [configuringNode, setConfiguringNode] = useState<Node | null>(null)
@@ -145,7 +146,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           setCurrentJourneyId(journey.id)
           setJourneyName(journey.name)
           setJourneyDescription(journey.description || '')
-          setSelectedProjectId(journey.project_id)
+          setSelectedProjectId(journey.project_id || '')
           
           if (journey.flow_data) {
             // Ensure nodes are marked as not selectable
@@ -203,13 +204,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
 
   // Save journey
   const saveJourney = useCallback(async () => {
-    if (!selectedProjectId) {
-      alert('Please select a project before saving')
+    if (!journeyName.trim()) {
+      alert('Please enter a journey name')
       return
     }
 
-    if (!journeyName.trim()) {
-      alert('Please enter a journey name')
+    // If using default name, open modal to get custom name
+    if (journeyName === 'User Journey 01' && !currentJourneyId) {
+      setShowNameEditModal(true)
       return
     }
 
@@ -234,10 +236,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       } else {
         // Create new journey
         const created = await createUserJourney(
-          selectedProjectId,
           journeyName,
           journeyDescription,
-          flowData
+          flowData,
+          selectedProjectId || null
         )
         
         if (created) {
@@ -250,6 +252,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       }
       
       setShowSaveModal(false)
+      setShowNameEditModal(false)
     } catch (error) {
       console.error('Error saving journey:', error)
       alert('An error occurred while saving the journey')
@@ -519,12 +522,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             Back to User Journeys
           </Button>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {currentJourneyId ? 'Edit User Journey' : 'Create User Journey'}
-            </h2>
-            <p className="text-gray-600">Design and visualize user journeys with an interactive flow diagram</p>
+            <div className="flex items-center gap-3 mb-1">
+              <h2 className="text-2xl font-bold text-gray-900">{journeyName}</h2>
+              <button
+                onClick={() => setShowNameEditModal(true)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                title="Edit journey name and description"
+              >
+                <Edit size={18} />
+              </button>
+            </div>
+            {journeyDescription && (
+              <p className="text-gray-600">{journeyDescription}</p>
+            )}
           </div>
           <div className="flex items-center gap-3">
           <Button
@@ -561,50 +573,24 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         </div>
       </div>
 
-      {/* Journey Details */}
+      {/* Project Selection */}
       <div className="bg-white p-4 rounded-lg border">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Project *
-            </label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a project...</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Journey Name *
-            </label>
-            <input
-              type="text"
-              value={journeyName}
-              onChange={(e) => setJourneyName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter journey name"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <input
-              type="text"
-              value={journeyDescription}
-              onChange={(e) => setJourneyDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter journey description"
-            />
-          </div>
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium text-gray-700">
+            Project
+          </label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="flex-1 max-w-md px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">No project (standalone)</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -684,7 +670,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         <Modal
           isOpen={showConfigModal}
           onClose={() => setShowConfigModal(false)}
-          title="Configure Node"
+          title="Edit Node"
         >
           <div className="space-y-6">
             <div>
@@ -787,7 +773,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 variant="primary"
                 onClick={saveNodeConfiguration}
               >
-                Save Configuration
+                Save
               </Button>
             </div>
           </div>
@@ -886,6 +872,58 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         </Modal>
       )}
 
+      {/* Name Edit Modal */}
+      {showNameEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Edit Journey Details
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Journey Name *
+                </label>
+                <input
+                  type="text"
+                  value={journeyName}
+                  onChange={(e) => setJourneyName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter journey name"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={journeyDescription}
+                  onChange={(e) => setJourneyDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Optional description"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <Button
+                variant="ghost"
+                onClick={() => setShowNameEditModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => setShowNameEditModal(false)}
+                disabled={!journeyName.trim()}
+              >
+                Save Details
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Save Modal */}
       {showSaveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -899,11 +937,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   Project
                 </label>
                 <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
-                  {projects.find(p => p.id === selectedProjectId)?.name || 'No project selected'}
+                  {selectedProjectId 
+                    ? projects.find(p => p.id === selectedProjectId)?.name || 'Unknown project'
+                    : 'No project (standalone)'}
                 </div>
-                {!selectedProjectId && (
-                  <p className="mt-1 text-sm text-red-600">Please select a project above before saving</p>
-                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -940,7 +977,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               </Button>
               <Button
                 onClick={saveJourney}
-                disabled={saving || !selectedProjectId || !journeyName.trim()}
+                disabled={saving || !journeyName.trim()}
               >
                 {saving ? 'Saving...' : (currentJourneyId ? 'Update Journey' : 'Save Journey')}
               </Button>

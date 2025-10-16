@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Route, Edit, Trash2, Eye, FolderOpen } from 'lucide-react'
+import { Plus, Search, Route, Edit, Trash2, FolderOpen } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
-import { getProjects, getUserJourneys, deleteUserJourney, type UserJourney, type Project } from '../lib/database'
+import { getProjects, getUserJourneys, deleteUserJourney, type UserJourney } from '../lib/database'
+import type { Project } from '../lib/supabase'
 
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
@@ -34,18 +35,21 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
       const projectsData = await getProjects()
       setProjects(projectsData)
 
-      // Load journeys for all projects
-      const allJourneys: UserJourneyWithProject[] = []
-      for (const project of projectsData) {
-        const journeys = await getUserJourneys(project.id)
-        const journeysWithProject = journeys.map(journey => ({
+      // Load all journeys (including those without projects)
+      const allJourneys = await getUserJourneys()
+      
+      // Enrich with project data
+      const journeysWithProject: UserJourneyWithProject[] = allJourneys.map(journey => {
+        const project = journey.project_id 
+          ? projectsData.find(p => p.id === journey.project_id)
+          : undefined
+        return {
           ...journey,
           project
-        }))
-        allJourneys.push(...journeysWithProject)
-      }
+        }
+      })
       
-      setUserJourneys(allJourneys)
+      setUserJourneys(journeysWithProject)
     } catch (error) {
       console.error('Error loading user journeys:', error)
     } finally {
@@ -57,7 +61,9 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
   const filteredUserJourneys = userJourneys.filter(journey => {
     const matchesSearch = journey.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (journey.description && journey.description.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesProject = projectFilter === 'all' || journey.project_id === projectFilter
+    const matchesProject = projectFilter === 'all' || 
+                          (projectFilter === 'none' && !journey.project_id) ||
+                          journey.project_id === projectFilter
     return matchesSearch && matchesProject
   })
 
@@ -115,7 +121,7 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
         <div className="flex items-center gap-2">
           <FolderOpen size={14} className="text-gray-400" />
           <span className="text-sm text-gray-700">
-            {journey.project?.name || 'Unknown Project'}
+            {journey.project?.name || (journey.project_id ? 'Unknown Project' : 'Standalone')}
           </span>
         </div>
       )
@@ -171,24 +177,20 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
       width: '120px',
       render: (journey) => (
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="small"
+          <button
             onClick={() => navigate(`/user-journey-creator?id=${journey.id}`)}
-            className="p-2"
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
             title="Edit journey"
           >
             <Edit size={16} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="small"
+          </button>
+          <button
             onClick={() => handleDeleteClick(journey)}
-            className="p-2 text-red-600 hover:text-red-700"
+            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
             title="Delete journey"
           >
             <Trash2 size={16} />
-          </Button>
+          </button>
         </div>
       )
     }
@@ -222,23 +224,7 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="text-2xl font-bold text-gray-900">{userJourneys.length}</div>
-          <div className="text-sm text-gray-600">Total Journeys</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="text-2xl font-bold text-gray-900">{projects.length}</div>
-          <div className="text-sm text-gray-600">Projects</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="text-2xl font-bold text-gray-900">
-            {userJourneys.reduce((sum, j) => sum + (j.flow_data?.nodes?.length || 0), 0)}
-          </div>
-          <div className="text-sm text-gray-600">Total Nodes</div>
-        </div>
-      </div>
+  
 
       {/* Filters */}
       <div className="flex items-center gap-4">
@@ -258,6 +244,7 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="all">All Projects</option>
+          <option value="none">Standalone (No Project)</option>
           {projects.map(project => (
             <option key={project.id} value={project.id}>{project.name}</option>
           ))}
@@ -265,14 +252,14 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
       </div>
 
       {/* User Journeys Table */}
-      <div className="bg-white rounded-lg border">
+
         <DataTable
           data={filteredUserJourneys}
           getItemId={(journey) => journey.id}
           columns={columns}
           className="min-w-0"
         />
-      </div>
+
 
       {/* Empty State */}
       {filteredUserJourneys.length === 0 && (
