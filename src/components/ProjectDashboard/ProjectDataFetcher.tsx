@@ -31,7 +31,9 @@ import {
   getNoteTemplates,
   getAllProjectProgressStatus,
   getTasks,
-  createTask
+  createTask,
+  getExamples,
+  getExamplesCount
 } from '../../lib/database'
 import { ProjectViewRenderer } from './ProjectViewRenderer'
 import type { 
@@ -48,7 +50,8 @@ import type {
   NoteTemplate,
   ProjectProgressStatus,
   Task,
-  UserStoryComment
+  UserStoryComment,
+  Example
 } from '../../lib/supabase'
 
 interface ProjectDataFetcherProps {
@@ -93,6 +96,10 @@ export function ProjectDataFetcher({
   const [notes, setNotes] = useState<ResearchNote[]>([])
   const [userStories, setUserStories] = useState<UserStory[]>([])
   const [storyRoles, setStoryRoles] = useState<Record<string, string[]>>({})
+  const [examples, setExamples] = useState<Example[]>([])
+  const [examplesCount, setExamplesCount] = useState(0)
+  const [userJourneys, setUserJourneys] = useState<UserJourney[]>([])
+  const [userJourneyStakeholders, setUserJourneyStakeholders] = useState<Record<string, string[]>>({})
   const [themes, setThemes] = useState<Theme[]>([])
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([])
   const [problemOverview, setProblemOverview] = useState<ProblemOverview>({
@@ -140,7 +147,9 @@ export function ProjectDataFetcher({
         researchNotesData,
         userStoriesData,
         themesData,
-        noteTemplatesData
+        noteTemplatesData,
+        examplesData,
+        examplesCountData
       ] = await Promise.all([
         getStakeholders(),
         getUserRoles(),
@@ -149,7 +158,9 @@ export function ProjectDataFetcher({
         getResearchNotes(),
         getUserStories(project.id),
         getThemes(),
-        getNoteTemplates()
+        getNoteTemplates(),
+        getExamples(project.id),
+        getExamplesCount(project.id)
       ])
       
       setAllStakeholders(stakeholdersData)
@@ -159,6 +170,8 @@ export function ProjectDataFetcher({
       setUserStories(userStoriesData)
       setThemes(themesData)
       setNoteTemplates(noteTemplatesData)
+      setExamples(examplesData)
+      setExamplesCount(examplesCountData)
       
       // Filter notes for this specific project
       const projectNotes = researchNotesData.filter(note => note.project_id === project.id)
