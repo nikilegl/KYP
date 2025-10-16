@@ -24,7 +24,7 @@ export function DashboardLayout({
   children 
 }: DashboardLayoutProps) {
   const menuItems: MenuItem[] = [
-    { id: 'projects', label: 'Projects', icon: FolderOpen },
+    { id: 'projects', label: 'Epics', icon: FolderOpen },
     { id: 'user-journeys', label: 'User Journeys', icon: Route },
     { id: 'law-firms', label: 'Law Firms', icon: Building2 },
     { id: 'themes', label: 'Themes', icon: Tag },

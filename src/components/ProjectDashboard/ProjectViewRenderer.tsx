@@ -578,7 +578,7 @@ export function ProjectViewRenderer({
   }
 
   const workspaceMenuItems = [
-    { id: 'projects', label: 'Projects', icon: FolderOpen },
+    { id: 'projects', label: 'Epics', icon: FolderOpen },
     { id: 'law-firms', label: 'Law Firms', icon: Building2 },
     { id: 'user-roles', label: 'User Roles', icon: UserCheck },
     { id: 'stakeholders', label: 'Stakeholders', icon: Users },
@@ -608,7 +608,7 @@ export function ProjectViewRenderer({
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-3"
           >
             <ArrowLeft size={20} />
-            All Projects
+            All Epics
           </button>
           <h1 className="text-lg font-semibold text-gray-900 truncate">{project.name}</h1>
           <p className="text-sm text-gray-500">Project Dashboard</p>

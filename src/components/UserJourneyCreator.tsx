@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ReactFlow,
@@ -15,16 +15,19 @@ import {
   Panel,
   NodeTypes,
   EdgeTypes,
+  useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Image, Check } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
+import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import type { UserRole, Project } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
+import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -40,6 +43,33 @@ interface UserJourneyCreatorProps {
   userRoles?: UserRole[]
   projectId?: string // Optional - if provided, will auto-select that project
   journeyId?: string // Optional - if provided, will load that journey for editing
+}
+
+// Keyboard zoom handler component
+function KeyboardZoomHandler() {
+  const { zoomIn, zoomOut } = useReactFlow()
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Cmd (Mac) or Ctrl (Windows/Linux)
+      const isModifierPressed = event.metaKey || event.ctrlKey
+
+      if (isModifierPressed) {
+        if (event.key === '+' || event.key === '=') {
+          event.preventDefault()
+          zoomIn({ duration: 200 })
+        } else if (event.key === '-' || event.key === '_') {
+          event.preventDefault()
+          zoomOut({ duration: 200 })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [zoomIn, zoomOut])
+
+  return null
 }
 
 export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: UserJourneyCreatorProps) {
@@ -69,8 +99,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId || '')
   const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
   const [loading, setLoading] = useState(true)
+  const [showImportImageModal, setShowImportImageModal] = useState(false)
+  
+  // Ref to track bullet point input elements
+  const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
+  
+  // History for undo functionality
+  const [history, setHistory] = useState<Node[][]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const isUndoing = useRef(false)
 
   // Load projects and journey on mount
   useEffect(() => {
@@ -97,10 +137,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           setSelectedProjectId(journey.project_id || '')
           
           if (journey.flow_data) {
-            // Ensure nodes are marked as not selectable
+            // Ensure nodes are selectable
             const nodesWithSelection = journey.flow_data.nodes.map(node => ({
               ...node,
-              selectable: false
+              selectable: true
             }))
             setNodes(nodesWithSelection)
             setEdges(journey.flow_data.edges)
@@ -120,6 +160,50 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       setLoading(false)
     }
   }
+
+  // Save state before drag starts (for undo)
+  const onNodeDragStart = useCallback(() => {
+    if (!isUndoing.current) {
+      const snapshot = JSON.parse(JSON.stringify(nodes))
+      setHistory((prev) => {
+        // Clear any "future" states if we're not at the end
+        const newHistory = prev.slice(0, historyIndex + 1)
+        // Add new snapshot
+        const updated = [...newHistory, snapshot]
+        // Limit history to last 50 states
+        return updated.slice(-50)
+      })
+      setHistoryIndex((prev) => prev + 1)
+    }
+  }, [nodes, historyIndex])
+
+  // Undo functionality
+  const undo = useCallback(() => {
+    if (historyIndex >= 0 && history[historyIndex]) {
+      isUndoing.current = true
+      const previousState = history[historyIndex]
+      setNodes(JSON.parse(JSON.stringify(previousState)))
+      setHistoryIndex((prev) => prev - 1)
+      
+      // Reset the flag after state updates
+      setTimeout(() => {
+        isUndoing.current = false
+      }, 50)
+    }
+  }, [historyIndex, history, setNodes])
+
+  // Keyboard shortcut for undo (Command+Z / Ctrl+Z)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        undo()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [undo])
 
   // Handle new connections
   const onConnect = useCallback(
@@ -145,7 +229,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       id: `${Date.now()}`,
       type,
       position: { x: Math.random() * 400, y: Math.random() * 400 },
-      selectable: false,
+      selectable: true,
       data: {
         label: `New ${typeLabels[type]}`,
         type,
@@ -168,7 +252,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   // Save journey
   const saveJourney = useCallback(async () => {
     if (!journeyName.trim()) {
-      alert('Please enter a journey name')
       return
     }
 
@@ -179,6 +262,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     }
 
     setSaving(true)
+    setJustSaved(false)
     try {
       const flowData = { nodes, edges }
       
@@ -187,14 +271,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         const updated = await updateUserJourney(currentJourneyId, {
           name: journeyName,
           description: journeyDescription,
-          flow_data: flowData
+          flow_data: flowData,
+          project_id: selectedProjectId || null
         })
         
         if (updated) {
           console.log('Journey updated successfully:', updated)
-          alert('Journey updated successfully!')
-        } else {
-          alert('Failed to update journey')
+          setJustSaved(true)
+          setTimeout(() => setJustSaved(false), 3000)
         }
       } else {
         // Create new journey
@@ -208,9 +292,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         if (created) {
           console.log('Journey created successfully:', created)
           setCurrentJourneyId(created.id)
-          alert('Journey saved successfully!')
-        } else {
-          alert('Failed to save journey')
+          setJustSaved(true)
+          setTimeout(() => setJustSaved(false), 3000)
         }
       }
       
@@ -218,7 +301,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       setShowNameEditModal(false)
     } catch (error) {
       console.error('Error saving journey:', error)
-      alert('An error occurred while saving the journey')
     } finally {
       setSaving(false)
     }
@@ -253,10 +335,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           const journeyData = JSON.parse(e.target?.result as string)
           setJourneyName(journeyData.name || 'Imported Journey')
           setJourneyDescription(journeyData.description || '')
-          // Ensure imported nodes are not selectable
+          // Ensure imported nodes are selectable
           const importedNodes = (journeyData.nodes || []).map((node: Node) => ({
             ...node,
-            selectable: false,
+            selectable: true,
           }))
           setNodes(importedNodes)
           setEdges(journeyData.edges || [])
@@ -268,6 +350,69 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       reader.readAsText(file)
     }
   }, [setNodes, setEdges])
+
+  // Handle AI-imported journey from image
+  const handleImportFromImage = useCallback((analyzedJourney: AnalyzedJourney) => {
+    try {
+      // Set journey metadata
+      if (analyzedJourney.name) {
+        setJourneyName(analyzedJourney.name)
+      }
+      if (analyzedJourney.description) {
+        setJourneyDescription(analyzedJourney.description)
+      }
+
+      // Convert analyzed nodes to React Flow nodes
+      const flowNodes: Node[] = analyzedJourney.nodes.map((node) => {
+        // Find matching user role if specified
+        let matchedUserRole: UserRole | null = null
+        if (node.userRole) {
+          matchedUserRole = userRoles.find(role => 
+            role.name.toLowerCase().includes(node.userRole!.toLowerCase()) ||
+            node.userRole!.toLowerCase().includes(role.name.toLowerCase())
+          ) || null
+        }
+
+        return {
+          id: node.id,
+          type: node.type,
+          position: node.position,
+          selectable: true,
+          data: {
+            label: node.label,
+            type: node.type,
+            userRole: matchedUserRole,
+            variant: node.platform || 'Legl',
+            bulletPoints: node.bulletPoints || [],
+            customProperties: {}
+          }
+        }
+      })
+
+      // Convert analyzed edges to React Flow edges
+      const flowEdges: Edge[] = analyzedJourney.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: 'custom',
+        data: {
+          label: edge.label || ''
+        }
+      }))
+
+      setNodes(flowNodes)
+      setEdges(flowEdges)
+
+      // Close the modal
+      setShowImportImageModal(false)
+
+      // Show success message
+      alert(`Successfully imported journey with ${flowNodes.length} nodes and ${flowEdges.length} connections!`)
+    } catch (error) {
+      console.error('Error processing imported journey:', error)
+      alert('Error processing the imported journey. Please try again.')
+    }
+  }, [userRoles, setNodes, setEdges])
 
   // Configure specific node (from button click)
   const configureNode = useCallback((nodeId: string) => {
@@ -354,6 +499,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     }))
   }, [])
 
+  // Handle Tab key in bullet point inputs
+  const handleBulletPointKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number, value: string) => {
+    if (e.key === 'Tab' && !e.shiftKey && value.trim()) {
+      e.preventDefault()
+      // Add new bullet point
+      setConfigForm(prev => ({
+        ...prev,
+        bulletPoints: [...prev.bulletPoints, '']
+      }))
+      // Focus the new input after it's rendered
+      setTimeout(() => {
+        const newIndex = index + 1
+        if (bulletInputRefs.current[newIndex]) {
+          bulletInputRefs.current[newIndex]?.focus()
+        }
+      }, 0)
+    }
+  }, [])
+
   // Delete node with confirmation
   const handleDeleteNode = useCallback((nodeId: string) => {
     setNodeToDelete(nodeId)
@@ -383,12 +547,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     const newNode = {
       ...nodeToDuplicate,
       id: newNodeId,
+      type: 'process', // Always set to Middle/process type
       position: {
         x: nodeToDuplicate.position.x + 50,
         y: nodeToDuplicate.position.y + 50
       },
       data: {
-        ...nodeToDuplicate.data
+        ...nodeToDuplicate.data,
+        type: 'process' // Always set to Middle/process type
       }
     }
 
@@ -554,6 +720,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             {journeyDescription && (
               <p className="text-gray-600">{journeyDescription}</p>
             )}
+            {selectedProjectId && (
+              <div className="flex items-center gap-2 mt-2">
+                <FolderOpen size={14} className="text-gray-400" />
+                <p className="text-sm text-gray-500">
+                  {projects.find(p => p.id === selectedProjectId)?.name || 'Unknown'}
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
           <Button
@@ -562,7 +736,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             className="flex items-center gap-2"
           >
             <Upload size={16} />
-            Import
+            Import JSON
           </Button>
           <input
             id="import-file"
@@ -571,6 +745,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             onChange={importJourney}
             className="hidden"
           />
+          <Button
+            variant="outline"
+            onClick={() => setShowImportImageModal(true)}
+            className="flex items-center gap-2"
+          >
+            <Image size={16} />
+            Import from Image
+          </Button>
           <Button
             variant="outline"
             onClick={exportJourney}
@@ -589,9 +771,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               }
             }}
             className="flex items-center gap-2"
+            disabled={saving || justSaved}
           >
-            <Save size={16} />
-            Save Journey
+            {justSaved ? (
+              <>
+                <Check size={16} />
+                Saved
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                {saving ? 'Saving...' : 'Save Journey'}
+              </>
+            )}
           </Button>
           </div>
         </div>
@@ -605,6 +797,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDragStart={onNodeDragStart}
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -612,9 +805,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           attributionPosition="bottom-left"
           nodesDraggable={true}
           nodesConnectable={true}
-          nodesFocusable={false}
+          nodesFocusable={true}
           elementsSelectable={true}
-          selectNodesOnDrag={false}
+          selectNodesOnDrag={true}
+          multiSelectionKeyCode="Shift"
           edgesReconnectable={true}
           edgesFocusable={true}
           snapToGrid={true}
@@ -623,7 +817,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         >
           <Controls />
           <MiniMap />
-          <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+          <Background 
+            variant={BackgroundVariant.Dots} 
+            gap={12} 
+            size={1}
+            color="#9ca3af"
+            bgColor="#e5e7eb"
+          />
+          <KeyboardZoomHandler />
           <Panel position="top-right">
             <Button
               variant="secondary"
@@ -698,9 +899,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   <div key={index} className="flex items-start gap-2 group">
                     <span className="text-gray-500 mt-2.5">•</span>
                     <input
+                      ref={(el) => bulletInputRefs.current[index] = el}
                       type="text"
                       value={bullet}
                       onChange={(e) => updateBulletPoint(index, e.target.value)}
+                      onKeyDown={(e) => handleBulletPointKeyDown(e, index, bullet)}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                       placeholder="Enter bullet point text"
                     />
@@ -928,6 +1131,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   placeholder="Optional description"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Epic
+                </label>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">No Epic</option>
+                  {projects.map(project => (
+                    <option key={project.id} value={project.id}>{project.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="flex items-center justify-end gap-3 mt-6">
               <Button
@@ -957,13 +1175,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Project
+                  Epic
                 </label>
-                <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
-                  {selectedProjectId 
-                    ? projects.find(p => p.id === selectedProjectId)?.name || 'Unknown project'
-                    : 'No project (standalone)'}
-                </div>
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">No Epic</option>
+                  {projects.map(project => (
+                    <option key={project.id} value={project.id}>{project.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1008,6 +1231,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           </div>
         </div>
       )}
+
+      {/* Import from Image Modal */}
+      <ImportJourneyImageModal
+        isOpen={showImportImageModal}
+        onClose={() => setShowImportImageModal(false)}
+        onImport={handleImportFromImage}
+      />
     </div>
   )
 }

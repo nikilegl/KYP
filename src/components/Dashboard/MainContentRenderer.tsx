@@ -262,7 +262,7 @@ export function MainContentRenderer({
             ? 'Back to Stakeholders' 
             : stakeholderDetailOrigin === 'law-firm' && originLawFirm
               ? `Back to ${originLawFirm.name}`
-              : 'Back to Project'
+              : 'Back to Epic'
         }
         onBack={onStakeholderBack}
         onUpdate={(updates) => {

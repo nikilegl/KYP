@@ -166,7 +166,7 @@ const SortableProjectCard = React.memo(function SortableProjectCard({
                 e.stopPropagation()
                 onProjectEdit(project)
               },
-              label: 'Edit Project'
+              label: 'Edit Epic'
             },
             {
               icon: <Trash2 size={16} />,
@@ -174,7 +174,7 @@ const SortableProjectCard = React.memo(function SortableProjectCard({
                 e.stopPropagation()
                 onProjectDelete(project.id, project.name)
               },
-              label: 'Delete Project',
+              label: 'Delete Epic',
               variant: 'danger'
             }
           ]}
@@ -339,21 +339,29 @@ export function ProjectManager({
             projects.find(p => p.id === pref.project_id)
           ).filter(Boolean) as Project[]
           
-          // Add any new projects that don't have preferences yet
+          // Add any new projects that don't have preferences yet - sort by most recent first
           const existingProjectIds = new Set(preferences.map(p => p.project_id))
-          const newProjects = projects.filter(p => !existingProjectIds.has(p.id))
+          const newProjects = projects
+            .filter(p => !existingProjectIds.has(p.id))
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           
-          setOrderedProjects([...ordered, ...newProjects])
+          setOrderedProjects([...newProjects, ...ordered])
         } else {
-          // Initialize preferences with current project order
-          await initializeProjectPreferences(user.id, projects.map(p => p.id))
-          setOrderedProjects([...projects])
+          // Initialize preferences with current project order - sort by most recent first
+          const sortedProjects = [...projects].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+          await initializeProjectPreferences(user.id, sortedProjects.map(p => p.id))
+          setOrderedProjects(sortedProjects)
         }
         setHasInitializedPreferences(true)
       } catch (error) {
         console.error('Error loading project preferences:', error)
-        // Fallback to original order
-        setOrderedProjects([...projects])
+        // Fallback to original order - sort by most recent first
+        const sortedProjects = [...projects].sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        setOrderedProjects(sortedProjects)
         setHasInitializedPreferences(true)
       } finally {
         setIsLoadingPreferences(false)
@@ -506,8 +514,7 @@ export function ProjectManager({
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Projects</h2>
-          <p className="text-gray-600">Manage your design and research projects</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Epics</h2>
           {isReordering && (
             <p className="text-sm text-blue-600">Saving new order...</p>
           )}
@@ -524,7 +531,7 @@ export function ProjectManager({
           variant="primary"
           size="default"
         >
-          Create Project
+          Create Epic
         </Button>
       </div>
 
@@ -532,9 +539,9 @@ export function ProjectManager({
       <FormModal
         isOpen={showProjectForm}
         onClose={() => setShowProjectForm(false)}
-        title="Create New Project"
+        title="Create New Epic"
         onSubmit={handleCreateProject}
-        submitText="Create Project"
+        submitText="Create Epic"
         cancelText="Cancel"
         loading={creatingProject}
         size="md"
@@ -569,9 +576,9 @@ export function ProjectManager({
       <FormModal
         isOpen={!!editingProject}
         onClose={() => setEditingProject(null)}
-        title="Edit Project"
+        title="Edit Epic"
         onSubmit={handleUpdateProject}
-        submitText="Update Project"
+        submitText="Update Epic"
         cancelText="Cancel"
         loading={updatingProject}
         size="md"

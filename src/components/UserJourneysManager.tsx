@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Route, Edit, Trash2, FolderOpen } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
+import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
 import { getProjects, getUserJourneys, deleteUserJourney, type UserJourney } from '../lib/database'
 import type { Project } from '../lib/supabase'
@@ -114,14 +115,14 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
     },
     {
       key: 'project',
-      header: 'Project',
+      header: 'Epic',
       sortable: true,
       width: '200px',
       render: (journey) => (
         <div className="flex items-center gap-2">
           <FolderOpen size={14} className="text-gray-400" />
           <span className="text-sm text-gray-700">
-            {journey.project?.name || (journey.project_id ? 'Unknown Project' : 'Standalone')}
+            {journey.project?.name || (journey.project_id ? 'Unknown Epic' : 'Standalone')}
           </span>
         </div>
       )
@@ -178,14 +179,20 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
       render: (journey) => (
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate(`/user-journey-creator?id=${journey.id}`)}
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/user-journey-creator?id=${journey.id}`)
+            }}
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
             title="Edit journey"
           >
             <Edit size={16} />
           </button>
           <button
-            onClick={() => handleDeleteClick(journey)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDeleteClick(journey)
+            }}
             className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
             title="Delete journey"
           >
@@ -243,8 +250,8 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
           onChange={(e) => setProjectFilter(e.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
-          <option value="all">All Projects</option>
-          <option value="none">Standalone (No Project)</option>
+          <option value="all">All Epics</option>
+          <option value="none">Standalone (No Epic)</option>
           {projects.map(project => (
             <option key={project.id} value={project.id}>{project.name}</option>
           ))}
@@ -257,43 +264,24 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
           data={filteredUserJourneys}
           getItemId={(journey) => journey.id}
           columns={columns}
+          onRowClick={(journey) => navigate(`/user-journey-creator?id=${journey.id}`)}
           className="min-w-0"
         />
 
 
-      {/* Empty State */}
-      {filteredUserJourneys.length === 0 && (
-        <div className="text-center py-12">
-          <Route size={48} className="mx-auto text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || projectFilter !== 'all' ? 'No matching user journeys' : 'No user journeys yet'}
-          </h3>
-          <p className="text-gray-500 mb-6">
-            {searchTerm || projectFilter !== 'all' 
-              ? 'Try adjusting your search or filter criteria'
-              : 'Get started by creating your first user journey'
-            }
-          </p>
-          {(!searchTerm && projectFilter === 'all') && (
-            <Button
-              onClick={handleCreateUserJourney}
-              className="flex items-center gap-2 mx-auto"
-            >
-              <Plus size={20} />
-              Create User Journey
-            </Button>
-          )}
-        </div>
-      )}
+
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && journeyToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete User Journey</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete "<strong>{journeyToDelete.name}</strong>"? This action cannot be undone.
-            </p>
+        <Modal
+          isOpen={showDeleteConfirm}
+          onClose={() => {
+            setShowDeleteConfirm(false)
+            setJourneyToDelete(null)
+          }}
+          title="Delete User Journey"
+          size="sm"
+          footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
                 variant="ghost"
@@ -312,8 +300,14 @@ export function UserJourneysManager({}: UserJourneysManagerProps) {
                 Delete Journey
               </Button>
             </div>
+          }
+        >
+          <div className="p-6">
+            <p className="text-gray-600">
+              Are you sure you want to delete "<strong>{journeyToDelete.name}</strong>"? This action cannot be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>

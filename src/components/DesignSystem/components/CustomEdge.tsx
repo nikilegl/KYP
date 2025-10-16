@@ -96,7 +96,7 @@ export function CustomEdge({
           {hasLabel ? (
             <div
               onClick={handleLabelClick}
-              className="bg-white px-3 py-1.5 rounded-full border border-gray-300 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-500 flex items-center gap-2 group"
+              className="bg-white px-3 py-1.5 rounded-full border border-gray-300 hover:shadow-md transition-all cursor-pointer hover:border-blue-500 flex items-center gap-2 group"
             >
               <span className="text-gray-700 font-medium">{data.label}</span>
               <PlusCircle

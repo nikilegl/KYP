@@ -23,7 +23,7 @@ interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
   onDelete?: () => void
 }
 
-export function UserJourneyNode({ data, selected, showHandles = false, onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
   const {
     label,
     type,
@@ -32,6 +32,9 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
     customProperties = {},
     variant = 'Legl'
   } = data || {}
+  
+  // Generate unique gradient ID for Legl logo
+  const gradientId = `legl-gradient-${id}`
 
   // Platform-specific border color
   const getBorderColor = () => {
@@ -97,7 +100,6 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
         bg-white
         border border-gray-200
         rounded-lg
-        shadow-sm
         ${selected ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-md' : ''}
         transition-all duration-200
         hover:shadow-md
@@ -119,21 +121,35 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
         />
       ))}
 
-      <div className="flex items-start justify-between gap-2">
+      {/* Main content row: Title + Bullets on left, Action buttons on right */}
+      <div className="flex items-start justify-between gap-3">
+        {/* Left column: Title and bullet points */}
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold text-gray-900 break-words">
             {label}
           </div>
+          
+          {/* Bullet Points */}
+          {bulletPoints && bulletPoints.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {bulletPoints.map((bullet, index) => (
+                <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
+                  <span className="text-gray-400 mt-0.5">•</span>
+                  <span className="flex-1">{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-1">
+        {/* Right column: Action buttons stacked vertically */}
+        <div className="flex flex-col gap-1">
           <button
             onClick={(e) => {
               e.stopPropagation()
               onEdit?.()
             }}
-            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-150"
             title="Edit node"
           >
             <Edit size={14} />
@@ -143,7 +159,7 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
               e.stopPropagation()
               onDuplicate?.()
             }}
-            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-all"
+            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors duration-150"
             title="Duplicate node"
           >
             <Copy size={14} />
@@ -159,27 +175,13 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
                 console.log('onDelete is undefined')
               }
             }}
-            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-150"
             title="Delete node"
           >
             <Trash2 size={14} />
           </button>
         </div>
       </div>
-
-      {/* Bullet Points */}
-      {bulletPoints && bulletPoints.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <ul className="space-y-1">
-            {bulletPoints.map((bullet, index) => (
-              <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
-                <span className="text-gray-400 mt-0.5">•</span>
-                <span className="flex-1">{bullet}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/* User Role Tag and Platform Label */}
       {(userRole || variant) && (
@@ -194,9 +196,24 @@ export function UserJourneyNode({ data, selected, showHandles = false, onEdit, o
           </div>
           <div>
             {variant && (
-              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                {variant}
-              </span>
+              variant === 'Legl' ? (
+                <div className="w-10 h-5">
+                  <svg viewBox="0 0 39 21" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id={gradientId} x1="39.7" y1="-.8" x2=".8" y2="22.2" gradientTransform="translate(0 22) scale(1 -1)" gradientUnits="userSpaceOnUse">
+                        <stop offset="0" stopColor="#01b88e"/>
+                        <stop offset=".9" stopColor="#86dbc8"/>
+                      </linearGradient>
+                    </defs>
+                    <path fill={`url(#${gradientId})`} d="M10.1.7h18.4c5.5,0,10,4.5,10,10h0c0,5.5-4.5,10-10,10H10.1C4.6,20.7.1,16.2.1,10.7H.1C.1,5.2,4.6.7,10.1.7Z"/>
+                    <path fill="#fff" d="M27.1,7.9c0,0,.1,0,.1.1v.7s0,4.6,0,4.6c0,.5,0,.9-.1,1.3-.4,1.1-1.3,1.9-2.3,2.2-.3,0-.6.1-.9.1,0,0,0,0,0,0-1.2,0-2.3-.6-2.9-1.6,0-.2.1-.8.4-.7.3.2,1.3.7,2.1.7s1.2-.3,1.5-.5c.2-.2.4-.7.4-1.2v-.2h0c-.4.5-1,.9-1.9.9-1.5,0-2.9-1.1-2.9-3.1,0-2,1.4-3.1,2.9-3.1,1,0,1.6.5,1.9.9v-.6s0,0,0-.1c.5-.4,1.2-.6,1.8-.6h0ZM30,4.7c0,0,.1,0,.1.1v8.8s0,0,0,.1c-.6.4-1.2.6-2,.6h0c0,0-.1,0-.1-.1V5.5s0,0,0-.1c.6-.4,1.2-.6,2-.6h0ZM16.7,8c1.8,0,3.1,1.2,3.1,3s0,.7,0,.7h-4.4c0,.2,0,.3.1.4,0,.1.1.2.2.3.2.2.6.5,1.4.5.8,0,1.8-.5,2.1-.7.2-.1.5.2.4.4-.6,1-1.7,1.8-2.9,1.8-1.5,0-2.7-1-3.2-2.3,0-.3,0-.6,0-.9,0-2.1,1.5-3.2,3.3-3.2ZM10.4,5.5c0,0,.1,0,.1.1v6.9s0,0,0,0h2.4s0,0,0,0c.3.4.5,1,.5,1.5h0c0,0,0,.1-.1.1h-4.4c-.3,0-.5-.2-.5-.5v-7.4h0,0s.3-.8,1.9-.8ZM23.9,9.9c-.9,0-1.5.7-1.5,1.5s.6,1.5,1.5,1.5c.9,0,1.4-.7,1.4-1.5s-.6-1.5-1.4-1.5ZM16.7,9.3c-.8,0-1.3.7-1.3,1.2h2.5c0-.6-.4-1.2-1.3-1.2Z"/>
+                  </svg>
+                </div>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                  {variant}
+                </span>
+              )
             )}
           </div>
         </div>

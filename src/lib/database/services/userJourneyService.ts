@@ -167,6 +167,7 @@ export const updateUserJourney = async (
     name?: string
     description?: string
     flow_data?: { nodes: Node[]; edges: Edge[] }
+    project_id?: string | null
   }
 ): Promise<UserJourney | null> => {
   if (!isSupabaseConfigured || !supabase) {

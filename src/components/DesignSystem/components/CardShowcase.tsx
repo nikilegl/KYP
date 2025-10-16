@@ -266,7 +266,7 @@ export function CardShowcase() {
                     e.stopPropagation()
                     console.log('Edit clicked')
                   },
-                  label: 'Edit Project'
+                  label: 'Edit Epic'
                 },
                 {
                   icon: <Trash2 size={16} />,
@@ -274,7 +274,7 @@ export function CardShowcase() {
                     e.stopPropagation()
                     console.log('Delete clicked')
                   },
-                  label: 'Delete Project',
+                  label: 'Delete Epic',
                   variant: 'danger'
                 }
               ]}
