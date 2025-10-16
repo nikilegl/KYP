@@ -22,7 +22,7 @@ import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Image, Check } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import type { UserRole, Project } from '../lib/supabase'
@@ -103,6 +103,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
   const [loading, setLoading] = useState(true)
   const [showImportImageModal, setShowImportImageModal] = useState(false)
+  const [showImportJsonModal, setShowImportJsonModal] = useState(false)
+  const [importJsonText, setImportJsonText] = useState('')
+  const [importJsonError, setImportJsonError] = useState<string | null>(null)
   
   // Ref to track bullet point input elements
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -325,31 +328,62 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     linkElement.click()
   }, [journeyName, journeyDescription, nodes, edges])
 
-  // Import journey from JSON
-  const importJourney = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const journeyData = JSON.parse(e.target?.result as string)
-          setJourneyName(journeyData.name || 'Imported Journey')
-          setJourneyDescription(journeyData.description || '')
-          // Ensure imported nodes are selectable
-          const importedNodes = (journeyData.nodes || []).map((node: Node) => ({
-            ...node,
-            selectable: true,
-          }))
-          setNodes(importedNodes)
-          setEdges(journeyData.edges || [])
-        } catch (error) {
-          console.error('Error importing journey:', error)
-          alert('Error importing journey. Please check the file format.')
-        }
+  // Import journey from pasted JSON text
+  const handleImportFromJson = useCallback(() => {
+    try {
+      setImportJsonError(null)
+      const journeyData = JSON.parse(importJsonText)
+      
+      if (!journeyData.nodes || !Array.isArray(journeyData.nodes)) {
+        setImportJsonError('Invalid JSON format: missing nodes array')
+        return
       }
-      reader.readAsText(file)
+      
+      // Validate and sanitize nodes
+      const importedNodes = journeyData.nodes.map((node: any) => {
+        // Ensure all required properties exist
+        if (!node.id) {
+          throw new Error('Node is missing required "id" property')
+        }
+        if (!node.position || typeof node.position.x !== 'number' || typeof node.position.y !== 'number') {
+          throw new Error('Node is missing valid "position" property with x and y coordinates')
+        }
+        if (!node.data) {
+          throw new Error('Node is missing required "data" property')
+        }
+        
+        return {
+          id: node.id,
+          type: node.type || 'process',
+          position: {
+            x: node.position.x,
+            y: node.position.y
+          },
+          data: node.data,
+          selectable: true,
+        }
+      })
+      
+      setJourneyName(journeyData.name || 'Imported Journey')
+      setJourneyDescription(journeyData.description || '')
+      
+      setNodes(importedNodes)
+      setEdges(journeyData.edges || [])
+      
+      // Close modal and reset state
+      setShowImportJsonModal(false)
+      setImportJsonText('')
+      setImportJsonError(null)
+    } catch (error) {
+      console.error('Error parsing JSON:', error)
+      if (error instanceof Error) {
+        setImportJsonError(error.message)
+      } else {
+        setImportJsonError('Invalid JSON format. Please check your input.')
+      }
     }
-  }, [setNodes, setEdges])
+  }, [importJsonText, setNodes, setEdges])
+
 
   // Handle AI-imported journey from image
   const handleImportFromImage = useCallback((analyzedJourney: AnalyzedJourney) => {
@@ -433,9 +467,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   }, [nodes])
 
   // Save node configuration
-  const saveNodeConfiguration = useCallback(() => {
+  const saveNodeConfiguration = useCallback(async () => {
     if (!configuringNode) return
 
+    // Update nodes in state
     setNodes((nds) =>
       nds.map((node) =>
         node.id === configuringNode.id
@@ -451,9 +486,33 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       )
     )
 
+    // Save to database if journey already exists
+    if (currentJourneyId) {
+      try {
+        const updatedNodes = nodes.map((node) =>
+          node.id === configuringNode.id
+            ? {
+                ...node,
+                type: configForm.type,
+                data: {
+                  ...node.data,
+                  ...configForm
+                }
+              }
+            : node
+        )
+        
+        await updateUserJourney(currentJourneyId, {
+          flow_data: { nodes: updatedNodes, edges }
+        })
+      } catch (error) {
+        console.error('Error saving node configuration:', error)
+      }
+    }
+
     setShowConfigModal(false)
     setConfiguringNode(null)
-  }, [configuringNode, configForm, setNodes])
+  }, [configuringNode, configForm, setNodes, currentJourneyId, nodes, edges])
 
   // Add custom property to node
   const addCustomProperty = useCallback(() => {
@@ -732,27 +791,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           <div className="flex items-center gap-3">
           <Button
             variant="outline"
-            onClick={() => document.getElementById('import-file')?.click()}
+            onClick={() => setShowImportJsonModal(true)}
             className="flex items-center gap-2"
           >
             <Upload size={16} />
             Import JSON
           </Button>
-          <input
-            id="import-file"
-            type="file"
-            accept=".json"
-            onChange={importJourney}
-            className="hidden"
-          />
-          <Button
+          {/* <Button
             variant="outline"
             onClick={() => setShowImportImageModal(true)}
             className="flex items-center gap-2"
           >
             <Image size={16} />
             Import from Image
-          </Button>
+          </Button> */}
           <Button
             variant="outline"
             onClick={exportJourney}
@@ -1155,7 +1207,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 Cancel
               </Button>
               <Button
-                onClick={() => setShowNameEditModal(false)}
+                onClick={async () => {
+                  // Save to database if journey already exists
+                  if (currentJourneyId && journeyName.trim()) {
+                    try {
+                      await updateUserJourney(currentJourneyId, {
+                        name: journeyName,
+                        description: journeyDescription,
+                        project_id: selectedProjectId || null
+                      })
+                    } catch (error) {
+                      console.error('Error saving journey details:', error)
+                    }
+                  }
+                  setShowNameEditModal(false)
+                }}
                 disabled={!journeyName.trim()}
               >
                 Save Details
@@ -1238,6 +1304,68 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         onClose={() => setShowImportImageModal(false)}
         onImport={handleImportFromImage}
       />
+
+      {/* Import JSON Modal */}
+      <Modal
+        isOpen={showImportJsonModal}
+        onClose={() => {
+          setShowImportJsonModal(false)
+          setImportJsonText('')
+          setImportJsonError(null)
+        }}
+        title="Import Journey from JSON"
+        size="lg"
+        footerContent={
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportJsonModal(false)
+                setImportJsonText('')
+                setImportJsonError(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportFromJson}
+              disabled={!importJsonText.trim()}
+            >
+              Import
+            </Button>
+          </div>
+        }
+      >
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-gray-600">
+            Paste your exported journey JSON below to import it.
+          </p>
+          
+          <div>
+            <textarea
+              value={importJsonText}
+              onChange={(e) => {
+                setImportJsonText(e.target.value)
+                setImportJsonError(null)
+              }}
+              placeholder='Paste your JSON here, e.g.:
+{
+  "name": "User Journey",
+  "description": "Description",
+  "nodes": [...],
+  "edges": [...]
+}'
+              className="w-full h-64 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            />
+          </div>
+
+          {importJsonError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">{importJsonError}</p>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }
