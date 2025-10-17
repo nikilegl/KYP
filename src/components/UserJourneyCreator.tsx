@@ -764,8 +764,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             Back to User Journeys
           </Button>
         </div>
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
               <h2 className="text-2xl font-bold text-gray-900">{journeyName}</h2>
               <button
@@ -788,11 +788,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               </div>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
           <Button
             variant="outline"
             onClick={() => setShowImportJsonModal(true)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 whitespace-nowrap"
           >
             <Upload size={16} />
             Import JSON
@@ -800,7 +800,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           {/* <Button
             variant="outline"
             onClick={() => setShowImportImageModal(true)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 whitespace-nowrap"
           >
             <Image size={16} />
             Import from Image
@@ -808,7 +808,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           <Button
             variant="outline"
             onClick={exportJourney}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 whitespace-nowrap"
           >
             <Download size={16} />
             Export
@@ -822,7 +822,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 setShowSaveModal(true)
               }
             }}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 whitespace-nowrap"
             disabled={saving || justSaved}
           >
             {justSaved ? (
