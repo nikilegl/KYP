@@ -90,6 +90,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     label: '',
     type: 'process' as 'start' | 'process' | 'decision' | 'end',
     variant: 'Legl' as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '',
+    thirdPartyName: '' as string,
     userRole: null as UserRole | null,
     bulletPoints: [] as string[],
     customProperties: {} as Record<string, unknown>
@@ -240,6 +241,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       label: `New ${typeLabels[nodeType]}`,
       type: nodeType,
       variant: 'Legl',
+      thirdPartyName: '',
       userRole: null,
       bulletPoints: [''],
       customProperties: {}
@@ -490,6 +492,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
         variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '') || 'Legl',
+        thirdPartyName: (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
@@ -1056,7 +1059,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 </label>
                 <select
                   value={configForm.variant}
-                  onChange={(e) => setConfigForm(prev => ({ ...prev, variant: e.target.value as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '' }))}
+                  onChange={(e) => {
+                    const newVariant = e.target.value as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+                    setConfigForm(prev => ({ 
+                      ...prev, 
+                      variant: newVariant,
+                      // Clear third party name if not selecting Third party
+                      thirdPartyName: newVariant === 'Third party' ? prev.thirdPartyName : ''
+                    }))
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">None</option>
@@ -1067,6 +1078,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   <option value="Third party">Third party</option>
                 </select>
               </div>
+
+              {/* Third Party Name Input - only shown when variant is Third party */}
+              {configForm.variant === 'Third party' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Third Party Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={configForm.thirdPartyName}
+                    onChange={(e) => setConfigForm(prev => ({ ...prev, thirdPartyName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Stripe, Auth0, Mailchimp"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
