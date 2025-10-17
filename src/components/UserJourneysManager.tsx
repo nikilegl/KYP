@@ -5,10 +5,13 @@ import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, type UserJourney } from '../lib/database'
-import type { Project } from '../lib/supabase'
+import { getLawFirms } from '../lib/database/services/lawFirmService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import type { Project, LawFirm } from '../lib/supabase'
 
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
+  lawFirms?: LawFirm[]
 }
 
 interface UserJourneysManagerProps {
@@ -19,6 +22,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const navigate = useNavigate()
   const [userJourneys, setUserJourneys] = useState<UserJourneyWithProject[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
@@ -32,6 +36,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     description: '',
     project_id: ''
   })
+  const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
+  const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
 
   // Load projects and journeys on mount
   useEffect(() => {
@@ -44,21 +50,35 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       const projectsData = await getProjects()
       setProjects(projectsData)
 
+      // Load all law firms
+      const lawFirmsData = await getLawFirms()
+      setLawFirms(lawFirmsData)
+
       // Load all journeys (including those without projects)
       const allJourneys = await getUserJourneys()
       
-      // Enrich with project data
-      const journeysWithProject: UserJourneyWithProject[] = allJourneys.map(journey => {
-        const project = journey.project_id 
-          ? projectsData.find(p => p.id === journey.project_id)
-          : undefined
-        return {
-          ...journey,
-          project
-        }
-      })
+      // Enrich with project data and law firms
+      const journeysWithData: UserJourneyWithProject[] = await Promise.all(
+        allJourneys.map(async journey => {
+          const project = journey.project_id 
+            ? projectsData.find(p => p.id === journey.project_id)
+            : undefined
+          
+          // Get law firm IDs for this journey
+          const lawFirmIds = await getUserJourneyLawFirms(journey.id)
+          
+          // Get full law firm objects
+          const lawFirms = lawFirmsData.filter(firm => lawFirmIds.includes(firm.id))
+          
+          return {
+            ...journey,
+            project,
+            lawFirms
+          }
+        })
+      )
       
-      setUserJourneys(journeysWithProject)
+      setUserJourneys(journeysWithData)
     } catch (error) {
       console.error('Error loading user journeys:', error)
     } finally {
@@ -91,6 +111,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       description: journey.description || '',
       project_id: journey.project_id || ''
     })
+    // Set selected law firms
+    setSelectedLawFirmIds(journey.lawFirms?.map(firm => firm.id) || [])
+    setLawFirmSearchQuery('')
     setShowEditModal(true)
   }
 
@@ -104,6 +127,12 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         project_id: editForm.project_id || null
       })
       
+      // Save law firm associations
+      await setUserJourneyLawFirms(journeyToEdit.id, selectedLawFirmIds)
+      
+      // Get updated law firms for local state
+      const updatedLawFirms = lawFirms.filter(firm => selectedLawFirmIds.includes(firm.id))
+      
       // Update local state
       setUserJourneys(prev => prev.map(j => 
         j.id === journeyToEdit.id 
@@ -112,13 +141,16 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               name: editForm.name, 
               description: editForm.description,
               project_id: editForm.project_id || null,
-              project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined
+              project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined,
+              lawFirms: updatedLawFirms
             }
           : j
       ))
       
       setShowEditModal(false)
       setJourneyToEdit(null)
+      setSelectedLawFirmIds([])
+      setLawFirmSearchQuery('')
     } catch (error) {
       console.error('Error updating journey:', error)
       alert('Failed to update journey')
@@ -173,7 +205,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       sortable: true,
       width: '300px',
       render: (journey) => (
-        <div className="font-medium text-gray-900">{journey.name}</div>
+        <div className="font-medium text-gray-900 break-words whitespace-normal">{journey.name}</div>
       )
     },
     {
@@ -188,13 +220,16 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       )
     },
     {
-      key: 'edges_count',
-      header: 'Edges',
+      key: 'law_firms',
+      header: 'Law Firms',
       sortable: false,
-      width: '80px',
+      width: '250px',
       render: (journey) => (
         <div className="text-sm text-gray-600">
-          {journey.flow_data?.edges?.length || 0}
+          {journey.lawFirms && journey.lawFirms.length > 0 
+            ? journey.lawFirms.map(firm => firm.name).join(', ')
+            : '—'
+          }
         </div>
       )
     },
@@ -372,6 +407,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           onClose={() => {
             setShowEditModal(false)
             setJourneyToEdit(null)
+            setSelectedLawFirmIds([])
+            setLawFirmSearchQuery('')
           }}
           title="Edit Journey Details"
           size="md"
@@ -382,6 +419,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                 onClick={() => {
                   setShowEditModal(false)
                   setJourneyToEdit(null)
+                  setSelectedLawFirmIds([])
+                  setLawFirmSearchQuery('')
                 }}
               >
                 Cancel
@@ -436,6 +475,59 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                   <option key={project.id} value={project.id}>{project.name}</option>
                 ))}
               </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Law Firms
+              </label>
+              <input
+                type="text"
+                value={lawFirmSearchQuery}
+                onChange={(e) => setLawFirmSearchQuery(e.target.value)}
+                placeholder="Search law firms..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+              />
+              <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
+                {lawFirms
+                  .filter(firm => 
+                    lawFirmSearchQuery.trim() === '' || 
+                    firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
+                  )
+                  .map(firm => (
+                    <label
+                      key={firm.id}
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLawFirmIds.includes(firm.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedLawFirmIds(prev => [...prev, firm.id])
+                          } else {
+                            setSelectedLawFirmIds(prev => prev.filter(id => id !== firm.id))
+                          }
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{firm.name}</span>
+                    </label>
+                  ))}
+                {lawFirms.filter(firm => 
+                  lawFirmSearchQuery.trim() === '' || 
+                  firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
+                ).length === 0 && (
+                  <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                    No law firms found
+                  </div>
+                )}
+              </div>
+              {selectedLawFirmIds.length > 0 && (
+                <div className="mt-2 text-sm text-gray-600">
+                  {selectedLawFirmIds.length} law firm{selectedLawFirmIds.length !== 1 ? 's' : ''} selected
+                </div>
+              )}
             </div>
           </div>
         </Modal>

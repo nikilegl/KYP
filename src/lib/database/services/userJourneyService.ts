@@ -252,3 +252,73 @@ export const deleteUserJourney = async (journeyId: string): Promise<boolean> => 
   }
 }
 
+// Law Firm associations
+export const getUserJourneyLawFirms = async (journeyId: string): Promise<string[]> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      const stored = localStorage.getItem(`kyp_user_journey_law_firms_${journeyId}`)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('law_firm_user_journeys')
+      .select('law_firm_id')
+      .eq('user_journey_id', journeyId)
+
+    if (error) throw error
+    return (data || []).map(item => item.law_firm_id)
+  } catch (error) {
+    console.error('Error fetching user journey law firms:', error)
+    return []
+  }
+}
+
+export const setUserJourneyLawFirms = async (
+  journeyId: string,
+  lawFirmIds: string[]
+): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      localStorage.setItem(`kyp_user_journey_law_firms_${journeyId}`, JSON.stringify(lawFirmIds))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  try {
+    // First, delete existing associations
+    const { error: deleteError } = await supabase
+      .from('law_firm_user_journeys')
+      .delete()
+      .eq('user_journey_id', journeyId)
+
+    if (deleteError) throw deleteError
+
+    // Then, insert new associations
+    if (lawFirmIds.length > 0) {
+      const { error: insertError } = await supabase
+        .from('law_firm_user_journeys')
+        .insert(
+          lawFirmIds.map(lawFirmId => ({
+            user_journey_id: journeyId,
+            law_firm_id: lawFirmId
+          }))
+        )
+
+      if (insertError) throw insertError
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error setting user journey law firms:', error)
+    return false
+  }
+}
+
