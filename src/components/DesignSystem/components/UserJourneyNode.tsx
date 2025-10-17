@@ -12,7 +12,7 @@ export interface UserJourneyNodeData {
   userRole?: UserRole
   bulletPoints?: string[]
   customProperties?: Record<string, unknown>
-  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | ''
+  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
 }
 
 interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
