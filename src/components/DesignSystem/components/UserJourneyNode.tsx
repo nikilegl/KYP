@@ -12,7 +12,8 @@ export interface UserJourneyNodeData {
   userRole?: UserRole
   bulletPoints?: string[]
   customProperties?: Record<string, unknown>
-  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | ''
+  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+  thirdPartyName?: string
 }
 
 interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
@@ -30,7 +31,8 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, onEdi
     userRole,
     bulletPoints = [],
     customProperties = {},
-    variant = 'Legl'
+    variant = 'Legl',
+    thirdPartyName = ''
   } = data || {}
   
   // Generate unique gradient ID for Legl logo
@@ -211,7 +213,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, onEdi
                 </div>
               ) : (
                 <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                  {variant}
+                  {variant === 'Third party' && thirdPartyName ? thirdPartyName : variant}
                 </span>
               )
             )}

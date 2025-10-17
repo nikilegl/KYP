@@ -8,7 +8,7 @@ export interface JourneyNode {
   label: string
   type: 'start' | 'process' | 'end'
   userRole?: string
-  platform?: 'CMS' | 'Legl' | 'End client' | 'Back end' | ''
+  platform?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
   bulletPoints?: string[]
   position: { x: number; y: number }
 }
@@ -123,9 +123,9 @@ Extract:
    - label: The main text/title of the node
    - type: Determine if it's "start" (first step), "process" (middle step), or "end" (final step)
    - userRole: If mentioned, the role performing this step (e.g., "Client", "Developer", "Admin")
-   - platform: If mentioned, one of: "CMS", "Legl", "End client", "Back end", or empty string
+   - platform: If mentioned, one of: "CMS", "Legl", "End client", "Back end", "Third party", or empty string
    - bulletPoints: Any bullet points or sub-items listed in the node
-   - position: Estimate x,y coordinates based on visual layout (x: 0-800, y: 0-600, spaced ~200 apart)
+   - position: Estimate x,y coordinates based on visual layout (x: horizontal spacing 380-400px apart, y: vertical spacing 240-260px apart for rows)
 
 2. **Edges**: Connections/arrows between nodes
    - id: Generate unique identifier (e.g., "edge-1-2")
@@ -170,7 +170,9 @@ Guidelines:
 - Extract any descriptive text from nodes
 - Identify all arrows/lines connecting nodes
 - If nodes are in a clear sequence, assign types accordingly (first=start, middle=process, last=end)
-- Space nodes evenly in positions (approximately 200px apart)
+- Space nodes evenly: 380-400px horizontally (nodes are 320px wide), 240-260px vertically between rows
+- For linear flows: position nodes at x: 100, 480, 860, 1240... (380px spacing)
+- For multi-row layouts: use y: 100 for first row, 340 for second row, 580 for third row (240px spacing)
 
 Return ONLY the JSON object, no other text.`
 }
@@ -211,8 +213,8 @@ function processJourneyData(data: any): AnalyzedJourney {
     platform: normalizePlatform(node.platform),
     bulletPoints: Array.isArray(node.bulletPoints) ? node.bulletPoints.filter((bp: any) => bp) : undefined,
     position: {
-      x: typeof node.position?.x === 'number' ? node.position.x : (index % 3) * 250 + 100,
-      y: typeof node.position?.y === 'number' ? node.position.y : Math.floor(index / 3) * 200 + 100
+      x: typeof node.position?.x === 'number' ? node.position.x : (index % 3) * 380 + 100,
+      y: typeof node.position?.y === 'number' ? node.position.y : Math.floor(index / 3) * 240 + 100
     }
   }))
 
@@ -244,12 +246,13 @@ function normalizeNodeType(type: any): 'start' | 'process' | 'end' {
 /**
  * Normalize platform to valid values
  */
-function normalizePlatform(platform: any): 'CMS' | 'Legl' | 'End client' | 'Back end' | '' {
+function normalizePlatform(platform: any): 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '' {
   const platformStr = String(platform || '').toLowerCase()
   if (platformStr.includes('cms')) return 'CMS'
   if (platformStr.includes('legl')) return 'Legl'
   if (platformStr.includes('end client') || platformStr.includes('frontend') || platformStr.includes('client')) return 'End client'
   if (platformStr.includes('back end') || platformStr.includes('backend') || platformStr.includes('server')) return 'Back end'
+  if (platformStr.includes('third party') || platformStr.includes('3rd party') || platformStr.includes('external')) return 'Third party'
   return ''
 }
 

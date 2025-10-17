@@ -89,7 +89,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [configForm, setConfigForm] = useState({
     label: '',
     type: 'process' as 'start' | 'process' | 'decision' | 'end',
-    variant: 'Legl' as 'CMS' | 'Legl' | 'End client' | 'Back end' | '',
+    variant: 'Legl' as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '',
+    thirdPartyName: '' as string,
     userRole: null as UserRole | null,
     bulletPoints: [] as string[],
     customProperties: {} as Record<string, unknown>
@@ -240,6 +241,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       label: `New ${typeLabels[nodeType]}`,
       type: nodeType,
       variant: 'Legl',
+      thirdPartyName: '',
       userRole: null,
       bulletPoints: [''],
       customProperties: {}
@@ -350,6 +352,36 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           throw new Error('Node is missing required "data" property')
         }
         
+        // Convert userRole string to UserRole object if needed
+        let userRoleObj = null
+        if (node.data.userRole) {
+          if (typeof node.data.userRole === 'string') {
+            // Trim and normalize the user role name
+            const userRoleName = node.data.userRole.trim()
+            
+            // Find the UserRole object by name (case-insensitive)
+            userRoleObj = userRoles.find(
+              role => role.name.toLowerCase().trim() === userRoleName.toLowerCase()
+            ) || null
+            
+            // Debug logging
+            if (!userRoleObj) {
+              console.warn(`Could not find user role: "${userRoleName}"`)
+              console.log('Available user roles:', userRoles.map(r => `"${r.name}"`).join(', '))
+              console.log('Checking exact matches:')
+              userRoles.forEach(role => {
+                const match = role.name.toLowerCase().trim() === userRoleName.toLowerCase()
+                console.log(`  "${role.name}" (${role.name.length} chars) vs "${userRoleName}" (${userRoleName.length} chars): ${match}`)
+              })
+            } else {
+              console.log(`Successfully mapped "${userRoleName}" to user role:`, userRoleObj.name)
+            }
+          } else if (typeof node.data.userRole === 'object' && node.data.userRole.id) {
+            // Already a UserRole object
+            userRoleObj = node.data.userRole
+          }
+        }
+        
         return {
           id: node.id,
           type: node.type || 'process',
@@ -357,7 +389,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             x: node.position.x,
             y: node.position.y
           },
-          data: node.data,
+          data: {
+            ...node.data,
+            userRole: userRoleObj
+          },
           selectable: true,
         }
       })
@@ -380,7 +415,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         setImportJsonError('Invalid JSON format. Please check your input.')
       }
     }
-  }, [importJsonText, setNodes, setEdges])
+  }, [importJsonText, setNodes, setEdges, userRoles])
 
 
   // Handle AI-imported journey from image
@@ -456,7 +491,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       setConfigForm({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
-        variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | '') || 'Legl',
+        variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '') || 'Legl',
+        thirdPartyName: (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
@@ -1023,7 +1059,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 </label>
                 <select
                   value={configForm.variant}
-                  onChange={(e) => setConfigForm(prev => ({ ...prev, variant: e.target.value as 'CMS' | 'Legl' | 'End client' | 'Back end' | '' }))}
+                  onChange={(e) => {
+                    const newVariant = e.target.value as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+                    setConfigForm(prev => ({ 
+                      ...prev, 
+                      variant: newVariant,
+                      // Clear third party name if not selecting Third party
+                      thirdPartyName: newVariant === 'Third party' ? prev.thirdPartyName : ''
+                    }))
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">None</option>
@@ -1031,8 +1075,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   <option value="Legl">Legl</option>
                   <option value="End client">End client</option>
                   <option value="Back end">Back end</option>
+                  <option value="Third party">Third party</option>
                 </select>
               </div>
+
+              {/* Third Party Name Input - only shown when variant is Third party */}
+              {configForm.variant === 'Third party' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Third Party Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={configForm.thirdPartyName}
+                    onChange={(e) => setConfigForm(prev => ({ ...prev, thirdPartyName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Stripe, Auth0, Mailchimp"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
