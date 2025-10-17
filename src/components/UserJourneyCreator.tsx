@@ -83,6 +83,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [configuringNode, setConfiguringNode] = useState<Node | null>(null)
+  const [isAddingNewNode, setIsAddingNewNode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [nodeToDelete, setNodeToDelete] = useState<string | null>(null)
   const [configForm, setConfigForm] = useState({
@@ -128,6 +129,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       
       // Check if there's an ID in the URL query params
       const urlJourneyId = searchParams.get('id')
+      const urlProjectId = searchParams.get('projectId')
       const loadJourneyId = urlJourneyId || journeyId
       
       if (loadJourneyId) {
@@ -151,8 +153,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         }
       } else {
         // New journey - set up defaults
-        if (projectId && projectsData.find(p => p.id === projectId)) {
-          setSelectedProjectId(projectId)
+        // Check URL params first, then props, then default to first project
+        const initialProjectId = urlProjectId || projectId
+        if (initialProjectId && projectsData.find(p => p.id === initialProjectId)) {
+          setSelectedProjectId(initialProjectId)
         } else if (projectsData.length > 0 && !selectedProjectId) {
           setSelectedProjectId(projectsData[0].id)
         }
@@ -220,37 +224,31 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     return connection.source !== connection.target
   }, [])
 
-  // Add new node
-  const addNode = useCallback((type: 'start' | 'process' | 'decision' | 'end') => {
+  // Smart add node - opens modal to configure node before adding
+  const smartAddNode = useCallback(() => {
+    const hasStartNode = nodes.some(node => node.type === 'start')
+    const nodeType = hasStartNode ? 'process' : 'start'
     const typeLabels = {
       start: 'Start',
       process: 'Middle',
       decision: 'Decision',
       end: 'End'
     }
-    const newNode: Node = {
-      id: `${Date.now()}`,
-      type,
-      position: { x: Math.random() * 400, y: Math.random() * 400 },
-      selectable: true,
-      data: {
-        label: `New ${typeLabels[type]}`,
-        type,
-        variant: 'Legl'
-      },
-    }
-    setNodes((nds) => [...nds, newNode])
-  }, [setNodes])
-
-  // Smart add node - adds start if no start exists, otherwise adds middle
-  const smartAddNode = useCallback(() => {
-    const hasStartNode = nodes.some(node => node.type === 'start')
-    if (hasStartNode) {
-      addNode('process')
-    } else {
-      addNode('start')
-    }
-  }, [nodes, addNode])
+    
+    // Set up form for new node
+    setConfigForm({
+      label: `New ${typeLabels[nodeType]}`,
+      type: nodeType,
+      variant: 'Legl',
+      userRole: null,
+      bulletPoints: [''],
+      customProperties: {}
+    })
+    
+    setIsAddingNewNode(true)
+    setConfiguringNode(null)
+    setShowConfigModal(true)
+  }, [nodes])
 
   // Save journey
   const saveJourney = useCallback(async () => {
@@ -453,6 +451,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     const node = nodes.find(n => n.id === nodeId)
     if (node) {
       setConfiguringNode(node)
+      setIsAddingNewNode(false)
       const existingBulletPoints = (node.data?.bulletPoints as string[]) || []
       setConfigForm({
         label: (node.data?.label as string) || '',
@@ -468,28 +467,37 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
 
   // Save node configuration
   const saveNodeConfiguration = useCallback(async () => {
-    if (!configuringNode) return
+    if (isAddingNewNode) {
+      // Create a new node
+      const newNode: Node = {
+        id: `${Date.now()}`,
+        type: configForm.type,
+        position: { x: Math.random() * 400, y: Math.random() * 400 },
+        selectable: true,
+        data: {
+          ...configForm
+        },
+      }
+      
+      setNodes((nds) => [...nds, newNode])
+      
+      // Save to database if journey already exists
+      if (currentJourneyId) {
+        try {
+          const updatedNodes = [...nodes, newNode]
+          await updateUserJourney(currentJourneyId, {
+            flow_data: { nodes: updatedNodes, edges }
+          })
+        } catch (error) {
+          console.error('Error saving new node:', error)
+        }
+      }
+    } else {
+      // Update existing node
+      if (!configuringNode) return
 
-    // Update nodes in state
-    setNodes((nds) =>
-      nds.map((node) =>
-        node.id === configuringNode.id
-          ? {
-              ...node,
-              type: configForm.type, // Update the node type for React Flow
-              data: {
-                ...node.data,
-                ...configForm
-              }
-            }
-          : node
-      )
-    )
-
-    // Save to database if journey already exists
-    if (currentJourneyId) {
-      try {
-        const updatedNodes = nodes.map((node) =>
+      setNodes((nds) =>
+        nds.map((node) =>
           node.id === configuringNode.id
             ? {
                 ...node,
@@ -501,18 +509,37 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               }
             : node
         )
-        
-        await updateUserJourney(currentJourneyId, {
-          flow_data: { nodes: updatedNodes, edges }
-        })
-      } catch (error) {
-        console.error('Error saving node configuration:', error)
+      )
+
+      // Save to database if journey already exists
+      if (currentJourneyId) {
+        try {
+          const updatedNodes = nodes.map((node) =>
+            node.id === configuringNode.id
+              ? {
+                  ...node,
+                  type: configForm.type,
+                  data: {
+                    ...node.data,
+                    ...configForm
+                  }
+                }
+              : node
+          )
+          
+          await updateUserJourney(currentJourneyId, {
+            flow_data: { nodes: updatedNodes, edges }
+          })
+        } catch (error) {
+          console.error('Error saving node configuration:', error)
+        }
       }
     }
 
     setShowConfigModal(false)
     setConfiguringNode(null)
-  }, [configuringNode, configForm, setNodes, currentJourneyId, nodes, edges])
+    setIsAddingNewNode(false)
+  }, [isAddingNewNode, configuringNode, configForm, setNodes, currentJourneyId, nodes, edges])
 
   // Add custom property to node
   const addCustomProperty = useCallback(() => {
@@ -766,7 +793,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
+          {selectedProjectId && (
+              <div className="flex items-center gap-2 mb-2">
+                <FolderOpen size={14} className="text-gray-400" />
+                <p className="text-sm text-gray-500">
+                  {projects.find(p => p.id === selectedProjectId)?.name || 'Unknown'}
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-3 mb-1">
+              
               <h2 className="text-2xl font-bold text-gray-900">{journeyName}</h2>
               <button
                 onClick={() => setShowNameEditModal(true)}
@@ -779,14 +815,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             {journeyDescription && (
               <p className="text-gray-600">{journeyDescription}</p>
             )}
-            {selectedProjectId && (
-              <div className="flex items-center gap-2 mt-2">
-                <FolderOpen size={14} className="text-gray-400" />
-                <p className="text-sm text-gray-500">
-                  {projects.find(p => p.id === selectedProjectId)?.name || 'Unknown'}
-                </p>
-              </div>
-            )}
+            
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
           <Button
@@ -894,13 +923,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       {showConfigModal && (
         <Modal
           isOpen={showConfigModal}
-          onClose={() => setShowConfigModal(false)}
-          title="Edit Node"
+          onClose={() => {
+            setShowConfigModal(false)
+            setIsAddingNewNode(false)
+          }}
+          title={isAddingNewNode ? "Add Node" : "Edit Node"}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
                 variant="ghost"
-                onClick={() => setShowConfigModal(false)}
+                onClick={() => {
+                  setShowConfigModal(false)
+                  setIsAddingNewNode(false)
+                }}
               >
                 Cancel
               </Button>

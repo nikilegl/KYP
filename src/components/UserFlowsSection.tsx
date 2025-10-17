@@ -1,6 +1,6 @@
 import React from 'react'
-import { UserJourneysSection } from './UserJourneysSection'
-import type { Stakeholder, UserRole, LawFirm } from '../lib/supabase'
+import { UserJourneysManager } from './UserJourneysManager'
+import type { Stakeholder, UserRole, LawFirm, UserPermission } from '../lib/supabase'
 
 interface UserFlowsSectionProps {
   projectId: string
@@ -18,12 +18,6 @@ export function UserFlowsSection({
   lawFirms 
 }: UserFlowsSectionProps) {
   return (
-    <UserJourneysSection
-      projectId={projectId}
-      assignedStakeholders={assignedStakeholders}
-      userRoles={userRoles}
-      userPermissions={userPermissions}
-      lawFirms={lawFirms}
-    />
+    <UserJourneysManager projectId={projectId} />
   )
 }
