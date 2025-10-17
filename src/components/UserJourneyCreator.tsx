@@ -25,8 +25,10 @@ import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
-import type { UserRole, Project } from '../lib/supabase'
+import type { UserRole, Project, LawFirm } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
+import { getLawFirms } from '../lib/database/services/lawFirmService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 
 // We need to define nodeTypes inside the component to access the handlers
@@ -108,6 +110,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [showImportJsonModal, setShowImportJsonModal] = useState(false)
   const [importJsonText, setImportJsonText] = useState('')
   const [importJsonError, setImportJsonError] = useState<string | null>(null)
+  const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
+  const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
+  const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
   
   // Ref to track bullet point input elements
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -128,6 +133,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       const projectsData = await getProjects()
       setProjects(projectsData)
       
+      // Load all law firms
+      const lawFirmsData = await getLawFirms()
+      setLawFirms(lawFirmsData)
+      
       // Check if there's an ID in the URL query params
       const urlJourneyId = searchParams.get('id')
       const urlProjectId = searchParams.get('projectId')
@@ -141,6 +150,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           setJourneyName(journey.name)
           setJourneyDescription(journey.description || '')
           setSelectedProjectId(journey.project_id || '')
+          
+          // Load associated law firms
+          const lawFirmIds = await getUserJourneyLawFirms(journey.id)
+          setSelectedLawFirmIds(lawFirmIds)
           
           if (journey.flow_data) {
             // Ensure nodes are selectable
@@ -279,6 +292,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         })
         
         if (updated) {
+          // Save law firm associations
+          await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
+          
           console.log('Journey updated successfully:', updated)
           setJustSaved(true)
           setTimeout(() => setJustSaved(false), 3000)
@@ -293,6 +309,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         )
         
         if (created) {
+          // Save law firm associations
+          await setUserJourneyLawFirms(created.id, selectedLawFirmIds)
+          
           console.log('Journey created successfully:', created)
           setCurrentJourneyId(created.id)
           setJustSaved(true)
@@ -1294,6 +1313,59 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   ))}
                 </select>
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Law Firms
+                </label>
+                <input
+                  type="text"
+                  value={lawFirmSearchQuery}
+                  onChange={(e) => setLawFirmSearchQuery(e.target.value)}
+                  placeholder="Search law firms..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+                />
+                <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
+                  {lawFirms
+                    .filter(firm => 
+                      lawFirmSearchQuery.trim() === '' || 
+                      firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
+                    )
+                    .map(firm => (
+                      <label
+                        key={firm.id}
+                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedLawFirmIds.includes(firm.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLawFirmIds(prev => [...prev, firm.id])
+                            } else {
+                              setSelectedLawFirmIds(prev => prev.filter(id => id !== firm.id))
+                            }
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{firm.name}</span>
+                      </label>
+                    ))}
+                  {lawFirms.filter(firm => 
+                    lawFirmSearchQuery.trim() === '' || 
+                    firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
+                  ).length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                      No law firms found
+                    </div>
+                  )}
+                </div>
+                {selectedLawFirmIds.length > 0 && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    {selectedLawFirmIds.length} law firm{selectedLawFirmIds.length !== 1 ? 's' : ''} selected
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-end gap-3 mt-6">
               <Button
@@ -1312,6 +1384,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                         description: journeyDescription,
                         project_id: selectedProjectId || null
                       })
+                      
+                      // Save law firm associations
+                      await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
                     } catch (error) {
                       console.error('Error saving journey details:', error)
                     }
@@ -1373,6 +1448,59 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Optional description"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Law Firms
+                </label>
+                <input
+                  type="text"
+                  value={lawFirmSearchQuery}
+                  onChange={(e) => setLawFirmSearchQuery(e.target.value)}
+                  placeholder="Search law firms..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
+                />
+                <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
+                  {lawFirms
+                    .filter(firm => 
+                      lawFirmSearchQuery.trim() === '' || 
+                      firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
+                    )
+                    .map(firm => (
+                      <label
+                        key={firm.id}
+                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedLawFirmIds.includes(firm.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLawFirmIds(prev => [...prev, firm.id])
+                            } else {
+                              setSelectedLawFirmIds(prev => prev.filter(id => id !== firm.id))
+                            }
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{firm.name}</span>
+                      </label>
+                    ))}
+                  {lawFirms.filter(firm => 
+                    lawFirmSearchQuery.trim() === '' || 
+                    firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
+                  ).length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                      No law firms found
+                    </div>
+                  )}
+                </div>
+                {selectedLawFirmIds.length > 0 && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    {selectedLawFirmIds.length} law firm{selectedLawFirmIds.length !== 1 ? 's' : ''} selected
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 mt-6">
