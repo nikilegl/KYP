@@ -17,7 +17,8 @@ import {
   Palette,
   Clipboard,
   CheckSquare,
-  Clock
+  Clock,
+  Route
 } from 'lucide-react'
 import { ProjectOverview } from '../ProjectOverview'
 
@@ -36,6 +37,8 @@ import { ProjectTaskManager } from '../ProjectTaskManager'
 import { ProjectProgressSection } from '../ProjectProgressSection'
 import { DecisionHistory } from '../DecisionHistory'
 import { ExampleForm } from '../ExampleForm'
+import { UserJourneysManager } from '../UserJourneysManager'
+import { UserFlowsSection } from '../UserFlowsSection'
 import { 
   createExample, 
   updateExample, 
@@ -363,6 +366,7 @@ export function ProjectViewRenderer({
 
   const menuItems = [
     { id: 'dashboard', label: 'Overview', icon: FolderOpen },
+    { id: 'user-journeys', label: 'User Journeys', icon: Route },
     { id: 'notes', label: 'Notes & Calls', icon: FileText },  
     { id: 'user-stories', label: 'User Stories', icon: BookOpen },
     { id: 'designs', label: 'Designs', icon: Palette },    
@@ -585,6 +589,10 @@ export function ProjectViewRenderer({
             }}
             onStoriesReordered={onStoriesReordered}
           />
+        )
+      case 'user-journeys':
+        return (
+          <UserJourneysManager projectId={project.id} />
         )
       case 'user-flows':
         return (
