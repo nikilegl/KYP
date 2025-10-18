@@ -39,6 +39,7 @@ import type {
 interface MainContentRendererProps {
   currentView: string
   loading: boolean
+  workspaceId: string
   
   // Data states
   projects: Project[]
@@ -142,6 +143,7 @@ interface MainContentRendererProps {
 export function MainContentRenderer({
   currentView,
   loading,
+  workspaceId,
   projects,
   stakeholders,
   notes,
@@ -444,6 +446,7 @@ export function MainContentRenderer({
     case 'settings':
       return (
         <SettingsManager 
+          workspaceId={workspaceId}
           workspaceUsers={workspaceUsers}
           userRoles={userRoles}
           userPermissions={userPermissions}

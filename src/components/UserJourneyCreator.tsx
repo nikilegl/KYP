@@ -22,7 +22,7 @@ import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import type { UserRole, Project, LawFirm } from '../lib/supabase'
@@ -79,6 +79,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const reactFlowInstanceRef = useRef<any>(null)
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [showNameEditModal, setShowNameEditModal] = useState(false)
@@ -507,10 +508,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       setConfiguringNode(node)
       setIsAddingNewNode(false)
       const existingBulletPoints = (node.data?.bulletPoints as string[]) || []
+      
+      // Debug: Log node data
+      console.log('Configuring node:', node)
+      console.log('Node data variant:', node.data?.variant)
+      console.log('Node data thirdPartyName:', node.data?.thirdPartyName)
+      
+      // Handle variant - preserve the exact value including empty string
+      const nodeVariant = node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+      const resolvedVariant = nodeVariant !== undefined && nodeVariant !== null ? nodeVariant : 'Legl'
+      
       setConfigForm({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
-        variant: (node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '') || 'Legl',
+        variant: resolvedVariant,
         thirdPartyName: (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
@@ -701,6 +712,141 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
 
     setNodes((nds) => [...nds, newNode])
   }, [nodes, setNodes])
+
+  // Tidy up node positions with proper spacing
+  const tidyUpNodes = useCallback(() => {
+    if (nodes.length === 0) return
+
+    const VERTICAL_GAP = 36
+    const HORIZONTAL_GAP = 48
+    const NODE_WIDTH = 320 // Width of nodes
+    const DEFAULT_NODE_HEIGHT = 120 // Fallback height
+
+    // Get actual rendered heights from DOM
+    const getNodeHeight = (nodeId: string): number => {
+      const nodeElement = document.querySelector(`[data-id="${nodeId}"]`)
+      if (nodeElement) {
+        const rect = nodeElement.getBoundingClientRect()
+        // Account for zoom level by using the transform scale
+        const zoom = reactFlowInstanceRef.current?.getZoom() || 1
+        return rect.height / zoom
+      }
+      return DEFAULT_NODE_HEIGHT
+    }
+
+    // Build adjacency map for graph traversal
+    const adjacencyMap = new Map<string, string[]>()
+    const incomingEdges = new Map<string, number>()
+
+    nodes.forEach(node => {
+      adjacencyMap.set(node.id, [])
+      incomingEdges.set(node.id, 0)
+    })
+
+    edges.forEach(edge => {
+      const sourceChildren = adjacencyMap.get(edge.source) || []
+      adjacencyMap.set(edge.source, [...sourceChildren, edge.target])
+      incomingEdges.set(edge.target, (incomingEdges.get(edge.target) || 0) + 1)
+    })
+
+    // Find start node (node with no incoming edges)
+    const startNodes = Array.from(incomingEdges.entries())
+      .filter(([_, count]) => count === 0)
+      .map(([nodeId]) => nodeId)
+
+    if (startNodes.length === 0) {
+      console.warn('No start node found')
+      return
+    }
+
+    // Assign levels and horizontal positions using BFS
+    const levels = new Map<string, number>()
+    const horizontalPositions = new Map<string, number>()
+    const visited = new Set<string>()
+    const queue: Array<{ nodeId: string; level: number; branch: number }> = []
+
+    // Start with all start nodes
+    startNodes.forEach((nodeId, index) => {
+      queue.push({ nodeId, level: 0, branch: index })
+      levels.set(nodeId, 0)
+      horizontalPositions.set(nodeId, index)
+    })
+
+    while (queue.length > 0) {
+      const { nodeId, level, branch } = queue.shift()!
+      
+      if (visited.has(nodeId)) continue
+      visited.add(nodeId)
+
+      const children = adjacencyMap.get(nodeId) || []
+      
+      if (children.length === 1) {
+        // Single child - same branch
+        const childId = children[0]
+        if (!visited.has(childId)) {
+          levels.set(childId, level + 1)
+          horizontalPositions.set(childId, branch)
+          queue.push({ nodeId: childId, level: level + 1, branch })
+        }
+      } else if (children.length > 1) {
+        // Multiple children - create branches
+        children.forEach((childId, index) => {
+          if (!visited.has(childId)) {
+            const childBranch = branch + index
+            levels.set(childId, level + 1)
+            horizontalPositions.set(childId, childBranch)
+            queue.push({ nodeId: childId, level: level + 1, branch: childBranch })
+          }
+        })
+      }
+    }
+
+    // Group nodes by level for vertical positioning
+    const nodesByLevel = new Map<number, string[]>()
+    levels.forEach((level, nodeId) => {
+      const nodesAtLevel = nodesByLevel.get(level) || []
+      nodesByLevel.set(level, [...nodesAtLevel, nodeId])
+    })
+
+    // Calculate positions
+    const updatedNodes = nodes.map(node => {
+      const level = levels.get(node.id) ?? 0
+      const horizontalPos = horizontalPositions.get(node.id) ?? 0
+
+      // Calculate Y position - sum of all previous levels' heights + gaps
+      let yPosition = 100
+      for (let i = 0; i < level; i++) {
+        const nodesAtPrevLevel = nodesByLevel.get(i) || []
+        const maxHeightAtLevel = Math.max(
+          ...nodesAtPrevLevel.map(id => getNodeHeight(id)),
+          DEFAULT_NODE_HEIGHT
+        )
+        yPosition += maxHeightAtLevel + VERTICAL_GAP
+      }
+
+      // Calculate X position based on horizontal position (branch)
+      const xPosition = 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
+
+      return {
+        ...node,
+        position: {
+          x: xPosition,
+          y: yPosition
+        }
+      }
+    })
+
+    setNodes(updatedNodes)
+
+    // Save to database if journey exists
+    if (currentJourneyId) {
+      updateUserJourney(currentJourneyId, {
+        flow_data: { nodes: updatedNodes, edges }
+      }).catch(error => {
+        console.error('Error saving tidy layout:', error)
+      })
+    }
+  }, [nodes, edges, setNodes, currentJourneyId])
 
   // Handle edge label editing
   const handleEdgeLabelClick = useCallback((edgeId: string) => {
@@ -934,6 +1080,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDragStart={onNodeDragStart}
+          onInit={(instance) => {
+            reactFlowInstanceRef.current = instance
+          }}
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -962,14 +1111,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           />
           <KeyboardZoomHandler />
           <Panel position="top-right">
-            <Button
-              variant="secondary"
-              onClick={smartAddNode}
-              className="flex items-center gap-2"
-            >
-              <Plus size={16} />
-              Add Node
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={tidyUpNodes}
+                className="flex items-center gap-2"
+                disabled={nodes.length === 0}
+              >
+                <Sparkles size={16} />
+                Tidy Up
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={smartAddNode}
+                className="flex items-center gap-2"
+              >
+                <Plus size={16} />
+                Add Node
+              </Button>
+            </div>
           </Panel>
         </ReactFlow>
       </div>

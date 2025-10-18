@@ -175,6 +175,15 @@ export interface LawFirm {
   updated_at: string
 }
 
+export interface ThirdParty {
+  id: string
+  workspace_id: string
+  name: string
+  logo?: string
+  created_at: string
+  updated_at: string
+}
+
 export interface ProblemOverview {
   id: string
   project_id: string

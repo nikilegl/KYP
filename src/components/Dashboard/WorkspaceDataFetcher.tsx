@@ -91,9 +91,6 @@ export function WorkspaceDataFetcher({
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  // Debug initial props
-  console.log('🔵 WorkspaceDataFetcher: Initial props - pathname:', pathname, 'routeParams:', routeParams)
-  
   // Local state for current view - managed based on URL
   const [currentView, setCurrentView] = useState('projects')
   
@@ -141,40 +138,20 @@ export function WorkspaceDataFetcher({
     }
   }, [selectedUserStory])
 
-  // Debug currentView changes
-  useEffect(() => {
-    console.log('🔵 WorkspaceDataFetcher: currentView changed to:', currentView)
-  }, [currentView])
-
-  // Debug pathname changes
-  useEffect(() => {
-    console.log('🔵 WorkspaceDataFetcher: pathname changed to:', pathname)
-  }, [pathname])
-
   useEffect(() => {
     fetchAllData()
   }, [])
 
   // Handle route-based navigation
   useEffect(() => {
-    console.log('🔵 WorkspaceDataFetcher: useEffect triggered with pathname:', pathname)
-    console.log('🔵 WorkspaceDataFetcher: routeParams:', routeParams)
-    console.log('🔵 WorkspaceDataFetcher: routeParams.shortId:', routeParams.shortId)
-    
     const handleRouteNavigation = async () => {
-      console.log('🔵 WorkspaceDataFetcher: handleRouteNavigation called with pathname:', pathname)
-      console.log('🔵 WorkspaceDataFetcher: routeParams:', routeParams)
-      console.log('🔵 WorkspaceDataFetcher: current currentView:', currentView)
-      
       // If this is a back navigation, skip the default route handling
       if (isNavigatingBack) {
-        console.log('🔵 WorkspaceDataFetcher: Skipping route navigation due to back navigation')
         setIsNavigatingBack(false)
         return
       }
 
       if (pathname === '/') {
-        console.log('🔵 WorkspaceDataFetcher: Processing root path')
         setCurrentView('projects')
         onViewChange('projects')
         setSelectedProject(null)
@@ -188,7 +165,6 @@ export function WorkspaceDataFetcher({
 
       // Handle top-level navigation paths
       if (pathname === '/law-firms') {
-        console.log('🔵 WorkspaceDataFetcher: Processing law-firms path')
         setCurrentView('law-firms')
         onViewChange('law-firms')
         setSelectedProject(null)
@@ -201,7 +177,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/themes') {
-        console.log('🔵 WorkspaceDataFetcher: Processing themes path')
         setCurrentView('themes')
         onViewChange('themes')
         setSelectedProject(null)
@@ -960,14 +935,14 @@ export function WorkspaceDataFetcher({
     }
   }
 
-  // Debug: Log workspaceUsers before passing to MainContentRenderer
-  console.log('🔵 WorkspaceDataFetcher: About to pass workspaceUsers to MainContentRenderer:', workspaceUsers)
-  console.log('🔵 WorkspaceDataFetcher: workspaceUsers length before MainContentRenderer:', workspaceUsers.length)
+  // Get workspace ID (assuming first workspace)
+  const workspaceId = workspaces[0]?.id || ''
 
   return (
     <MainContentRenderer
       currentView={currentView}
       loading={loading}
+      workspaceId={workspaceId}
       projects={projects}
       stakeholders={stakeholders}
       notes={notes}
