@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { Settings, Shield, UserCheck, FileText, UserPlus } from 'lucide-react'
+import { Settings, Shield, UserCheck, FileText, UserPlus, Package } from 'lucide-react'
 import { UserPermissionManager } from './UserPermissionManager'
 import { UserRoleManager } from './UserRoleManager'
 import { NoteTemplateManager } from './NoteTemplateManager'
 import { TeamManager } from './TeamManager'
+import { ThirdPartyManager } from './ThirdPartyManager'
 import type { 
   WorkspaceUser,
   UserRole,
@@ -14,6 +15,7 @@ import type {
 
 interface SettingsManagerProps {
   // Data states
+  workspaceId: string
   workspaceUsers: WorkspaceUser[]
   userRoles: UserRole[]
   userPermissions: UserPermission[]
@@ -46,6 +48,7 @@ interface SettingsManagerProps {
 }
 
 export function SettingsManager({
+  workspaceId,
   workspaceUsers,
   userRoles,
   userPermissions,
@@ -73,6 +76,7 @@ export function SettingsManager({
   const menuItems = [
     { id: 'user-permissions', label: 'User Permissions', icon: Shield },
     { id: 'user-roles', label: 'User Roles', icon: UserCheck },
+    { id: 'third-parties', label: 'Third Parties', icon: Package },
     { id: 'note-templates', label: 'Note Templates', icon: FileText },
     { id: 'team', label: 'KYP Team', icon: UserPlus },
   ]
@@ -101,6 +105,8 @@ export function SettingsManager({
             onNavigateToStakeholders={onNavigateToStakeholdersWithFilter}
           />
         )
+      case 'third-parties':
+        return <ThirdPartyManager workspaceId={workspaceId} />
       case 'note-templates':
         return (
           <NoteTemplateManager 
