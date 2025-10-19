@@ -123,6 +123,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [historyIndex, setHistoryIndex] = useState(-1)
   const isUndoing = useRef(false)
 
+  // Track selected nodes for copy/paste and edge highlighting
+  const [copiedNodes, setCopiedNodes] = useState<Node[]>([])
+  const [copiedEdges, setCopiedEdges] = useState<Edge[]>([])
+
   // Load projects and journey on mount
   useEffect(() => {
     loadData()
@@ -226,6 +230,176 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [undo])
+
+  // Track selected nodes and update edges highlighting
+  useEffect(() => {
+    const selected = new Set<string>()
+    nodes.forEach(node => {
+      if (node.selected) {
+        selected.add(node.id)
+      }
+    })
+
+    // Highlight edges that connect selected nodes
+    if (selected.size > 1) {
+      setEdges(prevEdges => prevEdges.map(edge => {
+        const isConnectingSelectedNodes = selected.has(edge.source) && selected.has(edge.target)
+        return {
+          ...edge,
+          data: {
+            ...edge.data,
+            highlighted: isConnectingSelectedNodes
+          }
+        }
+      }))
+    } else {
+      // Clear highlighting when less than 2 nodes selected
+      setEdges(prevEdges => prevEdges.map(edge => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          highlighted: false
+        }
+      })))
+    }
+  }, [nodes, setEdges])
+
+  // Copy selected nodes to clipboard (Command+C / Ctrl+C)
+  const copySelectedNodes = useCallback(async () => {
+    const selectedNodes = nodes.filter(node => node.selected)
+    if (selectedNodes.length === 0) return
+
+    const selectedNodeIds = new Set(selectedNodes.map(n => n.id))
+    // Get edges that connect the selected nodes
+    const relevantEdges = edges.filter(edge => 
+      selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
+    )
+
+    const copyData = {
+      nodes: selectedNodes,
+      edges: relevantEdges
+    }
+
+    // Store in state for fallback
+    setCopiedNodes(selectedNodes)
+    setCopiedEdges(relevantEdges)
+
+    // Copy to clipboard as JSON
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(copyData, null, 2))
+      console.log(`Copied ${selectedNodes.length} node(s) and ${relevantEdges.length} edge(s) to clipboard`)
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error)
+    }
+  }, [nodes, edges])
+
+  // Paste nodes from clipboard (Command+V / Ctrl+V)
+  const pasteNodes = useCallback(async () => {
+    try {
+      // Try to read from clipboard first
+      let copyData: { nodes: Node[], edges: Edge[] } | null = null
+      
+      try {
+        const clipboardText = await navigator.clipboard.readText()
+        copyData = JSON.parse(clipboardText)
+      } catch (clipboardError) {
+        // Fallback to state if clipboard read fails
+        console.log('Clipboard read failed, using fallback state')
+        if (copiedNodes.length > 0) {
+          copyData = {
+            nodes: copiedNodes,
+            edges: copiedEdges
+          }
+        }
+      }
+
+      if (!copyData || !copyData.nodes || copyData.nodes.length === 0) {
+        console.log('No nodes to paste')
+        return
+      }
+
+      // Create ID mapping for nodes
+      const idMapping = new Map<string, string>()
+      const newNodes: Node[] = copyData.nodes.map(node => {
+        const newId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        idMapping.set(node.id, newId)
+        
+        return {
+          ...node,
+          id: newId,
+          position: {
+            x: node.position.x + 50, // Offset by 50px to make it visible
+            y: node.position.y + 50
+          },
+          selected: true, // Select the pasted nodes
+          data: {
+            ...node.data
+          }
+        }
+      })
+
+      // Update edge references to use new node IDs
+      const newEdges: Edge[] = copyData.edges
+        .filter(edge => {
+          const newSourceId = idMapping.get(edge.source)
+          const newTargetId = idMapping.get(edge.target)
+          return newSourceId && newTargetId
+        })
+        .map(edge => {
+          const newSourceId = idMapping.get(edge.source)!
+          const newTargetId = idMapping.get(edge.target)!
+          
+          return {
+            ...edge,
+            id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            source: newSourceId,
+            target: newTargetId,
+            data: {
+              ...edge.data
+            }
+          }
+        })
+
+      // Deselect existing nodes
+      setNodes(prevNodes => [
+        ...prevNodes.map(node => ({ ...node, selected: false })),
+        ...newNodes
+      ])
+      
+      // Add new edges
+      setEdges(prevEdges => [...prevEdges, ...newEdges])
+
+      console.log(`Pasted ${newNodes.length} node(s) and ${newEdges.length} edge(s)`)
+    } catch (error) {
+      console.error('Failed to paste nodes:', error)
+    }
+  }, [copiedNodes, copiedEdges, setNodes, setEdges])
+
+  // Keyboard shortcuts for copy/paste
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return
+      }
+
+      if (isModifierPressed) {
+        if (event.key === 'c' || event.key === 'C') {
+          event.preventDefault()
+          copySelectedNodes()
+        } else if (event.key === 'v' || event.key === 'V') {
+          event.preventDefault()
+          pasteNodes()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [copySelectedNodes, pasteNodes])
 
   // Handle new connections
   const onConnect = useCallback(

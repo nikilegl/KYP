@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import {
-  BaseEdge,
   EdgeLabelRenderer,
   EdgeProps,
   getBezierPath,
@@ -10,21 +9,27 @@ import { PlusCircle } from 'lucide-react'
 interface CustomEdgeData {
   label?: string
   onLabelClick?: (edgeId: string) => void
+  highlighted?: boolean
 }
 
-export function CustomEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  style = {},
-  markerEnd,
-  data,
-  selected,
-}: EdgeProps<CustomEdgeData>) {
+type CustomEdgeProps = EdgeProps & {
+  data?: CustomEdgeData
+}
+
+export function CustomEdge(props: CustomEdgeProps) {
+  const {
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    markerEnd,
+    data,
+    selected,
+  } = props
+  
   const [isHovered, setIsHovered] = useState(false)
 
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -37,14 +42,14 @@ export function CustomEdge({
   })
 
   const hasLabel = data?.label && data.label.trim() !== ''
-  const isHighlighted = selected || isHovered
+  const isHighlighted = selected || isHovered || data?.highlighted
 
   // Debug log
   React.useEffect(() => {
-    if (selected) {
-      console.log('Edge selected:', id, 'selected:', selected)
+    if (selected || data?.highlighted) {
+      console.log('Edge highlighted:', id, 'selected:', selected, 'highlighted:', data?.highlighted)
     }
-  }, [selected, id])
+  }, [selected, data?.highlighted, id])
 
   const handleLabelClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -71,11 +76,11 @@ export function CustomEdge({
         d={edgePath}
         fill="none"
         strokeWidth={isHighlighted ? 3 : 2}
-        stroke={isHighlighted ? '#3b82f6' : '#b1b1b7'}
-        className={`react-flow__edge-path ${selected ? 'selected' : ''}`}
+        stroke={data?.highlighted ? '#10b981' : (isHighlighted ? '#3b82f6' : '#b1b1b7')}
+        className={`react-flow__edge-path ${selected ? 'selected' : ''} ${data?.highlighted ? 'highlighted' : ''}`}
         style={{ 
           pointerEvents: 'none',
-          stroke: isHighlighted ? '#3b82f6' : '#b1b1b7',
+          stroke: data?.highlighted ? '#10b981' : (isHighlighted ? '#3b82f6' : '#b1b1b7'),
           strokeWidth: isHighlighted ? 3 : 2,
         }}
         markerEnd={markerEnd}
@@ -96,12 +101,16 @@ export function CustomEdge({
           {hasLabel ? (
             <div
               onClick={handleLabelClick}
-              className="bg-white px-3 py-1.5 rounded-full border border-gray-300 hover:shadow-md transition-all cursor-pointer hover:border-blue-500 flex items-center gap-2 group"
+              className={`px-3 py-1.5 rounded-full border hover:shadow-md transition-all cursor-pointer flex items-center gap-2 group ${
+                data?.highlighted 
+                  ? 'bg-green-50 border-green-500 text-green-700' 
+                  : 'bg-white border-gray-300 hover:border-blue-500 text-gray-700'
+              }`}
             >
-              <span className="text-gray-700 font-medium">{data.label}</span>
+              <span className="font-medium">{data.label}</span>
               <PlusCircle
                 size={16}
-                className="text-blue-500"
+                className={data?.highlighted ? "text-green-600" : "text-blue-500"}
               />
             </div>
           ) : (
