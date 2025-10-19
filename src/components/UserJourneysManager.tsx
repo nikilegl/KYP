@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Edit, Trash2 } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Copy } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
-import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, type UserJourney } from '../lib/database'
+import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
 import { getLawFirms } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { Project, LawFirm } from '../lib/supabase'
@@ -28,6 +28,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [loading, setLoading] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [journeyToDelete, setJourneyToDelete] = useState<UserJourneyWithProject | null>(null)
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false)
+  const [journeyToDuplicate, setJourneyToDuplicate] = useState<UserJourneyWithProject | null>(null)
+  const [duplicating, setDuplicating] = useState(false)
   const [selectedJourneys, setSelectedJourneys] = useState<string[]>([])
   const [showEditModal, setShowEditModal] = useState(false)
   const [journeyToEdit, setJourneyToEdit] = useState<UserJourneyWithProject | null>(null)
@@ -176,6 +179,49 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }
   }
 
+  // Handle duplicate
+  const handleDuplicateClick = (journey: UserJourneyWithProject) => {
+    setJourneyToDuplicate(journey)
+    setShowDuplicateConfirm(true)
+  }
+
+  const confirmDuplicate = async () => {
+    if (!journeyToDuplicate) return
+    
+    try {
+      setDuplicating(true)
+      
+      // Create a copy with a new name
+      const duplicateName = `${journeyToDuplicate.name} (Copy)`
+      
+      const duplicated = await createUserJourney(
+        duplicateName,
+        journeyToDuplicate.description || '',
+        journeyToDuplicate.flow_data || { nodes: [], edges: [] },
+        journeyToDuplicate.project_id || null
+      )
+      
+      if (duplicated) {
+        // Copy law firm associations
+        const lawFirmIds = journeyToDuplicate.lawFirms?.map(firm => firm.id) || []
+        await setUserJourneyLawFirms(duplicated.id, lawFirmIds)
+        
+        // Reload data to show the new journey
+        await loadData()
+        
+        setShowDuplicateConfirm(false)
+        setJourneyToDuplicate(null)
+      } else {
+        alert('Failed to duplicate journey')
+      }
+    } catch (error) {
+      console.error('Error duplicating journey:', error)
+      alert('Failed to duplicate journey')
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   // Navigate to user journey creator
   const handleCreateUserJourney = () => {
     if (projectId) {
@@ -259,7 +305,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       key: 'actions',
       header: 'Actions',
       sortable: false,
-      width: '120px',
+      width: '150px',
       render: (journey) => (
         <div className="flex items-center gap-2">
           <button
@@ -271,6 +317,16 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             title="Edit journey details"
           >
             <Edit size={16} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDuplicateClick(journey)
+            }}
+            className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+            title="Duplicate journey"
+          >
+            <Copy size={16} />
           </button>
           <button
             onClick={(e) => {
@@ -395,6 +451,47 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           <div className="p-6">
             <p className="text-gray-600">
               Are you sure you want to delete "<strong>{journeyToDelete.name}</strong>"? This action cannot be undone.
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {/* Duplicate Confirmation Modal */}
+      {showDuplicateConfirm && journeyToDuplicate && (
+        <Modal
+          isOpen={showDuplicateConfirm}
+          onClose={() => {
+            setShowDuplicateConfirm(false)
+            setJourneyToDuplicate(null)
+          }}
+          title="Duplicate User Journey"
+          size="sm"
+          footerContent={
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowDuplicateConfirm(false)
+                  setJourneyToDuplicate(null)
+                }}
+                disabled={duplicating}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmDuplicate}
+                disabled={duplicating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {duplicating ? 'Duplicating...' : 'Confirm'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6">
+            <p className="text-gray-600">
+              Are you sure you want to duplicate this user journey? A copy will be created with the name "<strong>{journeyToDuplicate.name} (Copy)</strong>".
             </p>
           </div>
         </Modal>
