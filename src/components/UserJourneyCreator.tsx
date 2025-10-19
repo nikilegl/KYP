@@ -352,7 +352,33 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const handleImportFromJson = useCallback(() => {
     try {
       setImportJsonError(null)
-      const journeyData = JSON.parse(importJsonText)
+      
+      // Clean the input text - trim whitespace and try to extract JSON if there's extra text
+      let cleanedText = importJsonText.trim()
+      
+      // Remove BOM (Byte Order Mark) if present
+      cleanedText = cleanedText.replace(/^\uFEFF/, '')
+      
+      // Replace smart quotes with standard quotes
+      cleanedText = cleanedText.replace(/[\u201C\u201D]/g, '"') // " and "
+      cleanedText = cleanedText.replace(/[\u2018\u2019]/g, "'") // ' and '
+      
+      // Remove invisible/control characters but keep newlines, tabs, and carriage returns
+      cleanedText = cleanedText.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+      
+      // If the text doesn't start with { or [, try to find the JSON portion
+      if (!cleanedText.startsWith('{') && !cleanedText.startsWith('[')) {
+        const jsonMatch = cleanedText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+        if (jsonMatch) {
+          cleanedText = jsonMatch[0]
+        }
+      }
+      
+      // Debug: Log the first 100 characters to help diagnose issues
+      console.log('Attempting to parse JSON. First 100 chars:', cleanedText.substring(0, 100))
+      console.log('Character codes of first 10 chars:', cleanedText.substring(0, 10).split('').map(c => c.charCodeAt(0)))
+      
+      const journeyData = JSON.parse(cleanedText)
       
       if (!journeyData.nodes || !Array.isArray(journeyData.nodes)) {
         setImportJsonError('Invalid JSON format: missing nodes array')
@@ -430,7 +456,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
     } catch (error) {
       console.error('Error parsing JSON:', error)
       if (error instanceof Error) {
-        setImportJsonError(error.message)
+        // Show a more helpful error message
+        const errorMsg = `JSON Parse Error: ${error.message}\n\nTip: Make sure your JSON uses standard double quotes (") and check for any special characters.`
+        setImportJsonError(errorMsg)
       } else {
         setImportJsonError('Invalid JSON format. Please check your input.')
       }
