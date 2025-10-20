@@ -225,6 +225,7 @@ export interface UserJourney {
   id: string
   project_id: string
   name: string
+  layout?: 'vertical' | 'horizontal'
   short_id: number
   created_at: string
   updated_at: string

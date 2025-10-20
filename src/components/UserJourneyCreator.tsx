@@ -89,6 +89,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
+  const [journeyLayout, setJourneyLayout] = useState<'vertical' | 'horizontal'>('vertical')
   const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -209,6 +210,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     loadData()
   }, [])
 
+  // Update all nodes when layout changes
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          journeyLayout
+        }
+      }))
+    )
+  }, [journeyLayout, setNodes])
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -251,6 +265,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setCurrentJourneyId(journey.id)
           setJourneyName(journey.name)
           setJourneyDescription(journey.description || '')
+          setJourneyLayout(journey.layout || 'vertical')
           setSelectedProjectId(journey.project_id || '')
           
           // Load associated law firms
@@ -598,6 +613,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         const updated = await updateUserJourney(currentJourneyId, {
           name: journeyName,
           description: journeyDescription,
+          layout: journeyLayout,
           flow_data: flowData,
           project_id: selectedProjectId || null
         })
@@ -616,7 +632,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           journeyName,
           journeyDescription,
           flowData,
-          selectedProjectId || null
+          selectedProjectId || null,
+          journeyLayout
         )
         
         if (created) {
@@ -809,7 +826,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             userRole: matchedUserRole,
             variant: node.platform || 'Legl',
             bulletPoints: node.bulletPoints || [],
-            customProperties: {}
+            customProperties: {},
+            journeyLayout
           }
         }
       })
@@ -837,7 +855,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       console.error('Error processing imported journey:', error)
       alert('Error processing the imported journey. Please try again.')
     }
-  }, [userRoles, setNodes, setEdges])
+  }, [userRoles, setNodes, setEdges, journeyLayout])
 
   // Handle AI import from transcript
   const handleImportFromTranscript = useCallback(async () => {
@@ -899,7 +917,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           },
           data: {
             ...node.data,
-            userRole: userRoleObj
+            userRole: userRoleObj,
+            journeyLayout
           },
           selectable: true,
         }
@@ -930,7 +949,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       )
       setImportTranscriptLoading(false)
     }
-  }, [importTranscriptText, userRoles, setNodes, setEdges])
+  }, [importTranscriptText, userRoles, setNodes, setEdges, journeyLayout])
 
   // Handle AI-powered journey editing with natural language
   const handleEditWithAI = useCallback(async () => {
@@ -1101,7 +1120,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         position: { x: Math.random() * 400, y: Math.random() * 400 },
         selectable: true,
         data: {
-          ...configForm
+          ...configForm,
+          journeyLayout
         },
       }
       
@@ -1130,7 +1150,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 type: configForm.type,
                 data: {
                   ...node.data,
-                  ...configForm
+                  ...configForm,
+                  journeyLayout
                 }
               }
             : node
@@ -1147,7 +1168,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   type: configForm.type,
                   data: {
                     ...node.data,
-                    ...configForm
+                    ...configForm,
+                    journeyLayout
                   }
                 }
               : node
@@ -2519,6 +2541,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Optional description"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Layout
+                </label>
+                <select
+                  value={journeyLayout}
+                  onChange={(e) => setJourneyLayout(e.target.value as 'vertical' | 'horizontal')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="vertical">Vertical (Top to Bottom)</option>
+                  <option value="horizontal">Horizontal (Left to Right)</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
