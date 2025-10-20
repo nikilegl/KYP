@@ -27,6 +27,10 @@ import {
   createUserRole,
   updateCustomUserRole,
   deleteUserRole,
+  getPlatforms,
+  createPlatform,
+  updatePlatform,
+  deletePlatform,
   getLawFirms,
   getLawFirmByShortId,
   createLawFirm,
@@ -65,6 +69,7 @@ import type {
   ResearchNote, 
   WorkspaceUser,
   UserRole,
+  Platform,
   LawFirm,
   UserPermission,
   UserStory,
@@ -118,6 +123,7 @@ export function WorkspaceDataFetcher({
   const [notes, setNotes] = useState<ResearchNote[]>([])
   const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([])
   const [userRoles, setUserRoles] = useState<UserRole[]>([])
+  const [platforms, setPlatforms] = useState<Platform[]>([])
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [userPermissions, setUserPermissions] = useState<UserPermission[]>([])
   const [stakeholderNotesCountMap, setStakeholderNotesCountMap] = useState<Record<string, number>>({})
@@ -411,6 +417,7 @@ export function WorkspaceDataFetcher({
         notesData,
         workspaceUsersData,
         userRolesData,
+        platformsData,
         lawFirmsData,
         userPermissionsData,
         allNoteStakeholders,
@@ -426,6 +433,7 @@ export function WorkspaceDataFetcher({
         getResearchNotes(),
         getWorkspaceUsers(),
         getUserRoles(),
+        getPlatforms(),
         getLawFirms(),
         getUserPermissions(),
         getAllResearchNoteStakeholders(),
@@ -442,6 +450,7 @@ export function WorkspaceDataFetcher({
       setNotes(notesData)
       setWorkspaceUsers(workspaceUsersData)
       setUserRoles(userRolesData)
+      setPlatforms(platformsData)
       setLawFirms(lawFirmsData)
       setUserPermissions(userPermissionsData)
       setThemesWithCounts(themesWithCountsData)
@@ -752,6 +761,32 @@ export function WorkspaceDataFetcher({
     }
   }
 
+  // Platform handlers
+  const handleCreatePlatform = async (name: string, colour: string, icon?: string, description?: string) => {
+    const platform = await createPlatform(name, colour, icon, description)
+    if (platform) {
+      setPlatforms([platform, ...platforms])
+    }
+  }
+
+  const handleUpdatePlatform = async (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string }): Promise<boolean> => {
+    const updatedPlatform = await updatePlatform(platformId, updates)
+    if (updatedPlatform) {
+      setPlatforms(platforms.map(platform => 
+        platform.id === platformId ? updatedPlatform : platform
+      ))
+      return true
+    }
+    return false
+  }
+
+  const handleDeletePlatform = async (platformId: string) => {
+    const success = await deletePlatform(platformId)
+    if (success) {
+      setPlatforms(platforms.filter(platform => platform.id !== platformId))
+    }
+  }
+
   // Navigation handler for stakeholder filtering
   const handleNavigateToStakeholdersWithFilter = (userRoleId: string) => {
     onViewChange('stakeholders')
@@ -948,6 +983,7 @@ export function WorkspaceDataFetcher({
       notes={notes}
       workspaceUsers={workspaceUsers}
       userRoles={userRoles}
+      platforms={platforms}
       lawFirms={lawFirms}
       userPermissions={userPermissions}
       stakeholderNotesCountMap={stakeholderNotesCountMap}
@@ -991,6 +1027,9 @@ export function WorkspaceDataFetcher({
       onUpdateUserRoleDefinition={handleUpdateUserRoleDefinition}
       onDeleteUserRole={handleDeleteUserRole}
       onNavigateToStakeholdersWithFilter={handleNavigateToStakeholdersWithFilter}
+      onCreatePlatform={handleCreatePlatform}
+      onUpdatePlatform={handleUpdatePlatform}
+      onDeletePlatform={handleDeletePlatform}
       onCreateUserPermission={handleCreateUserPermission}
       onUpdateUserPermission={handleUpdateUserPermission}
       onDeleteUserPermission={handleDeleteUserPermission}

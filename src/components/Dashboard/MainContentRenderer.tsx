@@ -26,6 +26,7 @@ import type {
   ResearchNote, 
   WorkspaceUser,
   UserRole,
+  Platform,
   LawFirm,
   UserPermission,
   UserStory,
@@ -47,6 +48,7 @@ interface MainContentRendererProps {
   notes: ResearchNote[]
   workspaceUsers: WorkspaceUser[]
   userRoles: UserRole[]
+  platforms: Platform[]
   lawFirms: LawFirm[]
   userPermissions: UserPermission[]
   stakeholderNotesCountMap: Record<string, number>
@@ -100,6 +102,11 @@ interface MainContentRendererProps {
   onDeleteUserRole: (roleId: string) => Promise<void>
   onNavigateToStakeholdersWithFilter: (userRoleId: string) => void
   
+  // Platform handlers
+  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string) => Promise<void>
+  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string }) => Promise<boolean>
+  onDeletePlatform: (platformId: string) => Promise<void>
+  
   // User permission handlers
   onCreateUserPermission: (name: string, description?: string) => Promise<void>
   onUpdateUserPermission: (permissionId: string, updates: { name?: string; description?: string }) => Promise<void>
@@ -149,6 +156,7 @@ export function MainContentRenderer({
   notes,
   workspaceUsers,
   userRoles,
+  platforms,
   lawFirms,
   userPermissions,
   stakeholderNotesCountMap,
@@ -192,6 +200,9 @@ export function MainContentRenderer({
   onUpdateUserRoleDefinition,
   onDeleteUserRole,
   onNavigateToStakeholdersWithFilter,
+  onCreatePlatform,
+  onUpdatePlatform,
+  onDeletePlatform,
   onCreateUserPermission,
   onUpdateUserPermission,
   onDeleteUserPermission,
@@ -449,6 +460,7 @@ export function MainContentRenderer({
           workspaceId={workspaceId}
           workspaceUsers={workspaceUsers}
           userRoles={userRoles}
+          platforms={platforms}
           userPermissions={userPermissions}
           stakeholders={stakeholders}
           noteTemplates={noteTemplates}
@@ -460,6 +472,9 @@ export function MainContentRenderer({
           onUpdateUserRoleDefinition={onUpdateUserRoleDefinition}
           onDeleteUserRole={onDeleteUserRole}
           onNavigateToStakeholdersWithFilter={onNavigateToStakeholdersWithFilter}
+          onCreatePlatform={onCreatePlatform}
+          onUpdatePlatform={onUpdatePlatform}
+          onDeletePlatform={onDeletePlatform}
           onCreateUserPermission={onCreateUserPermission}
           onUpdateUserPermission={onUpdateUserPermission}
           onDeleteUserPermission={onDeleteUserPermission}

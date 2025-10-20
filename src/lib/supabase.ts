@@ -159,6 +159,17 @@ export interface UserRole {
   updated_at: string
 }
 
+export interface Platform {
+  id: string
+  workspace_id: string
+  name: string
+  description?: string
+  colour: string
+  icon?: string
+  created_at: string
+  updated_at: string
+}
+
 export interface LawFirm {
   id: string
   workspace_id: string
