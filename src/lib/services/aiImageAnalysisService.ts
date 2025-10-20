@@ -3,40 +3,86 @@
  * Analyzes user journey diagram images using OpenAI Vision API
  */
 
+import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt'
+
+export interface JourneyNotification {
+  id: string
+  type: 'pain-point' | 'warning' | 'info' | 'positive'
+  message: string
+}
+
 export interface JourneyNode {
   id: string
-  label: string
   type: 'start' | 'process' | 'end'
-  userRole?: string
-  platform?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
-  bulletPoints?: string[]
   position: { x: number; y: number }
+  data: {
+    label: string
+    type: 'start' | 'process' | 'end'
+    userRole?: string
+    variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+    thirdPartyName?: string
+    bulletPoints?: string[]
+    notifications?: JourneyNotification[]
+    customProperties?: Record<string, any>
+    journeyLayout?: 'vertical' | 'horizontal'
+  }
 }
 
 export interface JourneyEdge {
   id: string
   source: string
   target: string
+  type?: string
   label?: string
+  data?: {
+    label?: string
+  }
+}
+
+export interface JourneyRegion {
+  id: string
+  type: 'highlightRegion'
+  position: { x: number; y: number }
+  style: {
+    width: number
+    height: number
+    zIndex: number
+  }
+  data: {
+    label: string
+    backgroundColor: string
+    borderColor: string
+  }
+  draggable?: boolean
+  selectable?: boolean
 }
 
 export interface AnalyzedJourney {
   nodes: JourneyNode[]
   edges: JourneyEdge[]
+  regions?: JourneyRegion[]
   name?: string
   description?: string
+  layout?: 'vertical' | 'horizontal'
 }
 
 /**
  * Analyzes a user journey diagram image using AI
+ * @param imageFile - The image file to analyze
+ * @param apiKey - OpenAI API key
+ * @param userRoleNames - Array of available user role names from the workspace
  */
 export async function analyzeJourneyImage(
   imageFile: File,
-  apiKey: string
+  apiKey: string,
+  userRoleNames: string[] = []
 ): Promise<AnalyzedJourney> {
   try {
     // Convert image to base64
     const base64Image = await fileToBase64(imageFile)
+    
+    // Generate prompt with user roles
+    const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
     // Call OpenAI Vision API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -46,14 +92,14 @@ export async function analyzeJourneyImage(
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o', // Updated model with vision capabilities
+        model: 'gpt-4o', // Model with vision capabilities
         messages: [
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: getAnalysisPrompt()
+                text: prompt
               },
               {
                 type: 'image_url',
@@ -64,7 +110,7 @@ export async function analyzeJourneyImage(
             ]
           }
         ],
-        max_tokens: 4096,
+        max_tokens: 8192, // Increased for more complex responses with regions
         temperature: 0.1 // Low temperature for more consistent parsing
       })
     })
@@ -109,73 +155,6 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-/**
- * Generate the AI prompt for analyzing journey diagrams
- */
-function getAnalysisPrompt(): string {
-  return `You are analyzing a user journey diagram image. Extract the following information and return it as valid JSON:
-
-IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no extra text.
-
-Extract:
-1. **Nodes**: Each box/shape in the diagram representing a step
-   - id: Generate a unique identifier (e.g., "node-1", "node-2")
-   - label: The main text/title of the node
-   - type: Determine if it's "start" (first step), "process" (middle step), or "end" (final step)
-   - userRole: If mentioned, the role performing this step (e.g., "Client", "Developer", "Admin")
-   - platform: If mentioned, one of: "CMS", "Legl", "End client", "Back end", "Third party", or empty string
-   - bulletPoints: Any bullet points or sub-items listed in the node
-   - position: Estimate x,y coordinates based on visual layout (x: horizontal spacing 380-400px apart, y: vertical spacing 240-260px apart for rows)
-
-2. **Edges**: Connections/arrows between nodes
-   - id: Generate unique identifier (e.g., "edge-1-2")
-   - source: The id of the source node
-   - target: The id of the target node
-   - label: Any text on or near the arrow/connection
-
-3. **Metadata**:
-   - name: Title of the journey if visible
-   - description: Any subtitle or description text
-
-Return format:
-{
-  "name": "Journey Name",
-  "description": "Journey description",
-  "nodes": [
-    {
-      "id": "node-1",
-      "label": "Node description",
-      "type": "start",
-      "userRole": "Client",
-      "platform": "End client",
-      "bulletPoints": ["item 1", "item 2"],
-      "position": {"x": 100, "y": 100}
-    }
-  ],
-  "edges": [
-    {
-      "id": "edge-1-2",
-      "source": "node-1",
-      "target": "node-2",
-      "label": "Next step"
-    }
-  ]
-}
-
-Guidelines:
-- Read the diagram left-to-right and/or top-to-bottom
-- Identify clear start and end points
-- Look for role labels like "User", "Client", "Admin", "Developer"
-- Look for platform indicators like "CMS", "Backend", "Frontend", "Legl"
-- Extract any descriptive text from nodes
-- Identify all arrows/lines connecting nodes
-- If nodes are in a clear sequence, assign types accordingly (first=start, middle=process, last=end)
-- Space nodes evenly: 380-400px horizontally (nodes are 320px wide), 240-260px vertically between rows
-- For linear flows: position nodes at x: 100, 480, 860, 1240... (380px spacing)
-- For multi-row layouts: use y: 100 for first row, 340 for second row, 580 for third row (240px spacing)
-
-Return ONLY the JSON object, no other text.`
-}
 
 /**
  * Parse the AI response text to extract JSON
@@ -205,31 +184,81 @@ function parseAIResponse(content: string): any {
  * Process and validate the journey data
  */
 function processJourneyData(data: any): AnalyzedJourney {
-  const nodes: JourneyNode[] = (data.nodes || []).map((node: any, index: number) => ({
-    id: node.id || `node-${index + 1}`,
-    label: node.label || `Node ${index + 1}`,
-    type: normalizeNodeType(node.type),
-    userRole: node.userRole || undefined,
-    platform: normalizePlatform(node.platform),
-    bulletPoints: Array.isArray(node.bulletPoints) ? node.bulletPoints.filter((bp: any) => bp) : undefined,
+  // Process regions (if any)
+  const regions: JourneyRegion[] = (data.regions || []).map((region: any, index: number) => ({
+    id: region.id || `region-${index + 1}`,
+    type: 'highlightRegion' as const,
     position: {
-      x: typeof node.position?.x === 'number' ? node.position.x : (index % 3) * 380 + 100,
-      y: typeof node.position?.y === 'number' ? node.position.y : Math.floor(index / 3) * 240 + 100
-    }
+      x: snapToGrid(region.position?.x, 15) || 75,
+      y: snapToGrid(region.position?.y, 15) || 75
+    },
+    style: {
+      width: snapToGrid(region.style?.width, 15) || 600,
+      height: snapToGrid(region.style?.height, 15) || 450,
+      zIndex: -1
+    },
+    data: {
+      label: region.data?.label || `Region ${index + 1}`,
+      backgroundColor: region.data?.backgroundColor || '#dbeafe',
+      borderColor: region.data?.borderColor || '#3b82f6'
+    },
+    draggable: true,
+    selectable: true
   }))
 
+  // Process nodes
+  const nodes: JourneyNode[] = (data.nodes || []).map((node: any, index: number) => {
+    // Process notifications
+    const notifications: JourneyNotification[] = (node.data?.notifications || node.notifications || [])
+      .map((notif: any) => ({
+        id: notif.id || `notif-${Date.now()}-${Math.random()}`,
+        type: normalizeNotificationType(notif.type),
+        message: notif.message || ''
+      }))
+      .filter((notif: JourneyNotification) => notif.message)
+
+    return {
+      id: node.id || `node-${index + 1}`,
+      type: normalizeNodeType(node.type || node.data?.type),
+      position: {
+        x: snapToGrid(node.position?.x, 15) || (index % 3) * 375 + 105,
+        y: snapToGrid(node.position?.y, 15) || Math.floor(index / 3) * 255 + 105
+      },
+      data: {
+        label: node.data?.label || node.label || `Node ${index + 1}`,
+        type: normalizeNodeType(node.type || node.data?.type),
+        userRole: node.data?.userRole || node.userRole || undefined,
+        variant: normalizeVariant(node.data?.variant || node.platform),
+        thirdPartyName: node.data?.thirdPartyName || node.thirdPartyName || '',
+        bulletPoints: Array.isArray(node.data?.bulletPoints || node.bulletPoints) 
+          ? (node.data?.bulletPoints || node.bulletPoints).filter((bp: any) => bp) 
+          : [],
+        notifications: notifications.length > 0 ? notifications : [],
+        customProperties: node.data?.customProperties || {},
+        journeyLayout: data.layout || node.data?.journeyLayout || 'vertical'
+      }
+    }
+  })
+
+  // Process edges
   const edges: JourneyEdge[] = (data.edges || []).map((edge: any, index: number) => ({
     id: edge.id || `edge-${index + 1}`,
     source: edge.source,
     target: edge.target,
-    label: edge.label || undefined
+    type: edge.type || 'custom',
+    label: edge.label || '',
+    data: {
+      label: edge.data?.label || edge.label || ''
+    }
   }))
 
   return {
     nodes,
     edges,
+    regions: regions.length > 0 ? regions : undefined,
     name: data.name || 'Imported Journey',
-    description: data.description || ''
+    description: data.description || '',
+    layout: data.layout || 'vertical'
   }
 }
 
@@ -244,15 +273,34 @@ function normalizeNodeType(type: any): 'start' | 'process' | 'end' {
 }
 
 /**
- * Normalize platform to valid values
+ * Normalize variant to valid values
  */
-function normalizePlatform(platform: any): 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '' {
-  const platformStr = String(platform || '').toLowerCase()
-  if (platformStr.includes('cms')) return 'CMS'
-  if (platformStr.includes('legl')) return 'Legl'
-  if (platformStr.includes('end client') || platformStr.includes('frontend') || platformStr.includes('client')) return 'End client'
-  if (platformStr.includes('back end') || platformStr.includes('backend') || platformStr.includes('server')) return 'Back end'
-  if (platformStr.includes('third party') || platformStr.includes('3rd party') || platformStr.includes('external')) return 'Third party'
+function normalizeVariant(variant: any): 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '' {
+  const variantStr = String(variant || '').toLowerCase()
+  if (variantStr.includes('cms')) return 'CMS'
+  if (variantStr.includes('legl')) return 'Legl'
+  if (variantStr.includes('end client') || variantStr.includes('frontend') || variantStr.includes('client')) return 'End client'
+  if (variantStr.includes('back end') || variantStr.includes('backend') || variantStr.includes('server')) return 'Back end'
+  if (variantStr.includes('third party') || variantStr.includes('3rd party') || variantStr.includes('external')) return 'Third party'
   return ''
+}
+
+/**
+ * Normalize notification type to valid values
+ */
+function normalizeNotificationType(type: any): 'pain-point' | 'warning' | 'info' | 'positive' {
+  const typeStr = String(type || '').toLowerCase()
+  if (typeStr.includes('pain') || typeStr.includes('problem') || typeStr.includes('issue')) return 'pain-point'
+  if (typeStr.includes('warn')) return 'warning'
+  if (typeStr.includes('positive') || typeStr.includes('success') || typeStr.includes('good')) return 'positive'
+  return 'info'
+}
+
+/**
+ * Snap a value to the nearest multiple of gridSize
+ */
+function snapToGrid(value: any, gridSize: number): number {
+  const num = typeof value === 'number' ? value : 0
+  return Math.round(num / gridSize) * gridSize
 }
 
