@@ -5,11 +5,20 @@ import type { UserRole, ThirdParty } from '../../../lib/supabase'
 
 export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end'
 
+export type NotificationType = 'pain-point' | 'warning' | 'info' | 'positive'
+
+export interface Notification {
+  id: string
+  type: NotificationType
+  message: string
+}
+
 export interface UserJourneyNodeData {
   label: string
   type: UserJourneyNodeType
   userRole?: UserRole
   bulletPoints?: string[]
+  notifications?: Notification[]
   customProperties?: Record<string, unknown>
   variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
   thirdPartyName?: string
@@ -35,11 +44,42 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     type = 'process',
     userRole,
     bulletPoints = [],
+    notifications = [],
     customProperties = {},
     variant = 'Legl',
     thirdPartyName = '',
     journeyLayout = 'vertical'
   } = nodeData || {}
+  
+  // Get notification styling based on type
+  const getNotificationStyle = (notifType: NotificationType) => {
+    switch (notifType) {
+      case 'pain-point':
+        return {
+          bg: 'bg-red-50',
+          border: 'border-red-200',
+          text: 'text-red-800',
+        }
+      case 'warning':
+        return {
+          bg: 'bg-yellow-50',
+          border: 'border-yellow-300',
+          text: 'text-yellow-900',
+        }
+      case 'info':
+        return {
+          bg: 'bg-gray-100',
+          border: 'border-gray-300',
+          text: 'text-gray-700',
+        }
+      case 'positive':
+        return {
+          bg: 'bg-green-50',
+          border: 'border-green-300',
+          text: 'text-green-800',
+        }
+    }
+  }
   
   // Find matching third party logo (case-insensitive)
   const matchingThirdParty = thirdParties.find(
@@ -154,6 +194,27 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* Notifications */}
+          {notifications && notifications.length > 0 && (
+            <div className={`space-y-1.5 ${bulletPoints.length > 0 ? 'mt-2' : 'mt-2'}`}>
+              {notifications.map((notification) => {
+                const style = getNotificationStyle(notification.type)
+                return (
+                  <div
+                    key={notification.id}
+                    className={`
+                      ${style.bg} ${style.border} ${style.text}
+                      border rounded px-2 py-1.5
+                      text-xs
+                    `}
+                  >
+                    <span>{notification.message}</span>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
 

@@ -23,6 +23,7 @@ import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
+import type { Notification } from './DesignSystem/components/UserJourneyNode'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
@@ -105,6 +106,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     thirdPartyName: '' as string,
     userRole: null as UserRole | null,
     bulletPoints: [] as string[],
+    notifications: [] as Notification[],
     customProperties: {} as Record<string, unknown>
   })
   const [showEdgeLabelModal, setShowEdgeLabelModal] = useState(false)
@@ -593,6 +595,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       thirdPartyName: '',
       userRole: null,
       bulletPoints: [''],
+      notifications: [],
       customProperties: {}
     })
     
@@ -1144,6 +1147,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         thirdPartyName: (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
+        notifications: (node.data?.notifications as Notification[]) || [],
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
       })
       setShowConfigModal(true)
@@ -1290,6 +1294,37 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       }, 0)
     }
+  }, [])
+
+  // Add notification to node
+  const addNotification = useCallback(() => {
+    const newNotification: Notification = {
+      id: `notif-${Date.now()}`,
+      type: 'info',
+      message: ''
+    }
+    setConfigForm(prev => ({
+      ...prev,
+      notifications: [...prev.notifications, newNotification]
+    }))
+  }, [])
+
+  // Update notification
+  const updateNotification = useCallback((id: string, field: 'type' | 'message', value: string) => {
+    setConfigForm(prev => ({
+      ...prev,
+      notifications: prev.notifications.map(notif =>
+        notif.id === id ? { ...notif, [field]: value } : notif
+      )
+    }))
+  }, [])
+
+  // Remove notification from node
+  const removeNotification = useCallback((id: string) => {
+    setConfigForm(prev => ({
+      ...prev,
+      notifications: prev.notifications.filter(notif => notif.id !== id)
+    }))
   }, [])
 
   // Delete node with confirmation
@@ -2494,6 +2529,82 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 >
                   <Plus size={16} className="mr-2" />
                   Add Bullet Point
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notifications
+              </label>
+              <div className="space-y-3">
+                {configForm.notifications.map((notification) => (
+                  <div key={notification.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
+                    {/* Notification Type Selector */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                        Type
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { value: 'pain-point', label: 'Red (pain point)', color: 'bg-red-100 border-red-300 text-red-800' },
+                          { value: 'warning', label: 'Yellow (Warning)', color: 'bg-yellow-100 border-yellow-300 text-yellow-900' },
+                          { value: 'info', label: 'Grey (Info)', color: 'bg-gray-100 border-gray-300 text-gray-700' },
+                          { value: 'positive', label: 'Green (Positive)', color: 'bg-green-100 border-green-300 text-green-800' },
+                        ].map((typeOption) => (
+                          <button
+                            key={typeOption.value}
+                            type="button"
+                            onClick={() => updateNotification(notification.id, 'type', typeOption.value)}
+                            className={`
+                              ${typeOption.color}
+                              border-2 rounded px-2 py-1.5 text-xs font-medium
+                              transition-all
+                              ${notification.type === typeOption.value 
+                                ? 'ring-2 ring-blue-500 ring-offset-1' 
+                                : 'opacity-60 hover:opacity-100'
+                              }
+                            `}
+                          >
+                            {typeOption.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Notification Message */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                        Message
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={notification.message}
+                          onChange={(e) => updateNotification(notification.id, 'message', e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          placeholder="Enter notification message"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="small"
+                          onClick={() => removeNotification(notification.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="small"
+                  onClick={addNotification}
+                  className="w-full"
+                >
+                  <Plus size={16} className="mr-2" />
+                  Add Notification
                 </Button>
               </div>
             </div>
