@@ -24,7 +24,7 @@ import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNo
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import type { Notification } from './DesignSystem/components/UserJourneyNode'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
@@ -847,14 +847,39 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setJourneyDescription(analyzedJourney.description)
       }
 
+      // Set layout if provided
+      if (analyzedJourney.layout) {
+        setJourneyLayout(analyzedJourney.layout)
+      }
+
+      // Convert analyzed regions to React Flow nodes (if any)
+      const regionNodes: Node[] = (analyzedJourney.regions || []).map((region) => ({
+        id: region.id,
+        type: region.type,
+        position: region.position,
+        style: region.style,
+        data: region.data,
+        draggable: region.draggable,
+        selectable: region.selectable
+      }))
+
       // Convert analyzed nodes to React Flow nodes
       const flowNodes: Node[] = analyzedJourney.nodes.map((node) => {
         // Find matching user role if specified
         let matchedUserRole: UserRole | null = null
-        if (node.userRole) {
+        if (node.data.userRole) {
           matchedUserRole = userRoles.find(role => 
-            role.name.toLowerCase().includes(node.userRole!.toLowerCase()) ||
-            node.userRole!.toLowerCase().includes(role.name.toLowerCase())
+            role.name.toLowerCase().includes(node.data.userRole!.toLowerCase()) ||
+            node.data.userRole!.toLowerCase().includes(role.name.toLowerCase())
+          ) || null
+        }
+
+        // Find matching third party if specified
+        let matchedThirdParty: ThirdParty | null = null
+        if (node.data.thirdPartyName) {
+          matchedThirdParty = thirdParties.find(tp =>
+            tp.name.toLowerCase().includes(node.data.thirdPartyName!.toLowerCase()) ||
+            node.data.thirdPartyName!.toLowerCase().includes(tp.name.toLowerCase())
           ) || null
         }
 
@@ -864,13 +889,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           position: node.position,
           selectable: true,
           data: {
-            label: node.label,
-            type: node.type,
+            label: node.data.label,
+            type: node.data.type,
             userRole: matchedUserRole,
-            variant: node.platform || 'Legl',
-            bulletPoints: node.bulletPoints || [],
-            customProperties: {},
-            journeyLayout
+            variant: node.data.variant || '',
+            thirdParty: matchedThirdParty,
+            bulletPoints: node.data.bulletPoints || [],
+            notifications: node.data.notifications || [],
+            customProperties: node.data.customProperties || {},
+            journeyLayout: analyzedJourney.layout || journeyLayout
           }
         }
       })
@@ -880,25 +907,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        type: 'custom',
-        data: {
-          label: edge.label || ''
-        }
+        type: edge.type || 'custom',
+        data: edge.data || { label: '' }
       }))
 
-      setNodes(flowNodes)
+      // Combine regions and nodes (regions first so they render behind)
+      setNodes([...regionNodes, ...flowNodes])
       setEdges(flowEdges)
 
       // Close the modal
       setShowImportImageModal(false)
 
       // Show success message
-      alert(`Successfully imported journey with ${flowNodes.length} nodes and ${flowEdges.length} connections!`)
+      const regionText = regionNodes.length > 0 ? `, ${regionNodes.length} regions` : ''
+      alert(`Successfully imported journey with ${flowNodes.length} nodes${regionText}, and ${flowEdges.length} connections!`)
     } catch (error) {
       console.error('Error processing imported journey:', error)
       alert('Error processing the imported journey. Please try again.')
     }
-  }, [userRoles, setNodes, setEdges, journeyLayout])
+  }, [userRoles, thirdParties, setNodes, setEdges, journeyLayout])
 
   // Handle AI import from transcript
   const handleImportFromTranscript = useCallback(async () => {
@@ -2296,14 +2323,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <Sparkles size={16} />
             Import Transcript
           </Button>
-          {/* <Button
+          <Button
             variant="outline"
             onClick={() => setShowImportImageModal(true)}
             className="flex items-center gap-2 whitespace-nowrap"
           >
-            <Image size={16} />
+            <ImageIcon size={16} />
             Import from Image
-          </Button> */}
+          </Button>
           <Button
             variant="outline"
             onClick={exportJourney}
@@ -3098,6 +3125,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isOpen={showImportImageModal}
         onClose={() => setShowImportImageModal(false)}
         onImport={handleImportFromImage}
+        userRoles={userRoles.map(role => role.name)}
       />
 
       {/* Import JSON Modal */}
