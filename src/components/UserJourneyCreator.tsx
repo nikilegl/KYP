@@ -919,36 +919,55 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const tidyUpNodes = useCallback(() => {
     if (nodes.length === 0) return
 
-    const VERTICAL_GAP = 36
-    const HORIZONTAL_GAP = 48
-    const NODE_WIDTH = 320 // Width of nodes
-    const DEFAULT_NODE_HEIGHT = 120 // Fallback height
+    // Use requestAnimationFrame to ensure DOM has been updated
+    requestAnimationFrame(() => {
+      const VERTICAL_GAP = 36
+      const HORIZONTAL_GAP = 48
+      const NODE_WIDTH = 320 // Width of nodes
+      const DEFAULT_NODE_HEIGHT = 120 // Fallback height
 
-    // Get actual rendered heights from DOM
-    const getNodeHeight = (nodeId: string): number => {
-      const nodeElement = document.querySelector(`[data-id="${nodeId}"]`)
-      if (nodeElement) {
-        const rect = nodeElement.getBoundingClientRect()
-        // Account for zoom level by using the transform scale
-        const zoom = reactFlowInstanceRef.current?.getZoom() || 1
-        return rect.height / zoom
+      // Get actual rendered heights from DOM
+      const getNodeHeight = (nodeId: string): number => {
+        const nodeElement = document.querySelector(`[data-id="${nodeId}"]`)
+        if (nodeElement) {
+          const rect = nodeElement.getBoundingClientRect()
+          // Account for zoom level by using the transform scale
+          const zoom = reactFlowInstanceRef.current?.getZoom() || 1
+          const height = rect.height / zoom
+          console.log(`Node ${nodeId} height:`, height, `px (zoom: ${zoom})`)
+          return height
+        }
+        console.warn(`Node ${nodeId} not found in DOM, using default height`)
+        return DEFAULT_NODE_HEIGHT
       }
-      return DEFAULT_NODE_HEIGHT
+
+    // Helper function to check if an edge has a label
+    const hasEdgeLabel = (sourceId: string, targetId: string): boolean => {
+      const edge = edges.find(e => e.source === sourceId && e.target === targetId)
+      if (!edge?.data?.label) return false
+      const label = edge.data.label
+      return typeof label === 'string' && label.trim() !== ''
     }
 
     // Build adjacency map for graph traversal
     const adjacencyMap = new Map<string, string[]>()
     const incomingEdges = new Map<string, number>()
+    const parentMap = new Map<string, string[]>() // Track parents for each node
 
     nodes.forEach(node => {
       adjacencyMap.set(node.id, [])
       incomingEdges.set(node.id, 0)
+      parentMap.set(node.id, [])
     })
 
     edges.forEach(edge => {
       const sourceChildren = adjacencyMap.get(edge.source) || []
       adjacencyMap.set(edge.source, [...sourceChildren, edge.target])
       incomingEdges.set(edge.target, (incomingEdges.get(edge.target) || 0) + 1)
+      
+      // Track parent relationships
+      const parents = parentMap.get(edge.target) || []
+      parentMap.set(edge.target, [...parents, edge.source])
     })
 
     // Find start node (node with no incoming edges)
@@ -1003,6 +1022,276 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       }
     }
 
+    // Post-process: Classify node layouts and ensure simple nodes are vertically aligned with their parent
+    // This handles cases where a node might have been assigned a different horizontal position
+    const nodeParentCount = new Map<string, number>()
+    const nodeChildCount = new Map<string, number>()
+    const nodeLayout = new Map<string, string>() // Store layout classification
+    
+    nodes.forEach(node => {
+      const parents = parentMap.get(node.id) || []
+      const children = adjacencyMap.get(node.id) || []
+      nodeParentCount.set(node.id, parents.length)
+      nodeChildCount.set(node.id, children.length)
+    })
+    
+    // Classify nodes by layout type
+    nodes.forEach(node => {
+      const parentCount = nodeParentCount.get(node.id) || 0
+      const childCount = nodeChildCount.get(node.id) || 0
+      
+      // Convergent node: Has 2+ incoming edges
+      if (parentCount >= 2) {
+        nodeLayout.set(node.id, 'Convergent node')
+      }
+      // Branch node: Has 0-1 incoming edges, 2+ outgoing edges
+      else if (parentCount <= 1 && childCount >= 2) {
+        nodeLayout.set(node.id, 'Branch node')
+      }
+      // Check if this is a divergent node or branch-child
+      // Divergent node: Has a branch parent that has an outgoing edge directly connecting to a convergent node
+      // Branch-child: Has a branch parent where all branches lead to branch-children (not convergent nodes)
+      else if (parentCount === 1) {
+        const parents = parentMap.get(node.id) || []
+        const parentId = parents[0]
+        const parentChildCount = nodeChildCount.get(parentId) || 0
+        
+        // Parent is a branch node (2+ children)
+        if (parentChildCount >= 2) {
+          // Check if the parent has a DIRECT edge to a convergent node
+          // (one of the parent's children is a convergent node)
+          const parentChildren = adjacencyMap.get(parentId) || []
+          const convergentSiblings = parentChildren.filter(siblingId => {
+            const siblingParentCount = nodeParentCount.get(siblingId) || 0
+            return siblingParentCount >= 2
+          })
+          const parentHasDirectConvergentChild = convergentSiblings.length > 0
+          
+          // This node is divergent if its parent directly connects to a convergent node
+          if (parentHasDirectConvergentChild) {
+            nodeLayout.set(node.id, 'Divergent node')
+            const nodeLabel = (node.data as any)?.label || node.id
+            console.log(`Node ${nodeLabel} is Divergent: parent has direct edge to convergent node(s)`, 
+              convergentSiblings.map(id => {
+                const sibling = nodes.find(n => n.id === id)
+                return (sibling?.data as any)?.label || id
+              }))
+          } else {
+            // Branch-child: parent is branch node, but parent does not directly connect to convergent node
+            nodeLayout.set(node.id, 'Branch-child node')
+          }
+        } else {
+          // Simple node: Has 0-1 incoming and outgoing edges
+          nodeLayout.set(node.id, 'Simple node')
+        }
+      }
+      // Simple node: Has 0-1 incoming and outgoing edges
+      else {
+        nodeLayout.set(node.id, 'Simple node')
+      }
+    })
+    
+    // Apply branching layout
+    console.log('=== Branching Layout ===')
+    
+    // First, identify branch nodes and check if they have divergent children
+    const branchesWithLayout = new Map<string, boolean>() // branch node id -> should use branching layout
+    const branchingXPositions = new Map<string, number>() // Store actual pixel X positions for branching layout nodes
+    
+    nodes.forEach(node => {
+      const childCount = nodeChildCount.get(node.id) || 0
+      
+      if (childCount >= 2) {
+        // This is a branch node - check if any child is divergent
+        const children = adjacencyMap.get(node.id) || []
+        const hasDivergentChild = children.some(childId => {
+          const childLayout = nodeLayout.get(childId)
+          return childLayout === 'Divergent node'
+        })
+        
+        branchesWithLayout.set(node.id, !hasDivergentChild)
+        const nodeLabel = (node.data as any)?.label || node.id
+        
+        if (hasDivergentChild) {
+          console.log(`Branch node ${nodeLabel}: has divergent child, NOT using branching layout`)
+        } else {
+          console.log(`Branch node ${nodeLabel}: using branching layout`)
+        }
+      }
+    })
+    
+    // First pass: ensure parent nodes have positions set
+    const getNodeXPosition = (nodeId: string): number => {
+      // Check branching positions first
+      if (branchingXPositions.has(nodeId)) {
+        return branchingXPositions.get(nodeId)!
+      }
+      // Fall back to horizontal position with formula
+      const horizontalPos = horizontalPositions.get(nodeId) ?? 0
+      return 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
+    }
+    
+    // Apply branching layout: position children relative to branch node
+    // Process level by level to ensure parents are positioned before children
+    const maxLevelForBranching = Math.max(...Array.from(levels.values()), 0)
+    for (let level = 0; level <= maxLevelForBranching; level++) {
+      const nodesAtLevel = Array.from(levels.entries())
+        .filter(([_, l]) => l === level)
+        .map(([nodeId]) => nodeId)
+      
+      nodesAtLevel.forEach(nodeId => {
+        const node = nodes.find(n => n.id === nodeId)
+        if (!node) return
+        
+        const childCount = nodeChildCount.get(nodeId) || 0
+        const parentCount = nodeParentCount.get(nodeId) || 0
+        
+        if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
+          const children = adjacencyMap.get(nodeId) || []
+          const nodeLabel = (node.data as any)?.label || nodeId
+          
+          // Branch node should align with its parent - get parent's X position
+          let branchNodeX = 288 // Default center position
+          if (parentCount === 1) {
+            const parents = parentMap.get(nodeId) || []
+            const parentId = parents[0]
+            // Parent should already have a position since we're processing level by level
+            branchNodeX = branchingXPositions.has(parentId) 
+              ? branchingXPositions.get(parentId)!
+              : getNodeXPosition(parentId)
+            const parentLabel = nodes.find(n => n.id === parentId)
+            console.log(`  Branch node ${nodeLabel}: aligning with parent ${(parentLabel?.data as any)?.label || parentId} at x=${branchNodeX}`)
+          } else if (parentCount === 0) {
+            // Root node - use default
+            console.log(`  Branch node ${nodeLabel}: root node, using default x=${branchNodeX}`)
+          }
+          
+          branchingXPositions.set(nodeId, branchNodeX)
+          
+          // Position children centered around the branch node, 384px apart
+          // For 2 children: branch-192, branch+192
+          // For 3 children: branch-384, branch, branch+384
+          const numChildren = children.length
+          children.forEach((childId, index) => {
+            // Calculate offset from center
+            const offsetIndex = index - (numChildren - 1) / 2
+            const childX = Math.round((branchNodeX + (offsetIndex * 384)) / 8) * 8
+            branchingXPositions.set(childId, childX)
+            const childLabel = nodes.find(n => n.id === childId)
+            console.log(`  Branch child ${(childLabel?.data as any)?.label || childId}: positioned at x=${childX} (offset ${offsetIndex * 384})`)
+          })
+        }
+      })
+    }
+    
+    // Align convergent nodes with their branch node (unless divergent is involved)
+    console.log('=== Aligning Convergent Nodes ===')
+    nodes.forEach(node => {
+      const parentCount = nodeParentCount.get(node.id) || 0
+      
+      // If this is a convergent node (2+ parents)
+      if (parentCount >= 2) {
+        const parents = parentMap.get(node.id) || []
+        const nodeLabel = (node.data as any)?.label || node.id
+        
+        // Check if any parent is divergent
+        const hasDivergentParent = parents.some(parentId => {
+          const layout = nodeLayout.get(parentId)
+          return layout === 'Divergent node'
+        })
+        
+        if (!hasDivergentParent) {
+          // Find the branch node that these parents branch from
+          // Traverse up from parents to find common ancestor that is a branch node
+          const findBranchAncestor = (nodeId: string, visited = new Set<string>()): string | null => {
+            if (visited.has(nodeId)) return null
+            visited.add(nodeId)
+            
+            // Check if this node is a branch node with branching layout
+            const childCount = nodeChildCount.get(nodeId) || 0
+            if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
+              return nodeId
+            }
+            
+            // Check parents
+            const nodeParents = parentMap.get(nodeId) || []
+            for (const parentId of nodeParents) {
+              const result = findBranchAncestor(parentId, visited)
+              if (result) return result
+            }
+            
+            return null
+          }
+          
+          // Find branch ancestor from first parent
+          const branchAncestor = findBranchAncestor(parents[0])
+          
+          if (branchAncestor && branchingXPositions.has(branchAncestor)) {
+            const branchX = branchingXPositions.get(branchAncestor)!
+            branchingXPositions.set(node.id, branchX)
+            const branchLabel = nodes.find(n => n.id === branchAncestor)
+            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchAncestor} at x=${branchX}`)
+          }
+        } else {
+          console.log(`  Convergent node ${nodeLabel}: has divergent parent, skipping alignment`)
+        }
+      }
+    })
+    
+    // Default: All nodes inherit their parent's X position
+    // Only branch children, convergent nodes, and divergent nodes get different positions
+    console.log('=== Setting Default X Positions (inherit from parent) ===')
+    
+    // Process nodes level by level to ensure parents are positioned before children
+    const maxLevel = Math.max(...Array.from(levels.values()), 0)
+    for (let level = 0; level <= maxLevel; level++) {
+      const nodesAtLevel = Array.from(levels.entries())
+        .filter(([_, l]) => l === level)
+        .map(([nodeId]) => nodeId)
+      
+      nodesAtLevel.forEach(nodeId => {
+        // Skip if already has a position set by branching layout
+        if (branchingXPositions.has(nodeId)) {
+          return
+        }
+        
+        const parents = parentMap.get(nodeId) || []
+        
+        // If node has a parent, inherit its X position
+        if (parents.length === 1) {
+          const parentId = parents[0]
+          const parentX = branchingXPositions.has(parentId) 
+            ? branchingXPositions.get(parentId)! 
+            : getNodeXPosition(parentId)
+          
+          branchingXPositions.set(nodeId, parentX)
+          const nodeLabel = (nodes.find(n => n.id === nodeId)?.data as any)?.label || nodeId
+          const parentLabel = (nodes.find(n => n.id === parentId)?.data as any)?.label || parentId
+          console.log(`  ${nodeLabel}: inheriting parent ${parentLabel}'s x=${parentX}`)
+        }
+        // If no parents (root node), use default or existing horizontal position
+        else if (parents.length === 0) {
+          const defaultX = getNodeXPosition(nodeId)
+          branchingXPositions.set(nodeId, defaultX)
+          const nodeLabel = (nodes.find(n => n.id === nodeId)?.data as any)?.label || nodeId
+          console.log(`  ${nodeLabel}: root node at x=${defaultX}`)
+        }
+        // Convergent nodes already handled above
+      })
+    }
+
+    // Debug: Log all branching X positions
+    console.log('=== All Branching X Positions ===')
+    console.log(`Total nodes: ${nodes.length}, Nodes with branching X: ${branchingXPositions.size}`)
+    nodes.forEach(node => {
+      const hasPos = branchingXPositions.has(node.id)
+      const xPos = hasPos ? branchingXPositions.get(node.id) : 'MISSING'
+      const label = (node.data as any)?.label || node.id
+      if (!hasPos) {
+        console.warn(`  ⚠️  ${label}: ${xPos}`)
+      }
+    })
+    
     // Group nodes by level for vertical positioning
     const nodesByLevel = new Map<number, string[]>()
     levels.forEach((level, nodeId) => {
@@ -1010,44 +1299,103 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       nodesByLevel.set(level, [...nodesAtLevel, nodeId])
     })
 
-    // Calculate positions
+    // Calculate Y positions for each level, accounting for labeled edges
+    const yPositionsByNode = new Map<string, number>()
+    const maxLevels = Math.max(...Array.from(levels.values()), 0)
+    
+    let cumulativeY = 100 // Starting Y position
+    
+    for (let level = 0; level <= maxLevels; level++) {
+      const nodesAtLevel = nodesByLevel.get(level) || []
+      
+      if (nodesAtLevel.length === 0) continue
+      
+      // For each node at this level, calculate its Y position
+      nodesAtLevel.forEach(nodeId => {
+        // Check if this node has any incoming edges with labels
+        const parents = parentMap.get(nodeId) || []
+        const hasLabeledIncomingEdge = parents.some(parentId => hasEdgeLabel(parentId, nodeId))
+        
+        // Add extra gap if there's a labeled incoming edge
+        const extraGap = hasLabeledIncomingEdge ? VERTICAL_GAP : 0
+        
+        yPositionsByNode.set(nodeId, cumulativeY + extraGap)
+      })
+      
+      // Calculate the maximum height at this level
+      const maxHeightAtLevel = Math.max(
+        ...nodesAtLevel.map(id => getNodeHeight(id)),
+        DEFAULT_NODE_HEIGHT
+      )
+      
+      // Check if any node at this level has a labeled incoming edge
+      const anyNodeHasLabeledEdge = nodesAtLevel.some(nodeId => {
+        const parents = parentMap.get(nodeId) || []
+        return parents.some(parentId => hasEdgeLabel(parentId, nodeId))
+      })
+      
+      // Update cumulative Y for next level
+      // Add the max height of current level + standard gap + extra gap if any node has labeled edge
+      const extraGap = anyNodeHasLabeledEdge ? VERTICAL_GAP : 0
+      cumulativeY += maxHeightAtLevel + VERTICAL_GAP + extraGap
+    }
+
+    // Apply calculated positions to nodes
     const updatedNodes = nodes.map(node => {
-      const level = levels.get(node.id) ?? 0
-      const horizontalPos = horizontalPositions.get(node.id) ?? 0
+      const yPosition = yPositionsByNode.get(node.id) ?? 100
+      const layout = nodeLayout.get(node.id) || 'Simple node'
 
-      // Calculate Y position - sum of all previous levels' heights + gaps
-      let yPosition = 100
-      for (let i = 0; i < level; i++) {
-        const nodesAtPrevLevel = nodesByLevel.get(i) || []
-        const maxHeightAtLevel = Math.max(
-          ...nodesAtPrevLevel.map(id => getNodeHeight(id)),
-          DEFAULT_NODE_HEIGHT
-        )
-        yPosition += maxHeightAtLevel + VERTICAL_GAP
+      // Calculate X position - should always use branchingXPositions now
+      let xPosition: number
+      
+      if (branchingXPositions.has(node.id)) {
+        xPosition = branchingXPositions.get(node.id)!
+      } else {
+        // Fallback: this shouldn't happen if logic above is correct
+        console.warn(`Node ${(node.data as any)?.label || node.id}: missing branching position, using fallback`)
+        xPosition = getNodeXPosition(node.id)
       }
-
-      // Calculate X position based on horizontal position (branch)
-      const xPosition = 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
+      
+      // If this is a divergent node, add 180px offset to the right
+      if (layout === 'Divergent node') {
+        xPosition += 180
+        console.log(`Divergent node ${(node.data as any)?.label || node.id}: adding 180px offset (x: ${xPosition - 180} -> ${xPosition})`)
+      }
 
       return {
         ...node,
+        data: {
+          ...node.data,
+          nodeLayout: layout
+        },
         position: {
           x: xPosition,
           y: yPosition
         }
       }
     })
+    
+    // Log layout classifications and final positions for debugging
+    console.log('=== Node Layout Classifications & Final Positions ===')
+    updatedNodes.forEach(node => {
+      const layout = (node.data as any).nodeLayout || 'Unknown'
+      const label = (node.data as any).label || node.id
+      const xPos = node.position.x
+      const yPos = node.position.y
+      console.log(`${label}: ${layout} @ (${xPos}, ${yPos})`)
+    })
 
-    setNodes(updatedNodes)
+      setNodes(updatedNodes)
 
-    // Save to database if journey exists
-    if (currentJourneyId) {
-      updateUserJourney(currentJourneyId, {
-        flow_data: { nodes: updatedNodes, edges }
-      }).catch(error => {
-        console.error('Error saving tidy layout:', error)
-      })
-    }
+      // Save to database if journey exists
+      if (currentJourneyId) {
+        updateUserJourney(currentJourneyId, {
+          flow_data: { nodes: updatedNodes, edges }
+        }).catch(error => {
+          console.error('Error saving tidy layout:', error)
+        })
+      }
+    }) // End of requestAnimationFrame
   }, [nodes, edges, setNodes, currentJourneyId])
 
   // Handle edge label editing
@@ -1378,6 +1726,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 placeholder="Enter node description..."
               />
             </div>
+
+            {/* Node Layout Classification (read-only, for debugging) */}
+            {configuringNode && (configuringNode.data as any)?.nodeLayout && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Node Layout (Debug)
+                </label>
+                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700 text-sm">
+                  {(configuringNode.data as any).nodeLayout}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  This classification is automatically determined by the node's connections after running "Tidy up"
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
