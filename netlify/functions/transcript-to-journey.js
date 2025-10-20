@@ -48,19 +48,19 @@ export async function handler(event, context) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'You are a user journey mapping expert. You extract user journeys from transcripts and return valid JSON only. Never include markdown code blocks or explanations.'
+            content: 'You are a user journey mapping expert. You extract COMPLETE user journeys from transcripts and return valid JSON only. Extract EVERY step mentioned in the transcript, no matter how long. Never include markdown code blocks or explanations. Be thorough and comprehensive.'
           },
           {
             role: 'user',
-            content: `${prompt}\n\nTranscript:\n${transcript}`
+            content: `${prompt}\n\nTranscript:\n${transcript}\n\nIMPORTANT: Extract ALL steps from this transcript. Do not truncate or summarize - include every single step mentioned.`
           }
         ],
-        temperature: 0.3,
-        max_tokens: 4000,
+        temperature: 0.5,
+        max_tokens: 16000,
         response_format: { type: 'json_object' }
       })
     })
@@ -121,13 +121,22 @@ export async function handler(event, context) {
       journeyData.edges = []
     }
 
+    // Log token usage and check if we hit limits
+    console.log('Token usage:', data.usage)
+    console.log('Nodes extracted:', journeyData.nodes.length)
+    if (data.choices[0].finish_reason === 'length') {
+      console.warn('WARNING: Response was truncated due to max_tokens limit!')
+    }
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
         journey: journeyData,
-        usage: data.usage
+        usage: data.usage,
+        nodesExtracted: journeyData.nodes.length,
+        finishReason: data.choices[0].finish_reason
       }),
     }
 

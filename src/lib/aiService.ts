@@ -293,6 +293,16 @@ export const convertTranscriptToJourney = async (
       throw new Error('Server response is missing journey data')
     }
 
+    // Log diagnostic information
+    console.log('✓ Transcript conversion successful!')
+    console.log('Nodes extracted:', result.nodesExtracted || result.journey.nodes?.length || 0)
+    console.log('Token usage:', result.usage)
+    console.log('Finish reason:', result.finishReason)
+    
+    if (result.finishReason === 'length') {
+      console.warn('⚠️ WARNING: Response may be incomplete - hit token limit!')
+    }
+
     return result.journey
   } catch (error) {
     console.error('Error converting transcript to journey:', error)
