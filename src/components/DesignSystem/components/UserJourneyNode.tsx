@@ -1,5 +1,4 @@
-import React from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { Edit, Trash2, Copy } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
 import type { UserRole, ThirdParty } from '../../../lib/supabase'
@@ -15,9 +14,12 @@ export interface UserJourneyNodeData {
   variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
   thirdPartyName?: string
   nodeLayout?: string // Layout classification: 'Simple node', 'Branch node', 'Branch-child node', 'Convergent node', 'Divergent node'
+  journeyLayout?: 'vertical' | 'horizontal' // Overall journey layout direction
 }
 
-interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
+interface UserJourneyNodeProps {
+  id: string
+  data: UserJourneyNodeData
   selected?: boolean
   showHandles?: boolean
   thirdParties?: ThirdParty[]
@@ -27,15 +29,17 @@ interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
 }
 
 export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
+  const nodeData = data as UserJourneyNodeData
   const {
-    label,
-    type,
+    label = '',
+    type = 'process',
     userRole,
     bulletPoints = [],
     customProperties = {},
     variant = 'Legl',
-    thirdPartyName = ''
-  } = data || {}
+    thirdPartyName = '',
+    journeyLayout = 'vertical'
+  } = nodeData || {}
   
   // Find matching third party logo (case-insensitive)
   const matchingThirdParty = thirdParties.find(
@@ -58,46 +62,47 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
 
   const borderColor = getBorderColor()
 
-  // Handle positioning for different node types
+  // Handle positioning for different node types and layout orientation
   const getHandlePositions = () => {
+    const isHorizontal = journeyLayout === 'horizontal'
+    
+    // For horizontal layout, use Left/Right instead of Top/Bottom
+    const sourcePos = isHorizontal ? Position.Right : Position.Bottom
+    const targetPos = isHorizontal ? Position.Left : Position.Top
+    const sourceId = isHorizontal ? 'right' : 'bottom'
+    const targetId = isHorizontal ? 'left' : 'top'
+    
     switch (type) {
       case 'start':
         return [
-          { type: 'source', position: Position.Bottom, id: 'bottom' }
+          { type: 'source', position: sourcePos, id: sourceId }
         ]
       case 'process':
         return [
-          { type: 'target', position: Position.Top, id: 'top' },
-          { type: 'source', position: Position.Bottom, id: 'bottom' }
+          { type: 'target', position: targetPos, id: targetId },
+          { type: 'source', position: sourcePos, id: sourceId }
         ]
       case 'decision':
-        return [
-          { type: 'target', position: Position.Top, id: 'top' },
-          { type: 'source', position: Position.Right, id: 'right' },
-          { type: 'source', position: Position.Bottom, id: 'bottom' }
-        ]
+        // For decision nodes, keep the branch behavior
+        if (isHorizontal) {
+          return [
+            { type: 'target', position: Position.Left, id: 'left' },
+            { type: 'source', position: Position.Right, id: 'right' },
+            { type: 'source', position: Position.Bottom, id: 'bottom' }
+          ]
+        } else {
+          return [
+            { type: 'target', position: Position.Top, id: 'top' },
+            { type: 'source', position: Position.Right, id: 'right' },
+            { type: 'source', position: Position.Bottom, id: 'bottom' }
+          ]
+        }
       case 'end':
         return [
-          { type: 'target', position: Position.Top, id: 'top' }
+          { type: 'target', position: targetPos, id: targetId }
         ]
       default:
         return []
-    }
-  }
-
-  // Get type label
-  const getTypeLabel = () => {
-    switch (type) {
-      case 'start':
-        return 'Start'
-      case 'process':
-        return 'Middle'
-      case 'decision':
-        return 'Decision'
-      case 'end':
-        return 'End'
-      default:
-        return type
     }
   }
 

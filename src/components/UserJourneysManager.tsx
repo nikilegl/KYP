@@ -39,6 +39,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
+    layout: 'vertical' as 'vertical' | 'horizontal',
     project_id: ''
   })
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
@@ -162,6 +163,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     setEditForm({
       name: journey.name,
       description: journey.description || '',
+      layout: journey.layout || 'vertical',
       project_id: journey.project_id || ''
     })
     // Set selected law firms
@@ -177,6 +179,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       await updateUserJourney(journeyToEdit.id, {
         name: editForm.name,
         description: editForm.description,
+        layout: editForm.layout,
         project_id: editForm.project_id || null
       })
       
@@ -193,6 +196,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               ...j, 
               name: editForm.name, 
               description: editForm.description,
+              layout: editForm.layout,
               project_id: editForm.project_id || null,
               project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined,
               lawFirms: updatedLawFirms
@@ -248,7 +252,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         duplicateName,
         journeyToDuplicate.description || '',
         journeyToDuplicate.flow_data || { nodes: [], edges: [] },
-        journeyToDuplicate.project_id || null
+        journeyToDuplicate.project_id || null,
+        journeyToDuplicate.layout || 'vertical'
       )
       
       if (duplicated) {
@@ -607,6 +612,19 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Optional description"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Layout
+              </label>
+              <select
+                value={editForm.layout}
+                onChange={(e) => setEditForm(prev => ({ ...prev, layout: e.target.value as 'vertical' | 'horizontal' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="vertical">Vertical (Top to Bottom)</option>
+                <option value="horizontal">Horizontal (Left to Right)</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
