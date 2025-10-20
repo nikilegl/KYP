@@ -240,12 +240,14 @@ export const enhanceExtractedExamples = (examples: ExtractedExample[]): Extracte
 /**
  * Converts a phone call transcript to a user journey JSON using OpenAI
  * @param transcript - The raw transcript text
- * @param customPrompt - Optional custom prompt to override the default
+ * @param customPrompt - The prompt to use (should be generated with user roles)
+ * @param userRoleNames - Optional array of user role names to include in error messages
  * @returns Promise with the user journey JSON
  */
 export const convertTranscriptToJourney = async (
   transcript: string,
-  customPrompt?: string
+  customPrompt: string,
+  userRoleNames?: string[]
 ): Promise<any> => {
   try {
     console.log('Calling Netlify function to convert transcript...')
