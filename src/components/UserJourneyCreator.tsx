@@ -1300,6 +1300,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
 
     // Assign levels and horizontal positions using BFS
+    // For convergent nodes (multiple parents), level = max(parent levels) + 1
     const levels = new Map<string, number>()
     const horizontalPositions = new Map<string, number>()
     const visited = new Set<string>()
@@ -1324,21 +1325,79 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         // Single child - same branch
         const childId = children[0]
         if (!visited.has(childId)) {
-          levels.set(childId, level + 1)
+          const currentLevel = levels.get(childId)
+          const newLevel = level + 1
+          // For convergent nodes, use max level from all parents
+          if (currentLevel === undefined || newLevel > currentLevel) {
+            levels.set(childId, newLevel)
+          }
           horizontalPositions.set(childId, branch)
-          queue.push({ nodeId: childId, level: level + 1, branch })
+          queue.push({ nodeId: childId, level: newLevel, branch })
         }
       } else if (children.length > 1) {
         // Multiple children - create branches
         children.forEach((childId, index) => {
           if (!visited.has(childId)) {
             const childBranch = branch + index
-            levels.set(childId, level + 1)
+            const currentLevel = levels.get(childId)
+            const newLevel = level + 1
+            // For convergent nodes, use max level from all parents
+            if (currentLevel === undefined || newLevel > currentLevel) {
+              levels.set(childId, newLevel)
+            }
             horizontalPositions.set(childId, childBranch)
-            queue.push({ nodeId: childId, level: level + 1, branch: childBranch })
+            queue.push({ nodeId: childId, level: newLevel, branch: childBranch })
           }
         })
       }
+    }
+
+    // Post-process: Ensure convergent nodes are at max(parent levels) + 1
+    // This also cascades to their children
+    console.log('=== Post-processing: Fix convergent node levels ===')
+    let levelChanged = true
+    let iterations = 0
+    const maxIterations = 10 // Prevent infinite loops
+    
+    while (levelChanged && iterations < maxIterations) {
+      levelChanged = false
+      iterations++
+      
+      nodes.forEach(node => {
+        const parents = parentMap.get(node.id) || []
+        
+        if (parents.length >= 2) {
+          // This is a convergent node - ensure it's at max(parent levels) + 1
+          const parentLevels = parents.map(parentId => levels.get(parentId) || 0)
+          const maxParentLevel = Math.max(...parentLevels)
+          const correctLevel = maxParentLevel + 1
+          const currentLevel = levels.get(node.id) || 0
+          
+          if (currentLevel !== correctLevel) {
+            const nodeLabel = (node.data as any)?.label || node.id
+            console.log(`  Convergent node ${nodeLabel}: updating level from ${currentLevel} to ${correctLevel} (max parent level: ${maxParentLevel})`)
+            levels.set(node.id, correctLevel)
+            levelChanged = true
+          }
+        } else if (parents.length === 1) {
+          // Single parent - ensure level = parent level + 1
+          const parentId = parents[0]
+          const parentLevel = levels.get(parentId) || 0
+          const correctLevel = parentLevel + 1
+          const currentLevel = levels.get(node.id) || 0
+          
+          if (currentLevel !== correctLevel) {
+            const nodeLabel = (node.data as any)?.label || node.id
+            console.log(`  Node ${nodeLabel}: updating level from ${currentLevel} to ${correctLevel} (parent level: ${parentLevel})`)
+            levels.set(node.id, correctLevel)
+            levelChanged = true
+          }
+        }
+      })
+    }
+    
+    if (iterations >= maxIterations) {
+      console.warn('Max iterations reached while fixing node levels - possible circular dependency')
     }
 
     // Post-process: Classify node layouts and ensure simple nodes are vertically aligned with their parent
@@ -1450,60 +1509,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       return 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
     }
     
-    // Apply branching layout: position children relative to branch node
-    // Process level by level to ensure parents are positioned before children
-    const maxLevelForBranching = Math.max(...Array.from(levels.values()), 0)
-    for (let level = 0; level <= maxLevelForBranching; level++) {
-      const nodesAtLevel = Array.from(levels.entries())
-        .filter(([_, l]) => l === level)
-        .map(([nodeId]) => nodeId)
-      
-      nodesAtLevel.forEach(nodeId => {
-        const node = nodes.find(n => n.id === nodeId)
-        if (!node) return
-        
-        const childCount = nodeChildCount.get(nodeId) || 0
-        const parentCount = nodeParentCount.get(nodeId) || 0
-        
-        if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
-          const children = adjacencyMap.get(nodeId) || []
-          const nodeLabel = (node.data as any)?.label || nodeId
-          
-          // Branch node should align with its parent - get parent's X position
-          let branchNodeX = 288 // Default center position
-          if (parentCount === 1) {
-            const parents = parentMap.get(nodeId) || []
-            const parentId = parents[0]
-            // Parent should already have a position since we're processing level by level
-            branchNodeX = branchingXPositions.has(parentId) 
-              ? branchingXPositions.get(parentId)!
-              : getNodeXPosition(parentId)
-            const parentLabel = nodes.find(n => n.id === parentId)
-            console.log(`  Branch node ${nodeLabel}: aligning with parent ${(parentLabel?.data as any)?.label || parentId} at x=${branchNodeX}`)
-          } else if (parentCount === 0) {
-            // Root node - use default
-            console.log(`  Branch node ${nodeLabel}: root node, using default x=${branchNodeX}`)
-          }
-          
-          branchingXPositions.set(nodeId, branchNodeX)
-          
-          // Position children centered around the branch node, 384px apart
-          // For 2 children: branch-192, branch+192
-          // For 3 children: branch-384, branch, branch+384
-          const numChildren = children.length
-          children.forEach((childId, index) => {
-            // Calculate offset from center
-            const offsetIndex = index - (numChildren - 1) / 2
-            const childX = Math.round((branchNodeX + (offsetIndex * 384)) / 8) * 8
-            branchingXPositions.set(childId, childX)
-            const childLabel = nodes.find(n => n.id === childId)
-            console.log(`  Branch child ${(childLabel?.data as any)?.label || childId}: positioned at x=${childX} (offset ${offsetIndex * 384})`)
-          })
-        }
-      })
-    }
+    // STEP 1: Position all non-branch-child nodes first (including convergent nodes)
+    console.log('=== STEP 1: Positioning Parent Nodes ===')
     
-    // Align convergent nodes with their branch node (unless divergent is involved)
+    // First, align convergent nodes with their branch node (or divergent parent if applicable)
     console.log('=== Aligning Convergent Nodes ===')
     nodes.forEach(node => {
       const parentCount = nodeParentCount.get(node.id) || 0
@@ -1514,12 +1523,30 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         const nodeLabel = (node.data as any)?.label || node.id
         
         // Check if any parent is divergent
-        const hasDivergentParent = parents.some(parentId => {
+        const divergentParent = parents.find(parentId => {
           const layout = nodeLayout.get(parentId)
           return layout === 'Divergent node'
         })
         
-        if (!hasDivergentParent) {
+        if (divergentParent) {
+          // Convergent node should have the SAME X as the branch node (not the divergent node)
+          // The Y coordinate will naturally place it below the divergent due to level-based positioning
+          
+          // Get the branch node (parent of the divergent node)
+          const divergentParents = parentMap.get(divergentParent) || []
+          if (divergentParents.length > 0) {
+            const branchNodeId = divergentParents[0]
+            const branchNodeX = branchingXPositions.has(branchNodeId) 
+              ? branchingXPositions.get(branchNodeId)!
+              : getNodeXPosition(branchNodeId)
+            
+            // Convergent should be at the branch node's X (NOT divergent's X)
+            branchingXPositions.set(node.id, branchNodeX)
+            const divergentLabel = nodes.find(n => n.id === divergentParent)
+            const branchLabel = nodes.find(n => n.id === branchNodeId)
+            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchNodeId} (parent of divergent ${(divergentLabel?.data as any)?.label || divergentParent}) at x=${branchNodeX}`)
+          }
+        } else {
           // Find the branch node that these parents branch from
           // Traverse up from parents to find common ancestor that is a branch node
           const findBranchAncestor = (nodeId: string, visited = new Set<string>()): string | null => {
@@ -1551,11 +1578,70 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             const branchLabel = nodes.find(n => n.id === branchAncestor)
             console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchAncestor} at x=${branchX}`)
           }
-        } else {
-          console.log(`  Convergent node ${nodeLabel}: has divergent parent, skipping alignment`)
         }
       }
     })
+    
+    // STEP 2: Now position branch nodes and their children
+    // Process level by level to ensure parents are positioned before children
+    console.log('=== STEP 2: Positioning Branch Nodes and Children ===')
+    const maxLevelForBranching = Math.max(...Array.from(levels.values()), 0)
+    for (let level = 0; level <= maxLevelForBranching; level++) {
+      const nodesAtLevel = Array.from(levels.entries())
+        .filter(([_, l]) => l === level)
+        .map(([nodeId]) => nodeId)
+      
+      nodesAtLevel.forEach(nodeId => {
+        const node = nodes.find(n => n.id === nodeId)
+        if (!node) return
+        
+        const childCount = nodeChildCount.get(nodeId) || 0
+        const parentCount = nodeParentCount.get(nodeId) || 0
+        
+        if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
+          const children = adjacencyMap.get(nodeId) || []
+          const nodeLabel = (node.data as any)?.label || nodeId
+          
+          // Get the branch node's X position (may have been set by convergent logic above)
+          let branchNodeX = branchingXPositions.get(nodeId)
+          
+          if (!branchNodeX) {
+            // If not set yet, align with parent or use default
+            if (parentCount === 1) {
+              const parents = parentMap.get(nodeId) || []
+              const parentId = parents[0]
+              branchNodeX = branchingXPositions.has(parentId) 
+                ? branchingXPositions.get(parentId)!
+                : getNodeXPosition(parentId)
+              const parentLabel = nodes.find(n => n.id === parentId)
+              console.log(`  Branch node ${nodeLabel}: aligning with parent ${(parentLabel?.data as any)?.label || parentId} at x=${branchNodeX}`)
+            } else if (parentCount === 0) {
+              branchNodeX = 288 // Default center position for root
+              console.log(`  Branch node ${nodeLabel}: root node, using default x=${branchNodeX}`)
+            } else {
+              branchNodeX = 288 // Default if multiple parents
+              console.log(`  Branch node ${nodeLabel}: multiple parents, using default x=${branchNodeX}`)
+            }
+            branchingXPositions.set(nodeId, branchNodeX)
+          } else {
+            console.log(`  Branch node ${nodeLabel}: using pre-set position x=${branchNodeX}`)
+          }
+          
+          // Position children centered around the branch node, 384px apart
+          // For 2 children: branch-192, branch+192
+          // For 3 children: branch-384, branch, branch+384
+          const numChildren = children.length
+          children.forEach((childId, index) => {
+            // Calculate offset from center
+            const offsetIndex = index - (numChildren - 1) / 2
+            const childX = Math.round((branchNodeX + (offsetIndex * 384)) / 8) * 8
+            branchingXPositions.set(childId, childX)
+            const childLabel = nodes.find(n => n.id === childId)
+            console.log(`  Branch child ${(childLabel?.data as any)?.label || childId}: positioned at x=${childX} (offset ${offsetIndex * 384} from parent x=${branchNodeX})`)
+          })
+        }
+      })
+    }
     
     // Default: All nodes inherit their parent's X position
     // Only branch children, convergent nodes, and divergent nodes get different positions
@@ -1618,7 +1704,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       nodesByLevel.set(level, [...nodesAtLevel, nodeId])
     })
 
-    // Calculate Y positions for each level, accounting for labeled edges
+    // Calculate Y positions for each level, accounting for labeled edges and branch nodes
     const yPositionsByNode = new Map<string, number>()
     const maxLevels = Math.max(...Array.from(levels.values()), 0)
     
@@ -1628,6 +1714,29 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const nodesAtLevel = nodesByLevel.get(level) || []
       
       if (nodesAtLevel.length === 0) continue
+      
+      // Check if any node at the PREVIOUS level is a branch node
+      // If so, multiply the gap by the number of child branches
+      let branchGapMultiplier = 1
+      if (level > 0) {
+        const previousLevelNodes = nodesByLevel.get(level - 1) || []
+        previousLevelNodes.forEach(parentId => {
+          const childCount = nodeChildCount.get(parentId) || 0
+          if (childCount >= 2 && branchesWithLayout.get(parentId)) {
+            // Multiply gap by number of children
+            branchGapMultiplier = Math.max(branchGapMultiplier, childCount)
+            const parentLabel = (nodes.find(n => n.id === parentId)?.data as any)?.label || parentId
+            console.log(`Branch node ${parentLabel} has ${childCount} children: multiplying vertical gap by ${childCount}`)
+          }
+        })
+      }
+      
+      // Apply branch gap multiplier to cumulative Y before positioning nodes at this level
+      if (branchGapMultiplier > 1) {
+        const extraBranchGap = VERTICAL_GAP * (branchGapMultiplier - 1)
+        cumulativeY += extraBranchGap
+        console.log(`  Adding extra branch gap: ${extraBranchGap}px (${VERTICAL_GAP} × ${branchGapMultiplier - 1})`)
+      }
       
       // For each node at this level, calculate its Y position
       nodesAtLevel.forEach(nodeId => {
@@ -1675,10 +1784,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         xPosition = getNodeXPosition(node.id)
       }
       
-      // If this is a divergent node, add 180px offset to the right
+      // If this is a divergent node, add 200px offset to the right
       if (layout === 'Divergent node') {
-        xPosition += 180
-        console.log(`Divergent node ${(node.data as any)?.label || node.id}: adding 180px offset (x: ${xPosition - 180} -> ${xPosition})`)
+        xPosition += 200
+        console.log(`Divergent node ${(node.data as any)?.label || node.id}: adding 200px offset (x: ${xPosition - 200} -> ${xPosition})`)
       }
 
       return {
