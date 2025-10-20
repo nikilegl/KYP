@@ -236,3 +236,66 @@ export const enhanceExtractedExamples = (examples: ExtractedExample[]): Extracte
     outcome: example.outcome.trim(),
   }))
 }
+
+/**
+ * Converts a phone call transcript to a user journey JSON using OpenAI
+ * @param transcript - The raw transcript text
+ * @param customPrompt - Optional custom prompt to override the default
+ * @returns Promise with the user journey JSON
+ */
+export const convertTranscriptToJourney = async (
+  transcript: string,
+  customPrompt?: string
+): Promise<any> => {
+  try {
+    console.log('Calling Netlify function to convert transcript...')
+    const response = await fetch('/.netlify/functions/transcript-to-journey', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        transcript,
+        prompt: customPrompt,
+      }),
+    })
+
+    console.log('Response status:', response.status, response.statusText)
+
+    // Get the response text first
+    const responseText = await response.text()
+    console.log('Response text:', responseText)
+
+    if (!response.ok) {
+      // Try to parse as JSON for error details
+      let errorMessage = 'Failed to convert transcript'
+      try {
+        const errorData = JSON.parse(responseText)
+        errorMessage = errorData.error || errorData.message || errorMessage
+      } catch (parseError) {
+        // If it's not JSON, use the text as the error message
+        errorMessage = responseText || `HTTP ${response.status}: ${response.statusText}`
+      }
+      throw new Error(errorMessage)
+    }
+
+    // Parse the successful response
+    let result
+    try {
+      result = JSON.parse(responseText)
+    } catch (parseError) {
+      console.error('Failed to parse response as JSON:', responseText)
+      throw new Error('Invalid response from server. Expected JSON but got: ' + responseText.substring(0, 100))
+    }
+
+    if (!result.journey) {
+      console.error('Response missing journey data:', result)
+      throw new Error('Server response is missing journey data')
+    }
+
+    return result.journey
+  } catch (error) {
+    console.error('Error converting transcript to journey:', error)
+    throw error
+  }
+}
