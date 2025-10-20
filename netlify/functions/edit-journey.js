@@ -51,6 +51,17 @@ export async function handler(event, context) {
     console.log('Calling OpenAI API to edit journey...')
     console.log('Instruction:', instruction)
     console.log('Current nodes:', currentJourney.nodes.length)
+    
+    const hasSelection = currentJourney.selectedNodeIds && currentJourney.selectedNodeIds.length > 0
+    if (hasSelection) {
+      console.log('Selected nodes:', currentJourney.selectedNodeIds)
+    } else {
+      console.log('No nodes selected - applying to all matching nodes')
+    }
+    
+    const selectionInfo = hasSelection 
+      ? `${currentJourney.selectedNodeIds.length} node(s) are SELECTED (IDs: ${currentJourney.selectedNodeIds.join(', ')})` 
+      : 'No nodes selected'
 
     const systemPrompt = `You are a precise user journey editor. Apply the requested changes and return the COMPLETE journey as valid JSON.
 
@@ -64,9 +75,19 @@ CRITICAL RULES:
 - When removing nodes: also remove connected edges
 - Preserve all properties not mentioned in the instruction
 
+SELECTION-AWARE EDITING:
+- If instruction mentions "selected nodes", ONLY modify nodes where selected=true
+- If instruction is general (no mention of "selected"), apply to ALL matching nodes
+- When editing selected nodes, preserve the selection state in the response
+- Examples:
+  * "Update user role of selected nodes to Admin" → only change selected nodes
+  * "Change all Fee Earner roles to Admin" → change ALL matching nodes
+  * "Replace Amicus with ThirdFort in selected nodes" → only selected nodes
+
 Work efficiently - focus only on what needs to change.`
 
     const userPrompt = `Journey (${currentJourney.nodes.length} nodes, ${currentJourney.edges.length} edges):
+${selectionInfo}
 ${JSON.stringify(currentJourney, null, 0)}
 
 Instruction: ${instruction}

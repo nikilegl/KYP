@@ -875,14 +875,23 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         action: 'aiEdit'
       })
 
+      // Get selected nodes
+      const selectedNodes = nodes.filter(node => node.selected)
+      const selectedNodeIds = selectedNodes.map(n => n.id)
+      const hasSelection = selectedNodes.length > 0
+
+      console.log('Selected nodes:', selectedNodeIds)
+
       // Prepare current journey data for AI (send only essential data)
       const currentJourney = {
         name: journeyName,
         description: journeyDescription,
+        selectedNodeIds: hasSelection ? selectedNodeIds : null, // Tell AI which nodes are selected
         nodes: nodes.map(node => ({
           id: node.id,
           type: node.type,
           position: node.position,
+          selected: node.selected || false, // Include selection state
           data: {
             label: node.data?.label,
             type: node.data?.type,
@@ -2762,12 +2771,23 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 setEditInstruction(e.target.value)
                 setEditAIError(null)
               }}
-              placeholder='Examples:
+              placeholder={
+                nodes.filter(n => n.selected).length > 0
+                  ? `Examples (with ${nodes.filter(n => n.selected).length} node${nodes.filter(n => n.selected).length !== 1 ? 's' : ''} selected):
+• "Update the user role of the selected nodes to Admin"
+• "Change the variant of selected nodes to Third party"
+• "Replace Amicus with ThirdFort in the selected nodes"
+• "Add a bullet point 'Review required' to selected nodes"
+• "Change selected nodes to use Fee Earner role"`
+                  : `Examples:
 • "Replace Amicus with ThirdFort for all third parties"
 • "Add a step for ID verification after the onboarding"
 • "Change all Fee Earner roles to Admin"
 • "Remove the MLRO escalation branch"
-• "Rename all steps mentioning CMS to use the word System instead"'
+• "Rename all steps mentioning CMS to use the word System instead"
+
+💡 Tip: Select nodes first for targeted edits!`
+              }
               className="w-full h-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               disabled={editAILoading}
             />
@@ -2776,6 +2796,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
             <p className="text-xs text-gray-600">
               <strong>Current journey:</strong> {nodes.length} nodes, {edges.length} edges
+              {nodes.filter(n => n.selected).length > 0 && (
+                <span className="ml-2 text-blue-600 font-semibold">
+                  • {nodes.filter(n => n.selected).length} node{nodes.filter(n => n.selected).length !== 1 ? 's' : ''} selected
+                </span>
+              )}
             </p>
           </div>
 
