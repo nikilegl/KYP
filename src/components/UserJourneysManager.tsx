@@ -291,7 +291,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       width: '200px',
       render: (journey: UserJourneyWithProject) => (
         <span className="font-medium text-gray-900">
-          {journey.project?.name || (journey.project_id ? 'Unknown Epic' : 'Standalone')}
+          {journey.project?.name || (journey.project_id ? 'Unknown Epic' : '-')}
         </span>
       )
     }] : []),
@@ -443,7 +443,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">All Epics</option>
-            <option value="none">Standalone (No Epic)</option>
+            <option value="none">No Epic</option>
             {projects.map(project => (
               <option key={project.id} value={project.id}>{project.name}</option>
             ))}

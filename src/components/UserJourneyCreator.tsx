@@ -269,13 +269,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       } else {
         // New journey - set up defaults
-        // Check URL params first, then props, then default to first project
+        // Check URL params first, then props, otherwise default to No Epic
         const initialProjectId = urlProjectId || projectId
         if (initialProjectId && projectsData.find(p => p.id === initialProjectId)) {
           setSelectedProjectId(initialProjectId)
-        } else if (projectsData.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(projectsData[0].id)
         }
+        // If no URL param or prop, default to empty string (No Epic)
       }
     } catch (error) {
       console.error('Error loading data:', error)
