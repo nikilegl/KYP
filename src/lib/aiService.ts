@@ -309,3 +309,71 @@ export const convertTranscriptToJourney = async (
     throw error
   }
 }
+
+/**
+ * Edits an existing user journey using natural language instructions via OpenAI
+ * @param currentJourney - The current journey JSON (with nodes and edges)
+ * @param instruction - Natural language instruction (e.g., "Replace Amicus with ThirdFort")
+ * @returns Promise with the updated journey JSON
+ */
+export const editJourneyWithAI = async (
+  currentJourney: any,
+  instruction: string
+): Promise<any> => {
+  try {
+    console.log('Calling AI to edit journey with instruction:', instruction)
+    const response = await fetch('/.netlify/functions/edit-journey', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentJourney,
+        instruction,
+      }),
+    })
+
+    console.log('Response status:', response.status, response.statusText)
+
+    // Get the response text first
+    const responseText = await response.text()
+    console.log('Response text length:', responseText.length)
+
+    if (!response.ok) {
+      // Try to parse as JSON for error details
+      let errorMessage = 'Failed to edit journey'
+      try {
+        const errorData = JSON.parse(responseText)
+        errorMessage = errorData.error || errorData.message || errorMessage
+      } catch (parseError) {
+        errorMessage = responseText || `HTTP ${response.status}: ${response.statusText}`
+      }
+      throw new Error(errorMessage)
+    }
+
+    // Parse the successful response
+    let result
+    try {
+      result = JSON.parse(responseText)
+    } catch (parseError) {
+      console.error('Failed to parse response as JSON:', responseText)
+      throw new Error('Invalid response from server. Expected JSON but got: ' + responseText.substring(0, 100))
+    }
+
+    if (!result.journey) {
+      console.error('Response missing journey data:', result)
+      throw new Error('Server response is missing journey data')
+    }
+
+    // Log diagnostic information
+    console.log('✓ Journey edited successfully!')
+    console.log('Nodes in result:', result.journey.nodes?.length || 0)
+    console.log('Token usage:', result.usage)
+    console.log('Finish reason:', result.finishReason)
+
+    return result.journey
+  } catch (error) {
+    console.error('Error editing journey with AI:', error)
+    throw error
+  }
+}
