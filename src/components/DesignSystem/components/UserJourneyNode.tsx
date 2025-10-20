@@ -96,6 +96,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, onEdi
 
   return (
     <div
+      data-id={id}
       className={`
         px-4 py-3
         w-[320px]

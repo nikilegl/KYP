@@ -919,36 +919,55 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const tidyUpNodes = useCallback(() => {
     if (nodes.length === 0) return
 
-    const VERTICAL_GAP = 36
-    const HORIZONTAL_GAP = 48
-    const NODE_WIDTH = 320 // Width of nodes
-    const DEFAULT_NODE_HEIGHT = 120 // Fallback height
+    // Use requestAnimationFrame to ensure DOM has been updated
+    requestAnimationFrame(() => {
+      const VERTICAL_GAP = 36
+      const HORIZONTAL_GAP = 48
+      const NODE_WIDTH = 320 // Width of nodes
+      const DEFAULT_NODE_HEIGHT = 120 // Fallback height
 
-    // Get actual rendered heights from DOM
-    const getNodeHeight = (nodeId: string): number => {
-      const nodeElement = document.querySelector(`[data-id="${nodeId}"]`)
-      if (nodeElement) {
-        const rect = nodeElement.getBoundingClientRect()
-        // Account for zoom level by using the transform scale
-        const zoom = reactFlowInstanceRef.current?.getZoom() || 1
-        return rect.height / zoom
+      // Get actual rendered heights from DOM
+      const getNodeHeight = (nodeId: string): number => {
+        const nodeElement = document.querySelector(`[data-id="${nodeId}"]`)
+        if (nodeElement) {
+          const rect = nodeElement.getBoundingClientRect()
+          // Account for zoom level by using the transform scale
+          const zoom = reactFlowInstanceRef.current?.getZoom() || 1
+          const height = rect.height / zoom
+          console.log(`Node ${nodeId} height:`, height, `px (zoom: ${zoom})`)
+          return height
+        }
+        console.warn(`Node ${nodeId} not found in DOM, using default height`)
+        return DEFAULT_NODE_HEIGHT
       }
-      return DEFAULT_NODE_HEIGHT
+
+    // Helper function to check if an edge has a label
+    const hasEdgeLabel = (sourceId: string, targetId: string): boolean => {
+      const edge = edges.find(e => e.source === sourceId && e.target === targetId)
+      if (!edge?.data?.label) return false
+      const label = edge.data.label
+      return typeof label === 'string' && label.trim() !== ''
     }
 
     // Build adjacency map for graph traversal
     const adjacencyMap = new Map<string, string[]>()
     const incomingEdges = new Map<string, number>()
+    const parentMap = new Map<string, string[]>() // Track parents for each node
 
     nodes.forEach(node => {
       adjacencyMap.set(node.id, [])
       incomingEdges.set(node.id, 0)
+      parentMap.set(node.id, [])
     })
 
     edges.forEach(edge => {
       const sourceChildren = adjacencyMap.get(edge.source) || []
       adjacencyMap.set(edge.source, [...sourceChildren, edge.target])
       incomingEdges.set(edge.target, (incomingEdges.get(edge.target) || 0) + 1)
+      
+      // Track parent relationships
+      const parents = parentMap.get(edge.target) || []
+      parentMap.set(edge.target, [...parents, edge.source])
     })
 
     // Find start node (node with no incoming edges)
@@ -1010,21 +1029,51 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       nodesByLevel.set(level, [...nodesAtLevel, nodeId])
     })
 
-    // Calculate positions
-    const updatedNodes = nodes.map(node => {
-      const level = levels.get(node.id) ?? 0
-      const horizontalPos = horizontalPositions.get(node.id) ?? 0
+    // Calculate Y positions for each level, accounting for labeled edges
+    const yPositionsByNode = new Map<string, number>()
+    const maxLevels = Math.max(...Array.from(levels.values()), 0)
+    
+    let cumulativeY = 100 // Starting Y position
+    
+    for (let level = 0; level <= maxLevels; level++) {
+      const nodesAtLevel = nodesByLevel.get(level) || []
+      
+      if (nodesAtLevel.length === 0) continue
+      
+      // For each node at this level, calculate its Y position
+      nodesAtLevel.forEach(nodeId => {
+        // Check if this node has any incoming edges with labels
+        const parents = parentMap.get(nodeId) || []
+        const hasLabeledIncomingEdge = parents.some(parentId => hasEdgeLabel(parentId, nodeId))
+        
+        // Add extra gap if there's a labeled incoming edge
+        const extraGap = hasLabeledIncomingEdge ? VERTICAL_GAP : 0
+        
+        yPositionsByNode.set(nodeId, cumulativeY + extraGap)
+      })
+      
+      // Calculate the maximum height at this level
+      const maxHeightAtLevel = Math.max(
+        ...nodesAtLevel.map(id => getNodeHeight(id)),
+        DEFAULT_NODE_HEIGHT
+      )
+      
+      // Check if any node at this level has a labeled incoming edge
+      const anyNodeHasLabeledEdge = nodesAtLevel.some(nodeId => {
+        const parents = parentMap.get(nodeId) || []
+        return parents.some(parentId => hasEdgeLabel(parentId, nodeId))
+      })
+      
+      // Update cumulative Y for next level
+      // Add the max height of current level + standard gap + extra gap if any node has labeled edge
+      const extraGap = anyNodeHasLabeledEdge ? VERTICAL_GAP : 0
+      cumulativeY += maxHeightAtLevel + VERTICAL_GAP + extraGap
+    }
 
-      // Calculate Y position - sum of all previous levels' heights + gaps
-      let yPosition = 100
-      for (let i = 0; i < level; i++) {
-        const nodesAtPrevLevel = nodesByLevel.get(i) || []
-        const maxHeightAtLevel = Math.max(
-          ...nodesAtPrevLevel.map(id => getNodeHeight(id)),
-          DEFAULT_NODE_HEIGHT
-        )
-        yPosition += maxHeightAtLevel + VERTICAL_GAP
-      }
+    // Apply calculated positions to nodes
+    const updatedNodes = nodes.map(node => {
+      const horizontalPos = horizontalPositions.get(node.id) ?? 0
+      const yPosition = yPositionsByNode.get(node.id) ?? 100
 
       // Calculate X position based on horizontal position (branch)
       const xPosition = 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
@@ -1038,16 +1087,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       }
     })
 
-    setNodes(updatedNodes)
+      setNodes(updatedNodes)
 
-    // Save to database if journey exists
-    if (currentJourneyId) {
-      updateUserJourney(currentJourneyId, {
-        flow_data: { nodes: updatedNodes, edges }
-      }).catch(error => {
-        console.error('Error saving tidy layout:', error)
-      })
-    }
+      // Save to database if journey exists
+      if (currentJourneyId) {
+        updateUserJourney(currentJourneyId, {
+          flow_data: { nodes: updatedNodes, edges }
+        }).catch(error => {
+          console.error('Error saving tidy layout:', error)
+        })
+      }
+    }) // End of requestAnimationFrame
   }, [nodes, edges, setNodes, currentJourneyId])
 
   // Handle edge label editing
