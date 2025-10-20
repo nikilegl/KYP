@@ -25,10 +25,12 @@ import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
-import type { UserRole, Project, LawFirm } from '../lib/supabase'
+import type { UserRole, Project, LawFirm, ThirdParty } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
 import { getLawFirms } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
@@ -47,6 +49,7 @@ interface UserJourneyCreatorProps {
   userRoles?: UserRole[]
   projectId?: string // Optional - if provided, will auto-select that project
   journeyId?: string // Optional - if provided, will load that journey for editing
+  thirdParties?: ThirdParty[]
 }
 
 // Keyboard zoom handler component
@@ -76,12 +79,13 @@ function KeyboardZoomHandler() {
   return null
 }
 
-export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: UserJourneyCreatorProps) {
+export function UserJourneyCreator({ userRoles = [], projectId, journeyId, thirdParties: initialThirdParties }: UserJourneyCreatorProps) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const reactFlowInstanceRef = useRef<any>(null)
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [showNameEditModal, setShowNameEditModal] = useState(false)
@@ -205,6 +209,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       // Load all law firms
       const lawFirmsData = await getLawFirms()
       setLawFirms(lawFirmsData)
+      
+      // Load all third parties if not provided
+      if (!initialThirdParties || initialThirdParties.length === 0) {
+        // Get current user's workspace
+        if (supabase) {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data: workspaceUser } = await supabase
+              .from('workspace_users')
+              .select('workspace_id')
+              .eq('user_id', user.id)
+              .single()
+            
+            if (workspaceUser) {
+              const thirdPartiesData = await getThirdParties(workspaceUser.workspace_id)
+              setThirdParties(thirdPartiesData)
+            }
+          }
+        }
+      }
       
       // Check if there's an ID in the URL query params
       const urlJourneyId = searchParams.get('id')
@@ -1768,6 +1792,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         <UserJourneyNode 
           {...props} 
           showHandles={true}
+          thirdParties={thirdParties}
           onEdit={() => {
             console.log('Edit clicked for node:', props.id)
             configureNode(props.id)
@@ -1787,6 +1812,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       <UserJourneyNode 
         {...props} 
         showHandles={true}
+        thirdParties={thirdParties}
         onEdit={() => configureNode(props.id)}
         onDuplicate={() => duplicateNode(props.id)}
         onDelete={() => handleDeleteNode(props.id)}
@@ -1796,6 +1822,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       <UserJourneyNode 
         {...props} 
         showHandles={true}
+        thirdParties={thirdParties}
         onEdit={() => configureNode(props.id)}
         onDuplicate={() => duplicateNode(props.id)}
         onDelete={() => handleDeleteNode(props.id)}
@@ -1805,12 +1832,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       <UserJourneyNode 
         {...props} 
         showHandles={true}
+        thirdParties={thirdParties}
         onEdit={() => configureNode(props.id)}
         onDuplicate={() => duplicateNode(props.id)}
         onDelete={() => handleDeleteNode(props.id)}
       />
     ),
-  }), [configureNode, duplicateNode, handleDeleteNode])
+  }), [configureNode, duplicateNode, handleDeleteNode, thirdParties])
 
   if (loading) {
     return (
