@@ -31,7 +31,7 @@ import { getLawFirms } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
-import { TRANSCRIPT_TO_JOURNEY_PROMPT } from '../lib/prompts/transcript-to-journey-prompt'
+import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -780,10 +780,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         return
       }
 
+      // Generate prompt with actual user roles from database
+      const userRoleNames = userRoles.map(role => role.name)
+      const dynamicPrompt = generateTranscriptToJourneyPrompt(userRoleNames)
+      
+      console.log('Using user roles:', userRoleNames)
+
       // Call OpenAI API to convert transcript to journey JSON
       const journeyData = await convertTranscriptToJourney(
         importTranscriptText,
-        TRANSCRIPT_TO_JOURNEY_PROMPT
+        dynamicPrompt,
+        userRoleNames
       )
 
       // Validate the response

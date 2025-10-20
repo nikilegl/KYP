@@ -3,7 +3,16 @@
  * Edit this file to customize the AI's behavior
  */
 
-export const TRANSCRIPT_TO_JOURNEY_PROMPT = `You are analyzing a meeting transcript about a user journey. Extract the following information and return it as valid JSON:
+/**
+ * Generates the transcript-to-journey prompt with dynamic user roles
+ * @param userRoleNames - Array of user role names from the database
+ */
+export const generateTranscriptToJourneyPrompt = (userRoleNames: string[]): string => {
+  const rolesList = userRoleNames.length > 0 
+    ? userRoleNames.map(name => `"${name}"`).join(', ')
+    : '"End Client", "Admin", "Developer"' // Fallback if no roles
+  
+  return `You are analyzing a meeting transcript about a user journey. Extract the following information and return it as valid JSON:
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no extra text.
 
@@ -16,8 +25,8 @@ Extract:
    - data: An object containing the following properties:
      * label: The main text/title describing this step
      * type: Same as the top-level type ("start", "process", or "end")
-     * userRole: The EXACT role name performing this step. Common roles include: "Client", "Fee Earner", "End Client", "Developer", "Admin", "Partner", "Associate", "General User", "General Admin", "MLRO". 
-       IMPORTANT: Match the exact casing and wording. If you hear "end user", "user", or "client", use "End Client". If you hear "general user", use "General User". If you hear "general admin", use "General Admin". If you hear "lawyer", "solicitor", "attorney", "fee earner", use "Fee Earner". If unsure, use "End Client".
+     * userRole: The EXACT role name performing this step. Available roles in this workspace: ${rolesList}. 
+       IMPORTANT: Match the exact casing and wording from the available roles. ONLY use roles from the list above. If the role mentioned in the transcript doesn't exactly match an available role, choose the closest match. If completely unsure, use the first role from the list.
      * variant: If platform mentioned, one of: "CMS", "Legl", "End client", "Back end", "Third party", or empty string ""
      * thirdPartyName: If variant is "Third party", include the name of the third party service (e.g., "Stripe", "Auth0", "Mailchimp", "Salesforce"). Otherwise, leave as empty string "".
      * bulletPoints: Array of any detailed actions or sub-steps mentioned
@@ -96,19 +105,11 @@ GRID SNAPPING (CRITICAL):
 
 USER ROLE DETECTION (CRITICAL):
 - Pay close attention to who is performing each action in the transcript
-- Common role mappings:
-  * "user", "end user", "client", "customer" → use "End Client"
-  * "general user", "generic user" → use "General User"
-  * "general admin", "generic admin" → use "General Admin"
-  * "lawyer", "solicitor", "attorney", "legal professional", "fee earner" → use "Fee Earner"
-  * "developer", "engineer", "technical team" → use "Developer"
-  * "admin", "administrator", "system admin" → use "Admin"
-  * "partner" → use "Partner"
-  * "associate" → use "Associate"
-- ALWAYS use proper Title Case for roles (e.g., "End Client", not "end client"; "General User", not "general user"; "Fee Earner", not "fee earner")
+- ONLY use roles from this list: ${rolesList}
+- Match the EXACT casing and spelling from the available roles
 - If multiple roles are mentioned for a single step, choose the primary actor
-- If no role is explicitly mentioned, infer from context (e.g., "they log in" likely means "End Client")
-- Default to "End Client" if uncertain
+- If no role is explicitly mentioned, infer from context and choose the closest match from available roles
+- When in doubt, use the first role from the available roles list
 
 PLATFORM/VARIANT DETECTION:
 - Look for platform indicators like "CMS", "Backend", "Legl", "the system" and put in data.variant
@@ -161,4 +162,10 @@ BULLET POINTS:
 FINAL REMINDER: All x and y coordinates must be multiples of 8. When branches occur, keep the parent at x: 96, main branch at x: 96, and conditional branches diverge to the RIGHT at x: 480, 864, etc. Double-check all position values before returning the JSON.
 
 Return ONLY the JSON object, no other text.`
+}
+
+// Legacy export for backward compatibility (uses first 3 default roles)
+export const TRANSCRIPT_TO_JOURNEY_PROMPT = generateTranscriptToJourneyPrompt([
+  'End Client', 'Admin', 'Developer'
+])
 
