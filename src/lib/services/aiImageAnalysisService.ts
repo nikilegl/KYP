@@ -92,7 +92,7 @@ export async function analyzeJourneyImage(
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o', // Model with vision capabilities
+        model: 'gpt-4o-2024-11-20', // Latest GPT-4 Omni with vision (November 2024 version)
         messages: [
           {
             role: 'user',
@@ -110,8 +110,8 @@ export async function analyzeJourneyImage(
             ]
           }
         ],
-        max_tokens: 8192, // Increased for more complex responses with regions
-        temperature: 0.1 // Low temperature for more consistent parsing
+        max_tokens: 16384, // Increased for complex swim lane diagrams
+        temperature: 0.2 // Slightly higher for better spatial reasoning while maintaining consistency
       })
     })
 
