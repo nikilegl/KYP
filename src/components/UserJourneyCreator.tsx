@@ -20,6 +20,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
+import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles } from 'lucide-react'
@@ -159,6 +160,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Track selected nodes for copy/paste and edge highlighting
   const [copiedNodes, setCopiedNodes] = useState<Node[]>([])
   const [copiedEdges, setCopiedEdges] = useState<Edge[]>([])
+
+  // Highlight region state
+  const [showRegionConfigModal, setShowRegionConfigModal] = useState(false)
+  const [configuringRegion, setConfiguringRegion] = useState<Node | null>(null)
+  const [regionConfigForm, setRegionConfigForm] = useState({
+    label: '',
+    backgroundColor: '#fef3c7',
+    borderColor: '#fbbf24'
+  })
 
   // Undo handler for Tidy Up and AI Edit operations
   const handleUndo = useCallback(() => {
@@ -591,6 +601,34 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setShowConfigModal(true)
   }, [nodes])
 
+  // Sort nodes to ensure parents come before children (required by React Flow)
+  const sortNodesForSaving = useCallback((nodesToSort: Node[]): Node[] => {
+    const sorted: Node[] = []
+    const processed = new Set<string>()
+
+    const addNodeAndParents = (node: Node) => {
+      // If already processed, skip
+      if (processed.has(node.id)) return
+
+      // If node has a parent, process parent first
+      if (node.parentId) {
+        const parent = nodesToSort.find(n => n.id === node.parentId)
+        if (parent && !processed.has(parent.id)) {
+          addNodeAndParents(parent)
+        }
+      }
+
+      // Add this node
+      sorted.push(node)
+      processed.add(node.id)
+    }
+
+    // Process all nodes
+    nodesToSort.forEach(node => addNodeAndParents(node))
+
+    return sorted
+  }, [])
+
   // Save journey
   const saveJourney = useCallback(async () => {
     if (!journeyName.trim()) {
@@ -606,7 +644,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setSaving(true)
     setJustSaved(false)
     try {
-      const flowData = { nodes, edges }
+      // Sort nodes to ensure parents come before children
+      const sortedNodes = sortNodesForSaving(nodes)
+      const flowData = { nodes: sortedNodes, edges }
       
       if (currentJourneyId) {
         // Update existing journey
@@ -654,7 +694,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     } finally {
       setSaving(false)
     }
-  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId])
+  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, selectedLawFirmIds])
 
   // Export journey as JSON
   const exportJourney = useCallback(() => {
@@ -1294,6 +1334,134 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     setNodes((nds) => [...nds, newNode])
   }, [nodes, setNodes])
+
+  // Add new highlight region
+  const addHighlightRegion = useCallback(() => {
+    const newRegionId = `region-${Date.now()}`
+    const newRegion: Node = {
+      id: newRegionId,
+      type: 'highlightRegion',
+      position: { x: 100, y: 100 },
+      style: {
+        width: 600,
+        height: 400,
+        zIndex: -1, // Render behind regular nodes
+      },
+      data: {
+        label: 'New Region',
+        backgroundColor: '#fef3c7',
+        borderColor: '#fbbf24',
+      },
+      draggable: true,
+      selectable: true,
+    }
+
+    setNodes((nds) => [newRegion, ...nds]) // Add region at the beginning (before other nodes)
+  }, [setNodes])
+
+  // Configure highlight region (for editing)
+  const configureRegion = useCallback((regionId: string) => {
+    const region = nodes.find(n => n.id === regionId)
+    if (region && region.type === 'highlightRegion') {
+      setConfiguringRegion(region)
+      setRegionConfigForm({
+        label: (region.data?.label as string) || 'New Region',
+        backgroundColor: (region.data?.backgroundColor as string) || '#fef3c7',
+        borderColor: (region.data?.borderColor as string) || '#fbbf24',
+      })
+      setShowRegionConfigModal(true)
+    }
+  }, [nodes])
+
+  // Save region configuration
+  const saveRegionConfiguration = useCallback(() => {
+    if (!configuringRegion) return
+
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === configuringRegion.id
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                ...regionConfigForm,
+              },
+            }
+          : node
+      )
+    )
+
+    setShowRegionConfigModal(false)
+    setConfiguringRegion(null)
+  }, [configuringRegion, regionConfigForm, setNodes])
+
+  // Handle node drag stop - auto-assign to regions
+  const handleNodeDragStop = useCallback(
+    (_event: any, node: Node) => {
+      // Skip if the dragged node is itself a region
+      if (node.type === 'highlightRegion') return
+
+      // Find all regions
+      const regions = nodes.filter(n => n.type === 'highlightRegion')
+      
+      // Check if node is inside any region
+      let newParentId: string | undefined = undefined
+      
+      for (const region of regions) {
+        const regionBounds = {
+          x: region.position.x,
+          y: region.position.y,
+          width: (region.style?.width as number) || 600,
+          height: (region.style?.height as number) || 400,
+        }
+
+        const nodeBounds = {
+          x: node.position.x,
+          y: node.position.y,
+          width: 320, // Node width
+          height: 120, // Approximate node height
+        }
+
+        // Check if node center is inside region
+        const nodeCenterX = nodeBounds.x + nodeBounds.width / 2
+        const nodeCenterY = nodeBounds.y + nodeBounds.height / 2
+
+        const isInside =
+          nodeCenterX >= regionBounds.x &&
+          nodeCenterX <= regionBounds.x + regionBounds.width &&
+          nodeCenterY >= regionBounds.y &&
+          nodeCenterY <= regionBounds.y + regionBounds.height
+
+        if (isInside) {
+          newParentId = region.id
+          break
+        }
+      }
+
+      // Update node's parentId if it changed
+      if (node.parentId !== newParentId) {
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === node.id
+              ? {
+                  ...n,
+                  parentId: newParentId,
+                  // Convert position to relative if adding to region
+                  position: newParentId
+                    ? {
+                        x: n.position.x - (regions.find(r => r.id === newParentId)?.position.x || 0),
+                        y: n.position.y - (regions.find(r => r.id === newParentId)?.position.y || 0),
+                      }
+                    : n.position,
+                  extent: newParentId ? ('parent' as const) : undefined,
+                }
+              : n
+          )
+        )
+      }
+    },
+    [nodes, setNodes]
+  )
 
   // Tidy up node positions with proper spacing
   const tidyUpNodes = useCallback(() => {
@@ -2017,7 +2185,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onDelete={() => handleDeleteNode(props.id)}
       />
     ),
-  }), [configureNode, duplicateNode, handleDeleteNode, thirdParties])
+    highlightRegion: (props: any) => (
+      <HighlightRegionNode
+        {...props}
+        onEdit={() => configureRegion(props.id)}
+      />
+    ),
+  }), [configureNode, duplicateNode, handleDeleteNode, thirdParties, configureRegion])
 
   if (loading) {
     return (
@@ -2140,6 +2314,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
           onInit={(instance) => {
             reactFlowInstanceRef.current = instance
           }}
@@ -2197,6 +2372,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               >
                 <Plus size={16} />
                 Add Node
+              </Button>
+              <Button
+                variant="outline"
+                onClick={addHighlightRegion}
+                className="flex items-center gap-2"
+              >
+                <Plus size={16} />
+                Add Region
               </Button>
             </div>
           </Panel>
@@ -3067,6 +3250,104 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           )}
         </div>
       </Modal>
+
+      {/* Region Configuration Modal */}
+      {showRegionConfigModal && configuringRegion && (
+        <Modal
+          isOpen={showRegionConfigModal}
+          onClose={() => {
+            setShowRegionConfigModal(false)
+            setConfiguringRegion(null)
+          }}
+          title="Edit Region"
+          size="md"
+          footerContent={
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowRegionConfigModal(false)
+                  setConfiguringRegion(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={saveRegionConfiguration}
+                disabled={!regionConfigForm.label.trim()}
+              >
+                Save
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Region Label *
+              </label>
+              <input
+                type="text"
+                value={regionConfigForm.label}
+                onChange={(e) => setRegionConfigForm(prev => ({ ...prev, label: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Authentication Flow"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Background Color
+              </label>
+              <div className="grid grid-cols-6 gap-2">
+                {[
+                  { color: '#fef3c7', border: '#fbbf24', name: 'Yellow' },
+                  { color: '#dbeafe', border: '#3b82f6', name: 'Blue' },
+                  { color: '#d1fae5', border: '#10b981', name: 'Green' },
+                  { color: '#fee2e2', border: '#ef4444', name: 'Red' },
+                  { color: '#f3e8ff', border: '#a855f7', name: 'Purple' },
+                  { color: '#e0e7ff', border: '#6366f1', name: 'Indigo' },
+                  { color: '#fce7f3', border: '#ec4899', name: 'Pink' },
+                  { color: '#fef08a', border: '#eab308', name: 'Lime' },
+                  { color: '#ccfbf1', border: '#14b8a6', name: 'Teal' },
+                  { color: '#fecaca', border: '#f87171', name: 'Light Red' },
+                  { color: '#e5e7eb', border: '#9ca3af', name: 'Gray' },
+                  { color: '#fed7aa', border: '#fb923c', name: 'Orange' },
+                ].map((preset) => (
+                  <button
+                    key={preset.color}
+                    onClick={() => setRegionConfigForm(prev => ({ 
+                      ...prev, 
+                      backgroundColor: preset.color,
+                      borderColor: preset.border
+                    }))}
+                    className={`
+                      w-12 h-12 rounded-md border-2 transition-all
+                      ${regionConfigForm.backgroundColor === preset.color 
+                        ? 'ring-2 ring-blue-500 ring-offset-2' 
+                        : 'hover:scale-110'
+                      }
+                    `}
+                    style={{
+                      backgroundColor: preset.color,
+                      borderColor: preset.border,
+                    }}
+                    title={preset.name}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-md">
+              <p className="text-xs text-gray-600">
+                💡 Tip: Drag nodes onto the region to group them. When you move the region, all nodes inside will move with it.
+              </p>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Add Law Firm Modal - Opens from Edit Journey Details when no search results */}
       <LawFirmForm
