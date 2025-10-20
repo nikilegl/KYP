@@ -125,6 +125,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
   const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
   
+  // Undo state - stores snapshot before Tidy Up or AI Edit
+  const [undoSnapshot, setUndoSnapshot] = useState<{
+    nodes: Node[]
+    edges: Edge[]
+    name: string
+    description: string
+    action: 'tidyUp' | 'aiEdit'
+  } | null>(null)
+  
   // Ref to track bullet point input elements
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
@@ -136,6 +145,51 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   // Track selected nodes for copy/paste and edge highlighting
   const [copiedNodes, setCopiedNodes] = useState<Node[]>([])
   const [copiedEdges, setCopiedEdges] = useState<Edge[]>([])
+
+  // Undo handler for Tidy Up and AI Edit operations
+  const handleUndo = useCallback(() => {
+    if (!undoSnapshot) {
+      console.log('No undo snapshot available')
+      return
+    }
+
+    console.log(`Undoing ${undoSnapshot.action}...`)
+    
+    // Restore the snapshot
+    setNodes(undoSnapshot.nodes)
+    setEdges(undoSnapshot.edges)
+    setJourneyName(undoSnapshot.name)
+    setJourneyDescription(undoSnapshot.description)
+    
+    // Clear the snapshot after using it
+    setUndoSnapshot(null)
+    
+    // Show feedback
+    const actionName = undoSnapshot.action === 'tidyUp' ? 'Tidy Up' : 'AI Edit'
+    console.log(`✓ Undid ${actionName}`)
+  }, [undoSnapshot, setNodes, setEdges])
+
+  // Keyboard shortcut listener for Cmd+Z / Ctrl+Z
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux)
+      if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
+        // Prevent default browser undo
+        event.preventDefault()
+        
+        // Only undo if we have a snapshot
+        if (undoSnapshot) {
+          handleUndo()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [undoSnapshot, handleUndo])
 
   // Load projects and journey on mount
   useEffect(() => {
@@ -812,6 +866,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         return
       }
 
+      // Save snapshot for undo BEFORE making changes
+      setUndoSnapshot({
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges)),
+        name: journeyName,
+        description: journeyDescription,
+        action: 'aiEdit'
+      })
+
       // Prepare current journey data for AI (send only essential data)
       const currentJourney = {
         name: journeyName,
@@ -1125,6 +1188,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   // Tidy up node positions with proper spacing
   const tidyUpNodes = useCallback(() => {
     if (nodes.length === 0) return
+
+    // Save snapshot for undo
+    setUndoSnapshot({
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      edges: JSON.parse(JSON.stringify(edges)),
+      name: journeyName,
+      description: journeyDescription,
+      action: 'tidyUp'
+    })
 
     // Use requestAnimationFrame to ensure DOM has been updated
     requestAnimationFrame(() => {
@@ -1603,7 +1675,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         })
       }
     }) // End of requestAnimationFrame
-  }, [nodes, edges, setNodes, currentJourneyId])
+  }, [nodes, edges, setNodes, currentJourneyId, journeyName, journeyDescription])
 
   // Handle edge label editing
   const handleEdgeLabelClick = useCallback((edgeId: string) => {
