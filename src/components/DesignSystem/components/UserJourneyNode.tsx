@@ -2,7 +2,7 @@ import React from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Edit, Trash2, Copy } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
-import type { UserRole } from '../../../lib/supabase'
+import type { UserRole, ThirdParty } from '../../../lib/supabase'
 
 export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end'
 
@@ -20,12 +20,13 @@ export interface UserJourneyNodeData {
 interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
   selected?: boolean
   showHandles?: boolean
+  thirdParties?: ThirdParty[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
   const {
     label,
     type,
@@ -35,6 +36,11 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, onEdi
     variant = 'Legl',
     thirdPartyName = ''
   } = data || {}
+  
+  // Find matching third party logo (case-insensitive)
+  const matchingThirdParty = thirdParties.find(
+    tp => tp.name.toLowerCase() === thirdPartyName.toLowerCase()
+  )
   
   // Generate unique gradient ID for Legl logo
   const gradientId = `legl-gradient-${id}`
@@ -212,6 +218,22 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, onEdi
                     <path fill={`url(#${gradientId})`} d="M10.1.7h18.4c5.5,0,10,4.5,10,10h0c0,5.5-4.5,10-10,10H10.1C4.6,20.7.1,16.2.1,10.7H.1C.1,5.2,4.6.7,10.1.7Z"/>
                     <path fill="#fff" d="M27.1,7.9c0,0,.1,0,.1.1v.7s0,4.6,0,4.6c0,.5,0,.9-.1,1.3-.4,1.1-1.3,1.9-2.3,2.2-.3,0-.6.1-.9.1,0,0,0,0,0,0-1.2,0-2.3-.6-2.9-1.6,0-.2.1-.8.4-.7.3.2,1.3.7,2.1.7s1.2-.3,1.5-.5c.2-.2.4-.7.4-1.2v-.2h0c-.4.5-1,.9-1.9.9-1.5,0-2.9-1.1-2.9-3.1,0-2,1.4-3.1,2.9-3.1,1,0,1.6.5,1.9.9v-.6s0,0,0-.1c.5-.4,1.2-.6,1.8-.6h0ZM30,4.7c0,0,.1,0,.1.1v8.8s0,0,0,.1c-.6.4-1.2.6-2,.6h0c0,0-.1,0-.1-.1V5.5s0,0,0-.1c.6-.4,1.2-.6,2-.6h0ZM16.7,8c1.8,0,3.1,1.2,3.1,3s0,.7,0,.7h-4.4c0,.2,0,.3.1.4,0,.1.1.2.2.3.2.2.6.5,1.4.5.8,0,1.8-.5,2.1-.7.2-.1.5.2.4.4-.6,1-1.7,1.8-2.9,1.8-1.5,0-2.7-1-3.2-2.3,0-.3,0-.6,0-.9,0-2.1,1.5-3.2,3.3-3.2ZM10.4,5.5c0,0,.1,0,.1.1v6.9s0,0,0,0h2.4s0,0,0,0c.3.4.5,1,.5,1.5h0c0,0,0,.1-.1.1h-4.4c-.3,0-.5-.2-.5-.5v-7.4h0,0s.3-.8,1.9-.8ZM23.9,9.9c-.9,0-1.5.7-1.5,1.5s.6,1.5,1.5,1.5c.9,0,1.4-.7,1.4-1.5s-.6-1.5-1.4-1.5ZM16.7,9.3c-.8,0-1.3.7-1.3,1.2h2.5c0-.6-.4-1.2-1.3-1.2Z"/>
                   </svg>
+                </div>
+              ) : variant === 'Third party' && thirdPartyName && matchingThirdParty?.logo ? (
+                // Show third party logo if available
+                <div className="flex items-center justify-center h-5">
+                  {matchingThirdParty.logo.includes('<svg') ? (
+                    <div 
+                      className="h-5 flex items-center"
+                      dangerouslySetInnerHTML={{ __html: matchingThirdParty.logo }}
+                    />
+                  ) : (
+                    <img 
+                      src={matchingThirdParty.logo} 
+                      alt={thirdPartyName}
+                      className="h-5 object-contain"
+                    />
+                  )}
                 </div>
               ) : (
                 <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
