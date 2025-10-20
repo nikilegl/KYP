@@ -3,7 +3,9 @@
  * Edit this file to customize the AI's behavior
  */
 
-export const TRANSCRIPT_TO_JOURNEY_PROMPT = `IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no extra text.
+export const TRANSCRIPT_TO_JOURNEY_PROMPT = `You are analyzing a meeting transcript about a user journey. Extract the following information and return it as valid JSON:
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no extra text.
 
 Extract:
 
@@ -14,8 +16,8 @@ Extract:
    - data: An object containing the following properties:
      * label: The main text/title describing this step
      * type: Same as the top-level type ("start", "process", or "end")
-     * userRole: The EXACT role name performing this step. Common roles include: "Client", "Lawyer", "End Client", "Developer", "Admin", "Partner", "Associate", "General User", "General Admin". 
-       IMPORTANT: Match the exact casing and wording. If you hear "end user", "user", or "client", use "End Client". If you hear "general user", use "General User". If you hear "general admin", use "General Admin". If you hear "lawyer", "solicitor", "attorney", use "Lawyer". If unsure, use "End Client".
+     * userRole: The EXACT role name performing this step. Common roles include: "Client", "Fee Earner", "End Client", "Developer", "Admin", "Partner", "Associate", "General User", "General Admin", "MLRO". 
+       IMPORTANT: Match the exact casing and wording. If you hear "end user", "user", or "client", use "End Client". If you hear "general user", use "General User". If you hear "general admin", use "General Admin". If you hear "lawyer", "solicitor", "attorney", "fee earner", use "Fee Earner". If unsure, use "End Client".
      * variant: If platform mentioned, one of: "CMS", "Legl", "End client", "Back end", "Third party", or empty string ""
      * thirdPartyName: If variant is "Third party", include the name of the third party service (e.g., "Stripe", "Auth0", "Mailchimp", "Salesforce"). Otherwise, leave as empty string "".
      * bulletPoints: Array of any detailed actions or sub-steps mentioned
@@ -98,12 +100,12 @@ USER ROLE DETECTION (CRITICAL):
   * "user", "end user", "client", "customer" → use "End Client"
   * "general user", "generic user" → use "General User"
   * "general admin", "generic admin" → use "General Admin"
-  * "lawyer", "solicitor", "attorney", "legal professional" → use "Lawyer"
+  * "lawyer", "solicitor", "attorney", "legal professional", "fee earner" → use "Fee Earner"
   * "developer", "engineer", "technical team" → use "Developer"
   * "admin", "administrator", "system admin" → use "Admin"
   * "partner" → use "Partner"
   * "associate" → use "Associate"
-- ALWAYS use proper Title Case for roles (e.g., "End Client", not "end client"; "General User", not "general user")
+- ALWAYS use proper Title Case for roles (e.g., "End Client", not "end client"; "General User", not "general user"; "Fee Earner", not "fee earner")
 - If multiple roles are mentioned for a single step, choose the primary actor
 - If no role is explicitly mentioned, infer from context (e.g., "they log in" likely means "End Client")
 - Default to "End Client" if uncertain
@@ -116,29 +118,47 @@ LAYOUT RULES (with grid snapping):
 - VERTICAL LAYOUT: For linear (non-branching) flows, keep x constant at 96 and increment y by 240px per step
   * Linear flow positions: x: 96, y: 96, 336, 576, 816, 1056...
   * All values are multiples of 8
-- BRANCHING LAYOUT: When a step splits into multiple paths (branches):
-  * Space branches 384px apart horizontally: x: 96, 480, 864, 1248... (all multiples of 8)
-  * The parent node should be CENTERED horizontally above its child branches
-  * Example: If parent has 2 child branches at x: 96 and x: 480, position parent at x: 288 (centered and snapped to grid)
-  * Example: If parent has 3 child branches at x: 96, x: 480, x: 864, position parent at x: 480 (centered)
-  * Formula: parent x = round((leftmost_child_x + rightmost_child_x) / 2 / 8) * 8
-  * All branch nodes at the same level should share the same y coordinate
-  * Vertical gap between parent and branches: 240px (multiple of 8)
-- After branches converge, resume vertical linear layout
+  
+- BRANCHING LAYOUT (CRITICAL - DIVERGENT BRANCHES TO THE RIGHT):
+  * When a step splits into multiple paths (branches), the parent node STAYS on the main vertical line at x: 96
+  * The MAIN/PRIMARY branch continues straight down at x: 96 (same as parent)
+  * CONDITIONAL/ALTERNATE branches diverge to the RIGHT at x: 480, 864, 1248... (384px apart)
+  * Do NOT center the parent node - it must remain at x: 96
+  
+  * Example with 2 branches:
+    - Parent node (where split occurs): x: 96, y: 100
+    - Main branch (continues main flow): x: 96, y: 340
+    - Conditional branch (diverges right): x: 480, y: 340
+    - Both branch nodes share the SAME y coordinate (same horizontal level)
+    - Vertical gap between parent and branches: 240px
+  
+  * Example with edge labels:
+    - Parent → Main branch: label = "" (no label, main path)
+    - Parent → Conditional branch: label = "If purchase" (conditional path)
+  
+  * After branches: Both branches connect to the next step (convergence point) which resumes at x: 96
+  
+- BRANCH CONVERGENCE: When branches rejoin:
+  * Both branch nodes connect to the next convergence node
+  * Convergence node returns to x: 96 (main vertical flow)
+  * Convergence node y = (branch y + 240px)
+  * Both edges from branches to convergence typically have empty labels ""
+  
 - Both the top-level "type" and "data.type" should have the same value
 - Always include data.customProperties as an empty object {}
 - REMEMBER: Every x and y value must be a multiple of 8
+- REMEMBER: Parent node stays at x: 96, branches diverge to the RIGHT
 
 EDGE LABELS:
-- Only include labels on edges that represent branch/conditional paths (e.g., "Yes", "No", "If successful", "On error")
-- For strictly linear edges, set both the top-level "label" and "data.label" to empty strings ""
-- Branch edges should clearly indicate the condition or choice
+- Main path edges (continuing straight down): empty labels ""
+- Conditional/branch edges (diverging right): descriptive labels like "If purchase", "If successful", "On error"
+- Convergence edges (from branches back to main flow): empty labels ""
 
 BULLET POINTS:
 - Extract any mentioned sub-steps, details, or specific actions as bulletPoints in the data object
 - Keep bullet points concise and actionable
 
-FINAL REMINDER: All x and y coordinates must be multiples of 8. Double-check all position values before returning the JSON.
+FINAL REMINDER: All x and y coordinates must be multiples of 8. When branches occur, keep the parent at x: 96, main branch at x: 96, and conditional branches diverge to the RIGHT at x: 480, 864, etc. Double-check all position values before returning the JSON.
 
 Return ONLY the JSON object, no other text.`
 
