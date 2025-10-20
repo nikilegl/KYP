@@ -30,6 +30,8 @@ import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById }
 import { getLawFirms } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
+import { convertTranscriptToJourney } from '../lib/aiService'
+import { TRANSCRIPT_TO_JOURNEY_PROMPT } from '../lib/prompts/transcript-to-journey-prompt'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -111,6 +113,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [showImportJsonModal, setShowImportJsonModal] = useState(false)
   const [importJsonText, setImportJsonText] = useState('')
   const [importJsonError, setImportJsonError] = useState<string | null>(null)
+  const [showImportTranscriptModal, setShowImportTranscriptModal] = useState(false)
+  const [importTranscriptText, setImportTranscriptText] = useState('')
+  const [importTranscriptError, setImportTranscriptError] = useState<string | null>(null)
+  const [importTranscriptLoading, setImportTranscriptLoading] = useState(false)
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
   const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
@@ -702,6 +708,92 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       alert('Error processing the imported journey. Please try again.')
     }
   }, [userRoles, setNodes, setEdges])
+
+  // Handle AI import from transcript
+  const handleImportFromTranscript = useCallback(async () => {
+    try {
+      setImportTranscriptError(null)
+      setImportTranscriptLoading(true)
+
+      // Validate transcript
+      if (!importTranscriptText.trim()) {
+        setImportTranscriptError('Please paste a transcript to import.')
+        setImportTranscriptLoading(false)
+        return
+      }
+
+      // Call OpenAI API to convert transcript to journey JSON
+      const journeyData = await convertTranscriptToJourney(
+        importTranscriptText,
+        TRANSCRIPT_TO_JOURNEY_PROMPT
+      )
+
+      // Validate the response
+      if (!journeyData.nodes || !Array.isArray(journeyData.nodes)) {
+        setImportTranscriptError('AI did not return valid journey data. Please try again or adjust your transcript.')
+        setImportTranscriptLoading(false)
+        return
+      }
+
+      // Convert the AI-generated nodes to React Flow nodes
+      const importedNodes = journeyData.nodes.map((node: any) => {
+        // Find matching user role
+        let userRoleObj = null
+        if (node.data?.userRole) {
+          const userRoleName = typeof node.data.userRole === 'string' 
+            ? node.data.userRole.trim() 
+            : node.data.userRole.name
+
+          userRoleObj = userRoles.find(
+            role => role.name.toLowerCase().trim() === userRoleName.toLowerCase()
+          ) || null
+
+          if (!userRoleObj) {
+            console.warn(`Could not find user role: "${userRoleName}"`)
+          }
+        }
+
+        return {
+          id: node.id,
+          type: node.type || 'process',
+          position: {
+            x: node.position.x,
+            y: node.position.y
+          },
+          data: {
+            ...node.data,
+            userRole: userRoleObj
+          },
+          selectable: true,
+        }
+      })
+
+      // Set journey metadata
+      setJourneyName(journeyData.name || 'Imported from Transcript')
+      setJourneyDescription(journeyData.description || '')
+      
+      // Set nodes and edges
+      setNodes(importedNodes)
+      setEdges(journeyData.edges || [])
+      
+      // Close modal and reset state
+      setShowImportTranscriptModal(false)
+      setImportTranscriptText('')
+      setImportTranscriptError(null)
+      setImportTranscriptLoading(false)
+
+      // Show success message
+      alert(`Successfully imported journey from transcript with ${importedNodes.length} nodes!`)
+    } catch (error) {
+      console.error('Error importing from transcript:', error)
+      setImportTranscriptError(
+        error instanceof Error 
+          ? `Failed to convert transcript: ${error.message}` 
+          : 'Failed to convert transcript. Please try again.'
+      )
+      setImportTranscriptLoading(false)
+    }
+  }, [importTranscriptText, userRoles, setNodes, setEdges])
 
   // Configure specific node (from button click)
   const configureNode = useCallback((nodeId: string) => {
@@ -1577,6 +1669,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
             <Upload size={16} />
             Import JSON
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowImportTranscriptModal(true)}
+            className="flex items-center gap-2 whitespace-nowrap"
+          >
+            <Sparkles size={16} />
+            Import Transcript
+          </Button>
           {/* <Button
             variant="outline"
             onClick={() => setShowImportImageModal(true)}
@@ -2311,6 +2411,92 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           {importJsonError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-700">{importJsonError}</p>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Import Transcript Modal */}
+      <Modal
+        isOpen={showImportTranscriptModal}
+        onClose={() => {
+          setShowImportTranscriptModal(false)
+          setImportTranscriptText('')
+          setImportTranscriptError(null)
+        }}
+        title="Import Journey from Transcript"
+        size="lg"
+        footerContent={
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportTranscriptModal(false)
+                setImportTranscriptText('')
+                setImportTranscriptError(null)
+              }}
+              disabled={importTranscriptLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportFromTranscript}
+              disabled={!importTranscriptText.trim() || importTranscriptLoading}
+            >
+              {importTranscriptLoading ? (
+                <>
+                  <Sparkles size={16} className="animate-pulse" />
+                  Converting...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  Import
+                </>
+              )}
+            </Button>
+          </div>
+        }
+      >
+        <div className="p-6 space-y-4">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium mb-1">
+              <Sparkles size={14} className="inline mr-1" />
+              AI-Powered Transcript Analysis
+            </p>
+            <p className="text-sm text-blue-700">
+              Paste a phone call transcript below. Our AI will automatically extract the user journey, 
+              identify steps, roles, and create a complete diagram for you.
+            </p>
+          </div>
+          
+          <div>
+            <textarea
+              value={importTranscriptText}
+              onChange={(e) => {
+                setImportTranscriptText(e.target.value)
+                setImportTranscriptError(null)
+              }}
+              placeholder='Paste your transcript here, e.g.:
+
+"The client called to discuss their new property purchase. They mentioned they need to complete ID verification and provide proof of funds. The lawyer explained they would need to upload bank statements from the last 3 months..."'
+              className="w-full h-64 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              disabled={importTranscriptLoading}
+            />
+          </div>
+
+          {importTranscriptError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">{importTranscriptError}</p>
+            </div>
+          )}
+
+          {importTranscriptLoading && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-700 flex items-center gap-2">
+                <Sparkles size={14} className="animate-pulse" />
+                Analyzing transcript with AI... This may take a moment.
+              </p>
             </div>
           )}
         </div>

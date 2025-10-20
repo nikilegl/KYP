@@ -1,0 +1,1 @@
+module.exports = require('./netlify/functions/transcript-to-journey.js')
