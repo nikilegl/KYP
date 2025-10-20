@@ -812,7 +812,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
         return
       }
 
-      // Prepare current journey data for AI
+      // Prepare current journey data for AI (send only essential data)
       const currentJourney = {
         name: journeyName,
         description: journeyDescription,
@@ -821,12 +821,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
           type: node.type,
           position: node.position,
           data: {
-            ...node.data,
-            // Convert userRole object to string for AI
-            userRole: node.data?.userRole ? (node.data.userRole as any).name : null
+            label: node.data?.label,
+            type: node.data?.type,
+            userRole: node.data?.userRole ? (node.data.userRole as any).name : null,
+            variant: node.data?.variant || '',
+            thirdPartyName: node.data?.thirdPartyName || '',
+            bulletPoints: node.data?.bulletPoints || [],
+            customProperties: node.data?.customProperties || {}
           }
         })),
-        edges: edges
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          label: edge.label || '',
+          data: { label: edge.data?.label || '' }
+        }))
       }
 
       console.log('Sending journey to AI for editing...')

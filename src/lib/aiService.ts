@@ -322,6 +322,11 @@ export const editJourneyWithAI = async (
 ): Promise<any> => {
   try {
     console.log('Calling AI to edit journey with instruction:', instruction)
+    
+    // Create an AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 45000) // 45 second timeout
+    
     const response = await fetch('/.netlify/functions/edit-journey', {
       method: 'POST',
       headers: {
@@ -331,7 +336,8 @@ export const editJourneyWithAI = async (
         currentJourney,
         instruction,
       }),
-    })
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId))
 
     console.log('Response status:', response.status, response.statusText)
 
@@ -374,6 +380,12 @@ export const editJourneyWithAI = async (
     return result.journey
   } catch (error) {
     console.error('Error editing journey with AI:', error)
+    
+    // Handle specific error types
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. Try a simpler instruction or edit fewer items at once.')
+    }
+    
     throw error
   }
 }

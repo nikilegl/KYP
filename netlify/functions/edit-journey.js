@@ -52,38 +52,26 @@ export async function handler(event, context) {
     console.log('Instruction:', instruction)
     console.log('Current nodes:', currentJourney.nodes.length)
 
-    const systemPrompt = `You are a user journey editor. You receive a user journey in JSON format and a natural language instruction to modify it.
+    const systemPrompt = `You are a precise user journey editor. Apply the requested changes and return the COMPLETE journey as valid JSON.
 
-Your task:
-1. Understand the instruction
-2. Apply the changes to the journey (nodes, edges, metadata)
-3. Return the COMPLETE modified journey as valid JSON
-
-IMPORTANT RULES:
-- Return ONLY valid JSON, no markdown, no code blocks, no explanations
-- Include ALL nodes and edges in the response (not just changed ones)
-- Maintain the exact structure: nodes with id, type, position, data properties
-- Preserve all node properties unless specifically changed by the instruction
+CRITICAL RULES:
+- Return ONLY valid JSON (no markdown, no explanations)
+- Include ALL nodes and edges (even unchanged ones)
+- Preserve exact structure: nodes array with id, type, position, data
 - Keep position coordinates as multiples of 8
-- If replacing text, update in: node labels, bullet points, thirdPartyName, etc.
-- If adding nodes, generate unique IDs and appropriate positions
-- If removing nodes, also remove connected edges
-- Maintain data structure: userRole, variant, thirdPartyName, bulletPoints, customProperties
+- When replacing text: update labels, bulletPoints, thirdPartyName, variant
+- When adding nodes: generate unique IDs (e.g., "node-16", "node-17"), position on grid
+- When removing nodes: also remove connected edges
+- Preserve all properties not mentioned in the instruction
 
-Return format (complete journey):
-{
-  "name": "Journey Name",
-  "description": "Journey description",
-  "nodes": [...all nodes with any changes applied...],
-  "edges": [...all edges with any changes applied...]
-}`
+Work efficiently - focus only on what needs to change.`
 
-    const userPrompt = `Current user journey:
-${JSON.stringify(currentJourney, null, 2)}
+    const userPrompt = `Journey (${currentJourney.nodes.length} nodes, ${currentJourney.edges.length} edges):
+${JSON.stringify(currentJourney, null, 0)}
 
 Instruction: ${instruction}
 
-Apply the instruction and return the COMPLETE modified journey as JSON.`
+Return the COMPLETE updated journey as compact JSON.`
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -92,7 +80,7 @@ Apply the instruction and return the COMPLETE modified journey as JSON.`
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -103,8 +91,8 @@ Apply the instruction and return the COMPLETE modified journey as JSON.`
             content: userPrompt
           }
         ],
-        temperature: 0.3,
-        max_tokens: 16000,
+        temperature: 0.2,
+        max_tokens: 8000,
         response_format: { type: 'json_object' }
       })
     })
