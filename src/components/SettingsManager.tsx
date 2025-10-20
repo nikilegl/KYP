@@ -1,13 +1,15 @@
 import React, { useState } from 'react'
-import { Settings, Shield, UserCheck, FileText, UserPlus, Package } from 'lucide-react'
+import { Settings, Shield, UserCheck, FileText, UserPlus, Package, Server } from 'lucide-react'
 import { UserPermissionManager } from './UserPermissionManager'
 import { UserRoleManager } from './UserRoleManager'
+import { PlatformManager } from './PlatformManager'
 import { NoteTemplateManager } from './NoteTemplateManager'
 import { TeamManager } from './TeamManager'
 import { ThirdPartyManager } from './ThirdPartyManager'
 import type { 
   WorkspaceUser,
   UserRole,
+  Platform,
   UserPermission,
   Stakeholder,
   NoteTemplate
@@ -18,6 +20,7 @@ interface SettingsManagerProps {
   workspaceId: string
   workspaceUsers: WorkspaceUser[]
   userRoles: UserRole[]
+  platforms: Platform[]
   userPermissions: UserPermission[]
   stakeholders: Stakeholder[]
   noteTemplates: NoteTemplate[]
@@ -33,6 +36,11 @@ interface SettingsManagerProps {
   onUpdateUserRoleDefinition: (roleId: string, updates: { name?: string; colour?: string; icon?: string }) => Promise<boolean>
   onDeleteUserRole: (roleId: string) => Promise<void>
   onNavigateToStakeholdersWithFilter: (userRoleId: string) => void
+  
+  // Platform handlers
+  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string) => Promise<void>
+  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string }) => Promise<boolean>
+  onDeletePlatform: (platformId: string) => Promise<void>
   
   // User permission handlers
   onCreateUserPermission: (name: string, description?: string) => Promise<void>
@@ -51,6 +59,7 @@ export function SettingsManager({
   workspaceId,
   workspaceUsers,
   userRoles,
+  platforms,
   userPermissions,
   stakeholders,
   noteTemplates,
@@ -62,6 +71,9 @@ export function SettingsManager({
   onUpdateUserRoleDefinition,
   onDeleteUserRole,
   onNavigateToStakeholdersWithFilter,
+  onCreatePlatform,
+  onUpdatePlatform,
+  onDeletePlatform,
   onCreateUserPermission,
   onUpdateUserPermission,
   onDeleteUserPermission,
@@ -76,6 +88,7 @@ export function SettingsManager({
   const menuItems = [
     { id: 'user-permissions', label: 'User Permissions', icon: Shield },
     { id: 'user-roles', label: 'User Roles', icon: UserCheck },
+    { id: 'platforms', label: 'Platforms', icon: Server },
     { id: 'third-parties', label: 'Third Parties', icon: Package },
     { id: 'note-templates', label: 'Note Templates', icon: FileText },
     { id: 'team', label: 'KYP Team', icon: UserPlus },
@@ -103,6 +116,15 @@ export function SettingsManager({
             onUpdateUserRole={onUpdateUserRoleDefinition}
             onDeleteUserRole={onDeleteUserRole}
             onNavigateToStakeholders={onNavigateToStakeholdersWithFilter}
+          />
+        )
+      case 'platforms':
+        return (
+          <PlatformManager 
+            platforms={platforms}
+            onCreatePlatform={onCreatePlatform}
+            onUpdatePlatform={onUpdatePlatform}
+            onDeletePlatform={onDeletePlatform}
           />
         )
       case 'third-parties':
