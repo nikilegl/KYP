@@ -30,7 +30,7 @@ import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById }
 import { getLawFirms } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
-import { convertTranscriptToJourney } from '../lib/aiService'
+import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { TRANSCRIPT_TO_JOURNEY_PROMPT } from '../lib/prompts/transcript-to-journey-prompt'
 
 // We need to define nodeTypes inside the component to access the handlers
@@ -117,6 +117,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
   const [importTranscriptText, setImportTranscriptText] = useState('')
   const [importTranscriptError, setImportTranscriptError] = useState<string | null>(null)
   const [importTranscriptLoading, setImportTranscriptLoading] = useState(false)
+  const [showEditWithAIModal, setShowEditWithAIModal] = useState(false)
+  const [editInstruction, setEditInstruction] = useState('')
+  const [editAIError, setEditAIError] = useState<string | null>(null)
+  const [editAILoading, setEditAILoading] = useState(false)
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
   const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
@@ -794,6 +798,107 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
       setImportTranscriptLoading(false)
     }
   }, [importTranscriptText, userRoles, setNodes, setEdges])
+
+  // Handle AI-powered journey editing with natural language
+  const handleEditWithAI = useCallback(async () => {
+    try {
+      setEditAIError(null)
+      setEditAILoading(true)
+
+      // Validate instruction
+      if (!editInstruction.trim()) {
+        setEditAIError('Please enter an instruction.')
+        setEditAILoading(false)
+        return
+      }
+
+      // Prepare current journey data for AI
+      const currentJourney = {
+        name: journeyName,
+        description: journeyDescription,
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.type,
+          position: node.position,
+          data: {
+            ...node.data,
+            // Convert userRole object to string for AI
+            userRole: node.data?.userRole ? (node.data.userRole as any).name : null
+          }
+        })),
+        edges: edges
+      }
+
+      console.log('Sending journey to AI for editing...')
+      console.log('Current nodes:', currentJourney.nodes.length)
+      console.log('Instruction:', editInstruction)
+
+      // Call OpenAI API to edit the journey
+      const updatedJourney = await editJourneyWithAI(currentJourney, editInstruction)
+
+      // Convert the AI-updated nodes back to React Flow format
+      const updatedNodes = updatedJourney.nodes.map((node: any) => {
+        // Find matching user role
+        let userRoleObj = null
+        if (node.data?.userRole) {
+          const userRoleName = typeof node.data.userRole === 'string' 
+            ? node.data.userRole.trim() 
+            : node.data.userRole.name
+
+          userRoleObj = userRoles.find(
+            role => role.name.toLowerCase().trim() === userRoleName.toLowerCase()
+          ) || null
+
+          if (!userRoleObj) {
+            console.warn(`Could not find user role: "${userRoleName}"`)
+          }
+        }
+
+        return {
+          id: node.id,
+          type: node.type || 'process',
+          position: {
+            x: node.position.x,
+            y: node.position.y
+          },
+          data: {
+            ...node.data,
+            userRole: userRoleObj
+          },
+          selectable: true,
+        }
+      })
+
+      // Update journey metadata if changed
+      if (updatedJourney.name && updatedJourney.name !== journeyName) {
+        setJourneyName(updatedJourney.name)
+      }
+      if (updatedJourney.description && updatedJourney.description !== journeyDescription) {
+        setJourneyDescription(updatedJourney.description)
+      }
+      
+      // Apply the updated nodes and edges
+      setNodes(updatedNodes)
+      setEdges(updatedJourney.edges || [])
+      
+      // Close modal and reset state
+      setShowEditWithAIModal(false)
+      setEditInstruction('')
+      setEditAIError(null)
+      setEditAILoading(false)
+
+      // Show success message
+      alert(`Successfully applied AI edits! Updated ${updatedNodes.length} nodes.`)
+    } catch (error) {
+      console.error('Error editing with AI:', error)
+      setEditAIError(
+        error instanceof Error 
+          ? `Failed to apply edits: ${error.message}` 
+          : 'Failed to apply edits. Please try again.'
+      )
+      setEditAILoading(false)
+    }
+  }, [editInstruction, journeyName, journeyDescription, nodes, edges, userRoles, setNodes, setEdges])
 
   // Configure specific node (from button click)
   const configureNode = useCallback((nodeId: string) => {
@@ -1772,6 +1877,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
                 Tidy Up
               </Button>
               <Button
+                variant="outline"
+                onClick={() => setShowEditWithAIModal(true)}
+                className="flex items-center gap-2"
+                disabled={nodes.length === 0}
+              >
+                <Sparkles size={16} />
+                Edit
+              </Button>
+              <Button
                 variant="secondary"
                 onClick={smartAddNode}
                 className="flex items-center gap-2"
@@ -2496,6 +2610,104 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId }: Use
               <p className="text-sm text-blue-700 flex items-center gap-2">
                 <Sparkles size={14} className="animate-pulse" />
                 Analyzing transcript with AI... This may take a moment.
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Edit with AI Modal */}
+      <Modal
+        isOpen={showEditWithAIModal}
+        onClose={() => {
+          setShowEditWithAIModal(false)
+          setEditInstruction('')
+          setEditAIError(null)
+        }}
+        title="Edit Journey with AI"
+        size="lg"
+        footerContent={
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowEditWithAIModal(false)
+                setEditInstruction('')
+                setEditAIError(null)
+              }}
+              disabled={editAILoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditWithAI}
+              disabled={!editInstruction.trim() || editAILoading}
+            >
+              {editAILoading ? (
+                <>
+                  <Sparkles size={16} className="animate-pulse" />
+                  Applying...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  Apply Changes
+                </>
+              )}
+            </Button>
+          </div>
+        }
+      >
+        <div className="p-6 space-y-4">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium mb-1">
+              <Sparkles size={14} className="inline mr-1" />
+              Natural Language Editing
+            </p>
+            <p className="text-sm text-blue-700">
+              Describe the changes you want to make to your journey. The AI will understand 
+              and apply your instructions automatically.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              What would you like to change?
+            </label>
+            <textarea
+              value={editInstruction}
+              onChange={(e) => {
+                setEditInstruction(e.target.value)
+                setEditAIError(null)
+              }}
+              placeholder='Examples:
+• "Replace Amicus with ThirdFort for all third parties"
+• "Add a step for ID verification after the onboarding"
+• "Change all Fee Earner roles to Admin"
+• "Remove the MLRO escalation branch"
+• "Rename all steps mentioning CMS to use the word System instead"'
+              className="w-full h-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              disabled={editAILoading}
+            />
+          </div>
+
+          <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-xs text-gray-600">
+              <strong>Current journey:</strong> {nodes.length} nodes, {edges.length} edges
+            </p>
+          </div>
+
+          {editAIError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-700">{editAIError}</p>
+            </div>
+          )}
+
+          {editAILoading && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-700 flex items-center gap-2">
+                <Sparkles size={14} className="animate-pulse" />
+                AI is analyzing your journey and applying changes... This may take a moment.
               </p>
             </div>
           )}
