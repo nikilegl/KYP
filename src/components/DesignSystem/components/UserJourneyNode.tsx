@@ -14,6 +14,7 @@ export interface UserJourneyNodeData {
   customProperties?: Record<string, unknown>
   variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
   thirdPartyName?: string
+  nodeLayout?: string // Layout classification: 'Simple node', 'Branch node', 'Branch-child node', 'Convergent node', 'Divergent node'
 }
 
 interface UserJourneyNodeProps extends NodeProps<UserJourneyNodeData> {
