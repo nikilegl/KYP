@@ -4,10 +4,12 @@ import { Plus, Search, Edit, Trash2, Copy } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
+import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
-import { getLawFirms } from '../lib/database/services/lawFirmService'
+import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { Project, LawFirm } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
@@ -41,11 +43,59 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   })
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
   const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
+  const [showAddLawFirmModal, setShowAddLawFirmModal] = useState(false)
+  const [newLawFirm, setNewLawFirm] = useState({ 
+    name: '', 
+    structure: 'decentralised' as 'centralised' | 'decentralised',
+    status: 'active' as 'active' | 'inactive',
+    top_4: false
+  })
+  const [creatingLawFirm, setCreatingLawFirm] = useState(false)
 
   // Load projects and journeys on mount
   useEffect(() => {
     loadData()
   }, [])
+
+  // Handle creating a new law firm from the Edit Journey Details modal
+  const handleCreateLawFirmFromModal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreatingLawFirm(true)
+    
+    try {
+      // Get current user's workspace
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: workspaceUser } = await supabase
+            .from('workspace_users')
+            .select('workspace_id')
+            .eq('user_id', user.id)
+            .single()
+          
+          if (workspaceUser) {
+            await createLawFirm(
+              newLawFirm.name,
+              newLawFirm.structure,
+              newLawFirm.status
+            )
+            
+            // Reload law firms
+            const lawFirmsData = await getLawFirms({ workspaceId: workspaceUser.workspace_id })
+            setLawFirms(lawFirmsData)
+            
+            // Reset form and close modal
+            setNewLawFirm({ name: '', structure: 'decentralised', status: 'active', top_4: false })
+            setShowAddLawFirmModal(false)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error creating law firm:', error)
+    } finally {
+      setCreatingLawFirm(false)
+    }
+  }
 
   const loadData = async () => {
     try {
@@ -615,8 +665,18 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                   lawFirmSearchQuery.trim() === '' || 
                   firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
                 ).length === 0 && (
-                  <div className="px-3 py-2 text-sm text-gray-500 text-center">
-                    No law firms found
+                  <div className="px-3 py-4 text-center">
+                    <p className="text-sm text-gray-500 mb-2">No law firms found</p>
+                    <Button
+                      variant="outline"
+                      size="small"
+                      icon={Plus}
+                      onClick={() => {
+                        setShowAddLawFirmModal(true)
+                      }}
+                    >
+                      Add Law Firm
+                    </Button>
                   </div>
                 )}
               </div>
@@ -629,6 +689,20 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           </div>
         </Modal>
       )}
+
+      {/* Add Law Firm Modal - Opens from Edit Journey Details when no search results */}
+      <LawFirmForm
+        isOpen={showAddLawFirmModal}
+        isEditing={false}
+        lawFirm={newLawFirm}
+        loading={creatingLawFirm}
+        onUpdate={(updates) => setNewLawFirm({ ...newLawFirm, ...updates })}
+        onSubmit={handleCreateLawFirmFromModal}
+        onClose={() => {
+          setNewLawFirm({ name: '', structure: 'decentralised', status: 'active', top_4: false })
+          setShowAddLawFirmModal(false)
+        }}
+      />
 
     </div>
   )

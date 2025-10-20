@@ -221,32 +221,37 @@ export function LawFirmManager({
         onStructureFilterChange={setStructureFilter}
       />
 
-      {showLawFirmForm && (
-        <LawFirmForm
-          isEditing={false}
-          lawFirm={newLawFirm}
-          loading={creatingLawFirm}
-          onUpdate={(updates) => setNewLawFirm({ ...newLawFirm, ...updates })}
-          onSubmit={handleCreateLawFirm}
-          onClose={() => setShowLawFirmForm(false)}
-        />
-      )}
+      {/* Create Law Firm Modal */}
+      <LawFirmForm
+        isOpen={showLawFirmForm}
+        isEditing={false}
+        lawFirm={newLawFirm}
+        loading={creatingLawFirm}
+        onUpdate={(updates) => setNewLawFirm({ ...newLawFirm, ...updates })}
+        onSubmit={handleCreateLawFirm}
+        onClose={() => setShowLawFirmForm(false)}
+      />
 
-      {editingLawFirm && (
-        <LawFirmForm
-          isEditing={true}
-          lawFirm={{
-            name: editingLawFirm.name,
-            structure: editingLawFirm.structure,
-            status: editingLawFirm.status,
-            top_4: editingLawFirm.top_4 || false
-          }}
-          loading={updatingLawFirm}
-          onUpdate={(updates) => setEditingLawFirm({ ...editingLawFirm, ...updates })}
-          onSubmit={handleUpdateLawFirm}
-          onClose={() => setEditingLawFirm(null)}
-        />
-      )}
+      {/* Edit Law Firm Modal */}
+      <LawFirmForm
+        isOpen={!!editingLawFirm}
+        isEditing={true}
+        lawFirm={editingLawFirm ? {
+          name: editingLawFirm.name,
+          structure: editingLawFirm.structure,
+          status: editingLawFirm.status,
+          top_4: editingLawFirm.top_4 || false
+        } : {
+          name: '',
+          structure: 'decentralised',
+          status: 'active',
+          top_4: false
+        }}
+        loading={updatingLawFirm}
+        onUpdate={(updates) => editingLawFirm && setEditingLawFirm({ ...editingLawFirm, ...updates })}
+        onSubmit={handleUpdateLawFirm}
+        onClose={() => setEditingLawFirm(null)}
+      />
 
       {/* Law Firms Table */}
       <DataTable
