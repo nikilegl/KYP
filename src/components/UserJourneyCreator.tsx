@@ -37,6 +37,8 @@ import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
+import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyLayoutCalculator'
+import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -127,6 +129,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [importTranscriptText, setImportTranscriptText] = useState('')
   const [importTranscriptError, setImportTranscriptError] = useState<string | null>(null)
   const [importTranscriptLoading, setImportTranscriptLoading] = useState(false)
+  const [importTranscriptLayout, setImportTranscriptLayout] = useState<'vertical' | 'horizontal'>('vertical')
   const [showEditWithAIModal, setShowEditWithAIModal] = useState(false)
   const [editInstruction, setEditInstruction] = useState('')
   const [editAIError, setEditAIError] = useState<string | null>(null)
@@ -990,8 +993,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const dynamicPrompt = generateTranscriptToJourneyPrompt(userRoleNames)
       
       console.log('Using user roles:', userRoleNames)
+      console.log('Selected layout:', importTranscriptLayout)
 
-      // Call OpenAI API to convert transcript to journey JSON
+      // Call OpenAI API to convert transcript to journey JSON (content only, no positions)
       const journeyData = await convertTranscriptToJourney(
         importTranscriptText,
         dynamicPrompt,
@@ -1005,8 +1009,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
-      // Convert the AI-generated nodes to React Flow nodes
-      const importedNodes = journeyData.nodes.map((node: any) => {
+      // --- STEP 1: Extract raw content from AI (no positions) ---
+      const rawNodes = journeyData.nodes.map((node: any) => ({
+        id: node.id,
+        type: node.type || 'process',
+        data: node.data
+      }))
+
+      // --- STEP 2: Calculate positions using the appropriate layout calculator ---
+      const layoutResult = importTranscriptLayout === 'horizontal'
+        ? calculateHorizontalJourneyLayout(rawNodes, journeyData.edges || [])
+        : calculateVerticalJourneyLayout(rawNodes, journeyData.edges || [])
+
+      // --- STEP 3: Convert to React Flow nodes with positions and user roles ---
+      const importedNodes = layoutResult.nodes.map((node: any) => {
         // Find matching user role
         let userRoleObj = null
         if (node.data?.userRole) {
@@ -1026,22 +1042,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return {
           id: node.id,
           type: node.type || 'process',
-          position: {
-            x: node.position.x,
-            y: node.position.y
-          },
+          position: node.position,
           data: {
             ...node.data,
             userRole: userRoleObj,
-            journeyLayout
+            journeyLayout: importTranscriptLayout
           },
           selectable: true,
         }
       })
 
-      // Set journey metadata
+      // Set journey metadata and layout
       setJourneyName(journeyData.name || 'Imported from Transcript')
       setJourneyDescription(journeyData.description || '')
+      setJourneyLayout(importTranscriptLayout)
       
       // Set nodes and edges
       setNodes(importedNodes)
@@ -1054,7 +1068,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setImportTranscriptLoading(false)
 
       // Show success message
-      alert(`Successfully imported journey from transcript with ${importedNodes.length} nodes!`)
+      alert(`Successfully imported journey from transcript with ${importedNodes.length} nodes in ${importTranscriptLayout} layout!`)
     } catch (error) {
       console.error('Error importing from transcript:', error)
       setImportTranscriptError(
@@ -1064,7 +1078,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       )
       setImportTranscriptLoading(false)
     }
-  }, [importTranscriptText, userRoles, setNodes, setEdges, journeyLayout])
+  }, [importTranscriptText, importTranscriptLayout, userRoles, setNodes, setEdges])
 
   // Handle AI-powered journey editing with natural language
   const handleEditWithAI = useCallback(async () => {
@@ -3449,6 +3463,49 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               Paste a phone call transcript below. Our AI will automatically extract the user journey, 
               identify steps, roles, and create a complete diagram for you.
             </p>
+          </div>
+
+          {/* Layout Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Journey Layout
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setImportTranscriptLayout('vertical')}
+                className={`
+                  flex-1 px-4 py-2 rounded-lg border-2 transition-all
+                  ${importTranscriptLayout === 'vertical'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }
+                `}
+                disabled={importTranscriptLoading}
+              >
+                <div className="text-center">
+                  <div className="font-medium">Vertical</div>
+                  <div className="text-xs mt-1">Top to bottom flow</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportTranscriptLayout('horizontal')}
+                className={`
+                  flex-1 px-4 py-2 rounded-lg border-2 transition-all
+                  ${importTranscriptLayout === 'horizontal'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }
+                `}
+                disabled={importTranscriptLoading}
+              >
+                <div className="text-center">
+                  <div className="font-medium">Horizontal</div>
+                  <div className="text-xs mt-1">Left to right flow</div>
+                </div>
+              </button>
+            </div>
           </div>
           
           <div>

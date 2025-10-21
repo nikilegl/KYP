@@ -1,6 +1,11 @@
 /**
- * Journey Layout Calculator
- * Calculates node positions based on edges and flow, separate from AI detection
+ * Horizontal Journey Layout Calculator
+ * Calculates node positions for horizontal (left-to-right) user journey diagrams
+ * Focuses specifically on swim lane layouts with chronological flow
+ * 
+ * Separation of Concerns:
+ * - AI Prompt: Detects content (nodes, edges, lanes)
+ * - This Calculator: Positions nodes based on edges and swim lanes
  */
 
 interface NodeData {
@@ -30,28 +35,13 @@ interface LayoutResult {
  * Calculate horizontal layout positions for nodes
  * @param nodes - Array of nodes with content but no positions
  * @param edges - Array of edges defining parent-child relationships
- * @param layout - Layout type ('horizontal' or 'vertical')
+ * @returns Positioned nodes with swim lane dimensions
  */
-export function calculateJourneyLayout(
-  nodes: NodeData[],
-  edges: Edge[],
-  layout: 'horizontal' | 'vertical' = 'horizontal'
-): LayoutResult {
-  if (layout === 'horizontal') {
-    return calculateHorizontalLayout(nodes, edges)
-  } else {
-    return calculateVerticalLayout(nodes, edges)
-  }
-}
-
-/**
- * Calculate horizontal layout (left-to-right chronological flow)
- */
-function calculateHorizontalLayout(
+export function calculateHorizontalJourneyLayout(
   nodes: NodeData[],
   edges: Edge[]
 ): LayoutResult {
-  // Constants for layout
+  // Constants for horizontal layout
   const NODE_WIDTH = 320
   const NODE_HEIGHT = 120 // Approximate node height
   const HORIZONTAL_GAP = 40
@@ -186,29 +176,6 @@ function calculateHorizontalLayout(
     swimLaneOrder,
     swimLaneWidth,
     swimLaneHeight: SWIM_LANE_HEIGHT
-  }
-}
-
-/**
- * Calculate vertical layout (top-to-bottom flow)
- */
-function calculateVerticalLayout(
-  nodes: NodeData[],
-  _edges: Edge[]
-): LayoutResult {
-  // Similar to horizontal but swap X and Y logic
-  // For now, use simple vertical stacking
-  const positionedNodes = nodes.map((node, index) => ({
-    ...node,
-    position: {
-      x: 96,
-      y: 96 + (index * 255)
-    }
-  }))
-  
-  return {
-    nodes: positionedNodes,
-    swimLaneOrder: []
   }
 }
 
