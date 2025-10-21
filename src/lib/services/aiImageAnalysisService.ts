@@ -5,6 +5,7 @@
 
 import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt'
 import { calculateHorizontalJourneyLayout } from './horizontalJourneyLayoutCalculator'
+import { calculateVerticalJourneyLayout } from './verticalJourneyLayoutCalculator'
 
 export interface JourneyNotification {
   id: string
@@ -185,12 +186,14 @@ function parseAIResponse(content: string): any {
  * Process and validate the journey data
  * 
  * SEPARATION OF CONCERNS:
- * - AI Prompt: Extracts CONTENT (labels, types, roles, platforms, lanes, edges, notifications)
- * - Layout Calculator: Computes POSITIONS (x, y coordinates based on edges and lanes)
+ * - AI Prompt: Extracts CONTENT (labels, types, roles, platforms, lanes, edges, notifications) + LAYOUT TYPE
+ * - Layout Calculator: Computes POSITIONS (x, y coordinates based on edges and detected layout)
  * - This Function: Combines both to create the final journey structure
  */
 function processJourneyData(data: any): AnalyzedJourney {
   const detectedLayout = data.layout || 'horizontal'
+  
+  console.log('Detected layout from AI:', detectedLayout)
   
   // --- Step 1: Extract content from AI (NO POSITIONS) ---
   const rawNodes = (data.nodes || []).map((node: any) => ({
@@ -207,45 +210,49 @@ function processJourneyData(data: any): AnalyzedJourney {
     notifications: node.notifications || []
   }))
 
-  // --- Step 2: Calculate positions based on edges and lanes ---
-  // Horizontal layout calculator is the ONLY source of position calculations
-  const layoutResult = calculateHorizontalJourneyLayout(
-    rawNodes,
-    data.edges || []
-  )
+  // --- Step 2: Calculate positions using the appropriate layout calculator ---
+  // The AI detects layout type, and we use the corresponding calculator
+  const layoutResult = detectedLayout === 'horizontal'
+    ? calculateHorizontalJourneyLayout(rawNodes, data.edges || [])
+    : calculateVerticalJourneyLayout(rawNodes, data.edges || [])
 
-  // --- Step 3: Process lanes into regions using calculated dimensions ---
-  // Constants must match horizontalJourneyLayoutCalculator.ts
-  const VERTICAL_GAP_BETWEEN_LANES = 24
-  const START_Y = 40
-  const calculatedSwimLaneHeight = layoutResult.swimLaneHeight || 300
-  const calculatedSwimLaneWidth = layoutResult.swimLaneWidth || 2000
+  // --- Step 3: Process lanes into regions (only for horizontal layouts) ---
+  let regions: JourneyRegion[] = []
   
-  const regions: JourneyRegion[] = (data.lanes || []).map((lane: any) => {
-    // Calculate region Y position with gaps (matching layout calculator logic)
-    const regionY = START_Y + (lane.index * (calculatedSwimLaneHeight + VERTICAL_GAP_BETWEEN_LANES))
+  if (detectedLayout === 'horizontal' && (data.lanes || []).length > 0) {
+    // Constants must match horizontalJourneyLayoutCalculator.ts
+    const VERTICAL_GAP_BETWEEN_LANES = 24
+    const START_Y = 40
+    // Horizontal layout result includes swim lane dimensions
+    const calculatedSwimLaneHeight = ('swimLaneHeight' in layoutResult && layoutResult.swimLaneHeight) ? layoutResult.swimLaneHeight : 300
+    const calculatedSwimLaneWidth = ('swimLaneWidth' in layoutResult && layoutResult.swimLaneWidth) ? layoutResult.swimLaneWidth : 2000
     
-    return {
-      id: `region-${lane.index}`,
-      type: 'highlightRegion' as const,
-      position: {
-        x: 0,
-        y: regionY
-      },
-      style: {
-        width: calculatedSwimLaneWidth,
-        height: calculatedSwimLaneHeight,
-        zIndex: -1
-      },
-      data: {
-        label: lane.label || `Lane ${lane.index + 1}`,
-        backgroundColor: getLaneColor(lane.index).bg,
-        borderColor: getLaneColor(lane.index).border
-      },
-      draggable: true,
-      selectable: true
-    }
-  })
+    regions = (data.lanes || []).map((lane: any) => {
+      // Calculate region Y position with gaps (matching layout calculator logic)
+      const regionY = START_Y + (lane.index * (calculatedSwimLaneHeight + VERTICAL_GAP_BETWEEN_LANES))
+      
+      return {
+        id: `region-${lane.index}`,
+        type: 'highlightRegion' as const,
+        position: {
+          x: 0,
+          y: regionY
+        },
+        style: {
+          width: calculatedSwimLaneWidth,
+          height: calculatedSwimLaneHeight,
+          zIndex: -1
+        },
+        data: {
+          label: lane.label || `Lane ${lane.index + 1}`,
+          backgroundColor: getLaneColor(lane.index).bg,
+          borderColor: getLaneColor(lane.index).border
+        },
+        draggable: true,
+        selectable: true
+      }
+    })
+  }
 
   // --- Step 4: Process nodes with positions from layout calculator ---
   const nodes: JourneyNode[] = layoutResult.nodes.map((node: any) => {

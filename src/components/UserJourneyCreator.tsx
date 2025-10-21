@@ -22,11 +22,10 @@ import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
-import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
-import type { Notification } from './DesignSystem/components/UserJourneyNode'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
+import { EditNodeModal, type NodeFormData } from './EditNodeModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import type { UserRole, Project, LawFirm, ThirdParty } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
@@ -101,17 +100,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [isAddingNewNode, setIsAddingNewNode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [nodeToDelete, setNodeToDelete] = useState<string | null>(null)
-  const [configForm, setConfigForm] = useState({
-    label: '',
-    type: 'process' as 'start' | 'process' | 'decision' | 'end',
-    variant: 'Legl' as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | '',
-    thirdPartyName: '' as string,
-    userRole: null as UserRole | null,
-    bulletPoints: [] as string[],
-    notifications: [] as Notification[],
-    customProperties: {} as Record<string, unknown>,
-    swimLane: null as string | null // Region ID that this node belongs to
-  })
   const [showEdgeLabelModal, setShowEdgeLabelModal] = useState(false)
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
   const [edgeLabel, setEdgeLabel] = useState('')
@@ -154,9 +142,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     description: string
     action: 'tidyUp' | 'aiEdit'
   } | null>(null)
-  
-  // Ref to track bullet point input elements
-  const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
   // History for undo functionality
   const [history, setHistory] = useState<Node[][]>([])
@@ -611,32 +596,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Smart add node - opens modal to configure node before adding
   const smartAddNode = useCallback(() => {
-    const hasStartNode = nodes.some(node => node.type === 'start')
-    const nodeType = hasStartNode ? 'process' : 'start'
-    const typeLabels = {
-      start: 'Start',
-      process: 'Middle',
-      decision: 'Decision',
-      end: 'End'
-    }
-    
-    // Set up form for new node
-    setConfigForm({
-      label: `New ${typeLabels[nodeType]}`,
-      type: nodeType,
-      variant: 'Legl',
-      thirdPartyName: '',
-      userRole: null,
-      bulletPoints: [''],
-      notifications: [],
-      customProperties: {},
-      swimLane: null
-    })
-    
     setIsAddingNewNode(true)
     setConfiguringNode(null)
     setShowConfigModal(true)
-  }, [nodes])
+  }, [])
 
   // Sort nodes to ensure parents come before children (required by React Flow)
   const sortNodesForSaving = useCallback((nodesToSort: Node[]): Node[] => {
@@ -873,31 +836,65 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Handle AI-imported journey from image
   const handleImportFromImage = useCallback((analyzedJourney: AnalyzedJourney) => {
     try {
-      // Set journey metadata
-      if (analyzedJourney.name) {
-        setJourneyName(analyzedJourney.name)
-      }
-      if (analyzedJourney.description) {
-        setJourneyDescription(analyzedJourney.description)
+      // Calculate offset if there are existing nodes
+      let xOffset = 0
+      const IMPORT_HORIZONTAL_GAP = 500 // Gap between existing and imported content
+      
+      if (nodes.length > 0) {
+        // Find the rightmost position of existing nodes
+        const rightmostX = Math.max(...nodes.map(node => {
+          const nodeWidth = node.style?.width || node.width || 320
+          const width = typeof nodeWidth === 'number' ? nodeWidth : 320
+          return node.position.x + width
+        }))
+        
+        xOffset = rightmostX + IMPORT_HORIZONTAL_GAP
+        console.log(`Existing content detected. Placing imported journey at x offset: ${xOffset}px`)
       }
 
-      // Set layout if provided
-      if (analyzedJourney.layout) {
-        setJourneyLayout(analyzedJourney.layout)
+      // Set journey metadata (only if no existing content)
+      if (nodes.length === 0) {
+        if (analyzedJourney.name) {
+          setJourneyName(analyzedJourney.name)
+        }
+        if (analyzedJourney.description) {
+          setJourneyDescription(analyzedJourney.description)
+        }
+        // Set layout if provided
+        if (analyzedJourney.layout) {
+          setJourneyLayout(analyzedJourney.layout)
+        }
       }
 
-      // Convert analyzed regions to React Flow nodes (if any)
+      // Generate unique IDs to avoid conflicts with existing nodes
+      const timestamp = Date.now()
+      const idMapping = new Map<string, string>()
+      
+      // Map old region IDs to new unique IDs
+      ;(analyzedJourney.regions || []).forEach((region, index) => {
+        idMapping.set(region.id, `region-${timestamp}-${index}`)
+      })
+      
+      // Map old node IDs to new unique IDs
+      analyzedJourney.nodes.forEach((node, index) => {
+        idMapping.set(node.id, `node-${timestamp}-${index}`)
+      })
+
+      // Convert analyzed regions to React Flow nodes (if any) with offset and new IDs
       const regionNodes: Node[] = (analyzedJourney.regions || []).map((region) => ({
-        id: region.id,
+        id: idMapping.get(region.id) || region.id,
         type: region.type,
-        position: region.position,
+        position: {
+          x: region.position.x + xOffset,
+          y: region.position.y
+        },
         style: region.style,
         data: region.data,
         draggable: region.draggable,
         selectable: region.selectable
       }))
 
-      // Convert analyzed nodes to React Flow nodes
+      // Convert analyzed nodes to React Flow nodes with new IDs
       const flowNodes: Node[] = analyzedJourney.nodes.map((node) => {
         // Find matching user role if specified
         let matchedUserRole: UserRole | null = null
@@ -924,9 +921,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         )
 
         const baseNode: any = {
-          id: node.id,
+          id: idMapping.get(node.id) || node.id,
           type: node.type,
-          position: node.position,
+          position: {
+            x: node.position.x + xOffset,
+            y: node.position.y
+          },
           selectable: true,
           data: {
             label: node.data.label,
@@ -950,30 +950,31 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return baseNode
       })
 
-      // Convert analyzed edges to React Flow edges
-      const flowEdges: Edge[] = analyzedJourney.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
+      // Convert analyzed edges to React Flow edges with updated node references
+      const flowEdges: Edge[] = analyzedJourney.edges.map((edge, index) => ({
+        id: `edge-${timestamp}-${index}`,
+        source: idMapping.get(edge.source) || edge.source,
+        target: idMapping.get(edge.target) || edge.target,
         type: edge.type || 'custom',
         data: edge.data || { label: '' }
       }))
 
-      // Combine regions and nodes (regions first so they render behind)
-      setNodes([...regionNodes, ...flowNodes])
-      setEdges(flowEdges)
+      // Combine with existing content (append instead of replace)
+      setNodes([...nodes, ...regionNodes, ...flowNodes])
+      setEdges([...edges, ...flowEdges])
 
       // Close the modal
       setShowImportImageModal(false)
 
       // Show success message
       const regionText = regionNodes.length > 0 ? `, ${regionNodes.length} regions` : ''
-      alert(`Successfully imported journey with ${flowNodes.length} nodes${regionText}, and ${flowEdges.length} connections!`)
+      const actionText = nodes.length > 0 ? 'Added' : 'Successfully imported'
+      alert(`${actionText} journey with ${flowNodes.length} nodes${regionText}, and ${flowEdges.length} connections!`)
     } catch (error) {
       console.error('Error processing imported journey:', error)
       alert('Error processing the imported journey. Please try again.')
     }
-  }, [userRoles, thirdParties, setNodes, setEdges, journeyLayout])
+  }, [nodes, edges, userRoles, thirdParties, setNodes, setEdges, journeyLayout])
 
   // Handle AI import from transcript
   const handleImportFromTranscript = useCallback(async () => {
@@ -986,6 +987,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setImportTranscriptError('Please paste a transcript to import.')
         setImportTranscriptLoading(false)
         return
+      }
+
+      // Calculate offset if there are existing nodes
+      let xOffset = 0
+      const IMPORT_HORIZONTAL_GAP = 500 // Gap between existing and imported content
+      
+      if (nodes.length > 0) {
+        // Find the rightmost position of existing nodes
+        const rightmostX = Math.max(...nodes.map(node => {
+          const nodeWidth = node.style?.width || node.width || 320
+          const width = typeof nodeWidth === 'number' ? nodeWidth : 320
+          return node.position.x + width
+        }))
+        
+        xOffset = rightmostX + IMPORT_HORIZONTAL_GAP
+        console.log(`Existing content detected. Placing imported journey at x offset: ${xOffset}px`)
       }
 
       // Generate prompt with actual user roles from database
@@ -1021,7 +1038,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         ? calculateHorizontalJourneyLayout(rawNodes, journeyData.edges || [])
         : calculateVerticalJourneyLayout(rawNodes, journeyData.edges || [])
 
-      // --- STEP 3: Convert to React Flow nodes with positions and user roles ---
+      // --- STEP 3: Generate unique IDs to avoid conflicts with existing nodes ---
+      const timestamp = Date.now()
+      const idMapping = new Map<string, string>()
+      
+      // Map old node IDs to new unique IDs
+      layoutResult.nodes.forEach((node: any, index: number) => {
+        idMapping.set(node.id, `node-${timestamp}-${index}`)
+      })
+
+      // --- STEP 4: Convert to React Flow nodes with positions, user roles, and new IDs ---
       const importedNodes = layoutResult.nodes.map((node: any) => {
         // Find matching user role
         let userRoleObj = null
@@ -1040,9 +1066,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
 
         return {
-          id: node.id,
+          id: idMapping.get(node.id) || node.id,
           type: node.type || 'process',
-          position: node.position,
+          position: {
+            x: node.position.x + xOffset,
+            y: node.position.y
+          },
           data: {
             ...node.data,
             userRole: userRoleObj,
@@ -1052,14 +1081,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       })
 
-      // Set journey metadata and layout
-      setJourneyName(journeyData.name || 'Imported from Transcript')
-      setJourneyDescription(journeyData.description || '')
-      setJourneyLayout(importTranscriptLayout)
+      // Convert edges with updated node references
+      const importedEdges = (journeyData.edges || []).map((edge: any, index: number) => ({
+        id: `edge-${timestamp}-${index}`,
+        source: idMapping.get(edge.source) || edge.source,
+        target: idMapping.get(edge.target) || edge.target,
+        type: edge.type || 'custom',
+        data: edge.data || { label: '' }
+      }))
+
+      // Set journey metadata and layout (only if no existing content)
+      if (nodes.length === 0) {
+        setJourneyName(journeyData.name || 'Imported from Transcript')
+        setJourneyDescription(journeyData.description || '')
+        setJourneyLayout(importTranscriptLayout)
+      }
       
-      // Set nodes and edges
-      setNodes(importedNodes)
-      setEdges(journeyData.edges || [])
+      // Combine with existing content (append instead of replace)
+      setNodes([...nodes, ...importedNodes])
+      setEdges([...edges, ...importedEdges])
       
       // Close modal and reset state
       setShowImportTranscriptModal(false)
@@ -1068,7 +1108,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setImportTranscriptLoading(false)
 
       // Show success message
-      alert(`Successfully imported journey from transcript with ${importedNodes.length} nodes in ${importTranscriptLayout} layout!`)
+      const actionText = nodes.length > 0 ? 'Added' : 'Successfully imported'
+      alert(`${actionText} journey from transcript with ${importedNodes.length} nodes in ${importTranscriptLayout} layout!`)
     } catch (error) {
       console.error('Error importing from transcript:', error)
       setImportTranscriptError(
@@ -1078,7 +1119,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       )
       setImportTranscriptLoading(false)
     }
-  }, [importTranscriptText, importTranscriptLayout, userRoles, setNodes, setEdges])
+  }, [nodes, edges, importTranscriptText, importTranscriptLayout, userRoles, setNodes, setEdges])
 
   // Handle AI-powered journey editing with natural language
   const handleEditWithAI = useCallback(async () => {
@@ -1215,44 +1256,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     if (node) {
       setConfiguringNode(node)
       setIsAddingNewNode(false)
-      const existingBulletPoints = (node.data?.bulletPoints as string[]) || []
-      
-      // Debug: Log node data
-      console.log('Configuring node:', node)
-      console.log('Node data variant:', node.data?.variant)
-      console.log('Node data thirdPartyName:', node.data?.thirdPartyName)
-      
-      // Handle variant - preserve the exact value including empty string
-      const nodeVariant = node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
-      const resolvedVariant = nodeVariant !== undefined && nodeVariant !== null ? nodeVariant : 'Legl'
-      
-      setConfigForm({
-        label: (node.data?.label as string) || '',
-        type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
-        variant: resolvedVariant,
-        thirdPartyName: (node.data?.thirdPartyName as string) || '',
-        userRole: (node.data?.userRole as UserRole | null) || null,
-        bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
-        notifications: (node.data?.notifications as Notification[]) || [],
-        customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
-        swimLane: (node as any).parentId || null
-      })
       setShowConfigModal(true)
     }
   }, [nodes])
 
   // Save node configuration
-  const saveNodeConfiguration = useCallback(async () => {
+  const saveNodeConfiguration = useCallback(async (formData: NodeFormData) => {
     if (isAddingNewNode) {
       // Create a new node
       const newNode: Node = {
         id: `${Date.now()}`,
-        type: configForm.type,
+        type: formData.type,
         position: { x: Math.random() * 400, y: Math.random() * 400 },
         selectable: true,
-        ...(configForm.swimLane ? { parentId: configForm.swimLane } : {}),
+        ...(formData.swimLane ? { parentId: formData.swimLane } : {}),
         data: {
-          ...configForm,
+          ...formData,
           journeyLayout
         },
       }
@@ -1279,17 +1298,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           if (node.id === configuringNode.id) {
             const updatedNode: any = {
               ...node,
-              type: configForm.type,
+              type: formData.type,
               data: {
                 ...node.data,
-                ...configForm,
+                ...formData,
                 journeyLayout
               }
             }
             
             // Handle parentId based on swimLane
-            if (configForm.swimLane) {
-              updatedNode.parentId = configForm.swimLane
+            if (formData.swimLane) {
+              updatedNode.parentId = formData.swimLane
             } else {
               // Remove parentId if swimLane is null
               delete updatedNode.parentId
@@ -1308,17 +1327,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             if (node.id === configuringNode.id) {
               const updatedNode: any = {
                 ...node,
-                type: configForm.type,
+                type: formData.type,
                 data: {
                   ...node.data,
-                  ...configForm,
+                  ...formData,
                   journeyLayout
                 }
               }
               
               // Handle parentId based on swimLane
-              if (configForm.swimLane) {
-                updatedNode.parentId = configForm.swimLane
+              if (formData.swimLane) {
+                updatedNode.parentId = formData.swimLane
               } else {
                 // Remove parentId if swimLane is null
                 delete updatedNode.parentId
@@ -1341,101 +1360,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setShowConfigModal(false)
     setConfiguringNode(null)
     setIsAddingNewNode(false)
-  }, [isAddingNewNode, configuringNode, configForm, setNodes, currentJourneyId, nodes, edges])
+  }, [isAddingNewNode, configuringNode, setNodes, currentJourneyId, nodes, edges, journeyLayout])
 
-  // Add custom property to node
-  const addCustomProperty = useCallback(() => {
-    const key = prompt('Property name:')
-    const value = prompt('Property value:')
-    if (key && value) {
-      setConfigForm(prev => ({
-        ...prev,
-        customProperties: { ...prev.customProperties, [key]: value }
-      }))
-    }
-  }, [])
-
-  // Remove custom property from node
-  const removeCustomProperty = useCallback((key: string) => {
-    setConfigForm(prev => {
-      const { [key]: _, ...rest } = prev.customProperties
-      return { ...prev, customProperties: rest }
-    })
-  }, [])
-
-  // Add bullet point to node
-  const addBulletPoint = useCallback(() => {
-    setConfigForm(prev => ({
-      ...prev,
-      bulletPoints: [...prev.bulletPoints, '']
-    }))
-  }, [])
-
-  // Update bullet point
-  const updateBulletPoint = useCallback((index: number, newText: string) => {
-    setConfigForm(prev => ({
-      ...prev,
-      bulletPoints: prev.bulletPoints.map((bp, i) => i === index ? newText : bp)
-    }))
-  }, [])
-
-  // Remove bullet point from node
-  const removeBulletPoint = useCallback((index: number) => {
-    setConfigForm(prev => ({
-      ...prev,
-      bulletPoints: prev.bulletPoints.filter((_, i) => i !== index)
-    }))
-  }, [])
-
-  // Handle Tab key in bullet point inputs
-  const handleBulletPointKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number, value: string) => {
-    if (e.key === 'Tab' && !e.shiftKey && value.trim()) {
-      e.preventDefault()
-      // Add new bullet point
-      setConfigForm(prev => ({
-        ...prev,
-        bulletPoints: [...prev.bulletPoints, '']
-      }))
-      // Focus the new input after it's rendered
-      setTimeout(() => {
-        const newIndex = index + 1
-        if (bulletInputRefs.current[newIndex]) {
-          bulletInputRefs.current[newIndex]?.focus()
-        }
-      }, 0)
-    }
-  }, [])
-
-  // Add notification to node
-  const addNotification = useCallback(() => {
-    const newNotification: Notification = {
-      id: `notif-${Date.now()}`,
-      type: 'info',
-      message: ''
-    }
-    setConfigForm(prev => ({
-      ...prev,
-      notifications: [...prev.notifications, newNotification]
-    }))
-  }, [])
-
-  // Update notification
-  const updateNotification = useCallback((id: string, field: 'type' | 'message', value: string) => {
-    setConfigForm(prev => ({
-      ...prev,
-      notifications: prev.notifications.map(notif =>
-        notif.id === id ? { ...notif, [field]: value } : notif
-      )
-    }))
-  }, [])
-
-  // Remove notification from node
-  const removeNotification = useCallback((id: string) => {
-    setConfigForm(prev => ({
-      ...prev,
-      notifications: prev.notifications.filter(notif => notif.id !== id)
-    }))
-  }, [])
 
   // Delete node with confirmation
   const handleDeleteNode = useCallback((nodeId: string) => {
@@ -2645,312 +2571,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </ReactFlow>
       </div>
 
-      {/* Configuration Modal */}
-      {showConfigModal && (
-        <Modal
-          isOpen={showConfigModal}
-          onClose={() => {
-            setShowConfigModal(false)
-            setIsAddingNewNode(false)
-          }}
-          title={isAddingNewNode ? "Add Node" : "Edit Node"}
-          footerContent={
-            <div className="flex items-center justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setShowConfigModal(false)
-                  setIsAddingNewNode(false)
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={saveNodeConfiguration}
-              >
-                Save
-              </Button>
-            </div>
-          }
-        >
-          <div className="p-6 space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                value={configForm.label}
-                onChange={(e) => setConfigForm(prev => ({ ...prev, label: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
-                placeholder="Enter node description..."
-              />
-            </div>
-
-            {/* Node Layout Classification (read-only, for debugging) */}
-            {configuringNode && (configuringNode.data as any)?.nodeLayout && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Node Layout (Debug)
-                </label>
-                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700 text-sm">
-                  {(configuringNode.data as any).nodeLayout}
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  This classification is automatically determined by the node's connections after running "Tidy up"
-                </p>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Node Type
-              </label>
-              <SegmentedControl
-                options={[
-                  { value: 'start', label: 'Start' },
-                  { value: 'process', label: 'Middle' },
-                  { value: 'end', label: 'End' }
-                ]}
-                value={configForm.type}
-                onChange={(value) => setConfigForm(prev => ({ ...prev, type: value as 'start' | 'process' | 'decision' | 'end' }))}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bullet Points
-              </label>
-              <div className="space-y-2">
-                {configForm.bulletPoints.map((bullet, index) => (
-                  <div key={index} className="flex items-start gap-2 group">
-                    <span className="text-gray-500 mt-2.5">•</span>
-                    <input
-                      ref={(el) => bulletInputRefs.current[index] = el}
-                      type="text"
-                      value={bullet}
-                      onChange={(e) => updateBulletPoint(index, e.target.value)}
-                      onKeyDown={(e) => handleBulletPointKeyDown(e, index, bullet)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                      placeholder="Enter bullet point text"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="small"
-                      onClick={() => removeBulletPoint(index)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      ×
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="small"
-                  onClick={addBulletPoint}
-                  className="w-full"
-                >
-                  <Plus size={16} className="mr-2" />
-                  Add Bullet Point
-                </Button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notifications
-              </label>
-              <div className="space-y-3">
-                {configForm.notifications.map((notification) => (
-                  <div key={notification.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
-                    {/* Notification Type Selector */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                        Type
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { value: 'pain-point', label: 'Red (pain point)', color: 'bg-red-100 border-red-300 text-red-800' },
-                          { value: 'warning', label: 'Yellow (Warning)', color: 'bg-yellow-100 border-yellow-300 text-yellow-900' },
-                          { value: 'info', label: 'Grey (Info)', color: 'bg-gray-100 border-gray-300 text-gray-700' },
-                          { value: 'positive', label: 'Green (Positive)', color: 'bg-green-100 border-green-300 text-green-800' },
-                        ].map((typeOption) => (
-                          <button
-                            key={typeOption.value}
-                            type="button"
-                            onClick={() => updateNotification(notification.id, 'type', typeOption.value)}
-                            className={`
-                              ${typeOption.color}
-                              border-2 rounded px-2 py-1.5 text-xs font-medium
-                              transition-all
-                              ${notification.type === typeOption.value 
-                                ? 'ring-2 ring-blue-500 ring-offset-1' 
-                                : 'opacity-60 hover:opacity-100'
-                              }
-                            `}
-                          >
-                            {typeOption.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Notification Message */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                        Message
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={notification.message}
-                          onChange={(e) => updateNotification(notification.id, 'message', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          placeholder="Enter notification message"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="small"
-                          onClick={() => removeNotification(notification.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="small"
-                  onClick={addNotification}
-                  className="w-full"
-                >
-                  <Plus size={16} className="mr-2" />
-                  Add Notification
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Platform
-                </label>
-                <select
-                  value={configForm.variant}
-                  onChange={(e) => {
-                    const newVariant = e.target.value as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
-                    setConfigForm(prev => ({ 
-                      ...prev, 
-                      variant: newVariant,
-                      // Clear third party name if not selecting Third party
-                      thirdPartyName: newVariant === 'Third party' ? prev.thirdPartyName : ''
-                    }))
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">None</option>
-                  <option value="CMS">CMS</option>
-                  <option value="Legl">Legl</option>
-                  <option value="End client">End client</option>
-                  <option value="Back end">Back end</option>
-                  <option value="Third party">Third party</option>
-                </select>
-              </div>
-
-              {/* Third Party Name Input - only shown when variant is Third party */}
-              {configForm.variant === 'Third party' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Third Party Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={configForm.thirdPartyName}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, thirdPartyName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., Stripe, Auth0, Mailchimp"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  User Role
-                </label>
-                <select
-                  value={configForm.userRole?.id || ''}
-                  onChange={(e) => {
-                    const role = userRoles.find(r => r.id === e.target.value)
-                    setConfigForm(prev => ({ ...prev, userRole: role || null }))
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">None</option>
-                  {userRoles.map((role) => (
-                    <option key={role.id} value={role.id}>{role.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Swim Lane (Region) Selector */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Swim Lane (Region)
-                </label>
-                <select
-                  value={configForm.swimLane || ''}
-                  onChange={(e) => {
-                    setConfigForm(prev => ({ ...prev, swimLane: e.target.value || null }))
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">None (No Region)</option>
-                  {nodes.filter(n => n.type === 'highlightRegion').map((region) => (
-                    <option key={region.id} value={region.id}>
-                      {(region.data as any)?.label || region.id}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Assign this node to a region. Nodes inside regions will move together with the region.
-                </p>
-              </div>
-            </div>
-
-            <div className="hidden">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Properties
-              </label>
-              <div className="space-y-2">
-                {Object.entries(configForm.customProperties).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{key}:</span>
-                    <span className="text-sm">{String(value)}</span>
-                    <Button
-                      variant="ghost"
-                      size="small"
-                      onClick={() => removeCustomProperty(key)}
-                    >
-                      ×
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="small"
-                  onClick={addCustomProperty}
-                >
-                  <Plus size={16} className="mr-2" />
-                  Add Property
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Edit Node Modal */}
+      <EditNodeModal
+        isOpen={showConfigModal}
+        onClose={() => {
+          setShowConfigModal(false)
+          setIsAddingNewNode(false)
+        }}
+        node={configuringNode}
+        isAddingNewNode={isAddingNewNode}
+        userRoles={userRoles}
+        thirdParties={thirdParties}
+        availableRegions={nodes
+          .filter((n) => n.type === 'highlightRegion')
+          .map((n) => ({
+            id: n.id,
+            label: (n.data as any).label || 'Untitled Region'
+          }))}
+        journeyLayout={journeyLayout}
+        onSave={saveNodeConfiguration}
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
