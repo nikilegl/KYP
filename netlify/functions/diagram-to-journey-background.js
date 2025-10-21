@@ -1,9 +1,9 @@
 // Background function for diagram-to-journey (15 minute timeout)
-// Uses CommonJS format for Netlify compatibility
+// Uses ES modules for Netlify compatibility
 
-const { createClient } = require('@supabase/supabase-js')
+import { createClient } from '@supabase/supabase-js'
 
-exports.handler = async (event) => {
+export async function handler(event) {
   // Only allow POST
   if (event.httpMethod !== 'POST') {
     return { 
