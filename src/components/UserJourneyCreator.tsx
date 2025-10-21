@@ -2370,6 +2370,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onDelete={() => handleDeleteNode(props.id)}
       />
     ),
+    label: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={false}
+        thirdParties={thirdParties}
+        onEdit={() => configureNode(props.id)}
+        onDuplicate={() => duplicateNode(props.id)}
+        onDelete={() => handleDeleteNode(props.id)}
+      />
+    ),
     highlightRegion: (props: any) => (
       <HighlightRegionNode
         {...props}
@@ -2590,6 +2600,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }))}
         journeyLayout={journeyLayout}
         onSave={saveNodeConfiguration}
+        onDelete={configuringNode ? () => {
+          // Delete the node directly (confirmation handled in modal)
+          setNodes((nds) => nds.filter((node) => node.id !== configuringNode.id))
+          setEdges((eds) => eds.filter((edge) => edge.source !== configuringNode.id && edge.target !== configuringNode.id))
+        } : undefined}
       />
 
       {/* Delete Confirmation Modal */}
