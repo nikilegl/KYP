@@ -87,7 +87,7 @@ export async function handler(event, context) {
                 type: 'image_url',
                 image_url: {
                   url: base64Image,
-                  detail: 'high' // High detail for better diagram analysis
+                  detail: 'auto' // Auto: faster processing, OpenAI decides optimal detail
                 }
               }
             ]

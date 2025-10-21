@@ -80,8 +80,13 @@ export async function analyzeJourneyImage(
   userRoleNames: string[] = []
 ): Promise<AnalyzedJourney> {
   try {
+    console.log(`Original image size: ${(imageFile.size / 1024).toFixed(0)}KB`)
+    
+    // Compress image to reduce processing time and payload size
+    const compressedImage = await compressImage(imageFile)
+    
     // Convert image to base64
-    const base64Image = await fileToBase64(imageFile)
+    const base64Image = await fileToBase64(compressedImage)
     
     // Generate prompt with user roles
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
@@ -93,7 +98,7 @@ export async function analyzeJourneyImage(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        base64Image: `data:${imageFile.type};base64,${base64Image}`,
+        base64Image: `data:${compressedImage.type};base64,${base64Image}`,
         prompt: prompt
       })
     })
@@ -148,6 +153,71 @@ export async function analyzeJourneyImage(
 /**
  * Convert file to base64 string
  */
+/**
+ * Compress and resize image to reduce processing time and payload size
+ */
+async function compressImage(file: File, maxWidth = 2000, maxHeight = 2000, quality = 0.85): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      
+      // Calculate new dimensions
+      let width = img.width
+      let height = img.height
+      
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      
+      // Create canvas and draw resized image
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'))
+        return
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height)
+      
+      // Convert to blob
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to compress image'))
+            return
+          }
+          
+          // Create new file from blob
+          const compressedFile = new File([blob], file.name, {
+            type: file.type,
+            lastModified: Date.now(),
+          })
+          
+          console.log(`Image compressed: ${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB`)
+          resolve(compressedFile)
+        },
+        file.type,
+        quality
+      )
+    }
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Failed to load image'))
+    }
+    
+    img.src = url
+  })
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
