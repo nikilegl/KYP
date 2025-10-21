@@ -124,7 +124,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
             {analyzing ? (
               <>
                 <Loader2 size={16} className="mr-2 animate-spin" />
-                Analyzing...
+                Analyzing (may take up to 60s)...
               </>
             ) : (
               'Import Journey'
@@ -134,6 +134,13 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
       }
     >
       <div className="p-6 space-y-4">
+        {/* Info Banner */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-xs text-blue-800">
+            <strong>Processing time:</strong> Simple diagrams take 10-20 seconds. Complex diagrams with many nodes may take up to 60 seconds.
+          </p>
+        </div>
+
         {/* Paste Area */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
