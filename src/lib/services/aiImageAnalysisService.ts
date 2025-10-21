@@ -99,11 +99,26 @@ export async function analyzeJourneyImage(
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(`AI analysis error: ${error.error || response.statusText}`)
+      let errorMessage = `Server error: ${response.status} ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        errorMessage = errorData.error || errorData.message || errorMessage
+      } catch (e) {
+        // If we can't parse the error response, use the status text
+        const text = await response.text()
+        if (text) {
+          errorMessage = text
+        }
+      }
+      throw new Error(errorMessage)
     }
 
-    const result = await response.json()
+    let result
+    try {
+      result = await response.json()
+    } catch (e) {
+      throw new Error('Invalid JSON response from server')
+    }
     
     if (!result.success || !result.journey) {
       throw new Error('Invalid response from AI service')

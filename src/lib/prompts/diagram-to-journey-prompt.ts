@@ -20,7 +20,7 @@ Return ONLY valid JSON with this schema:
 {
   "name": "string",
   "layout": "horizontal|vertical",
-  "lanes": [{"index": 0, "label": "string"}],
+  "lanes": [{"index": 0, "label": "string"}],  // Empty array [] if layout is "vertical", only populate for "horizontal"
   "nodes": [
     {
       "id": "string",
@@ -64,22 +64,38 @@ CRITICAL RULES - CONTENT EXTRACTION ONLY
 * **ONLY extract:** labels, types, roles, platforms, lanes, edges, bullet points, notifications
 
 Layout Detection (populate "layout" field):
-* **Horizontal Layout:** Nodes flow LEFT-TO-RIGHT with swim lanes as HORIZONTAL ROWS
-  - Visual indicators: Nodes arranged in horizontal rows/bands
-  - Swim lane labels typically on the left side
-  - Time flows left to right (start → middle → end)
-  - Example: Swim lane diagrams where each actor has a horizontal lane
-* **Vertical Layout:** Nodes flow TOP-TO-BOTTOM in a vertical sequence
-  - Visual indicators: Nodes stacked vertically, flowing downward
-  - May have branches that diverge horizontally but main flow is vertical
-  - Time flows top to bottom (start → middle → end)
-  - Example: Traditional flowcharts, decision trees
+**CRITICAL: Look at where the arrows connect to the nodes!**
+
+* **Vertical Layout:** Arrows connect to TOP and BOTTOM of nodes
+  - Visual indicators:
+    - Incoming arrows enter nodes from the TOP
+    - Outgoing arrows exit nodes from the BOTTOM
+    - Nodes are stacked vertically, flowing downward
+    - Time flows top to bottom (start → middle → end)
+    - May have branches that diverge horizontally but main flow is vertical
+  - Examples: Traditional flowcharts, decision trees, process flows
+  - **If vertical layout is detected, set "lanes": [] (empty array - DO NOT detect swim lanes)**
+
+* **Horizontal Layout:** Arrows connect to LEFT and RIGHT sides of nodes
+  - Visual indicators:
+    - Incoming arrows enter nodes from the LEFT side
+    - Outgoing arrows exit nodes from the RIGHT side
+    - Nodes arranged in horizontal rows/bands (swim lanes)
+    - Swim lane labels typically on the left side
+    - Time flows left to right (start → middle → end)
+  - Examples: Swim lane diagrams where each actor has a horizontal lane
+  - **Only if horizontal layout is detected, detect swim lanes**
+
 * **How to decide:**
-  - Look at the PRIMARY direction of flow (follow the arrows)
-  - If most nodes are arranged in left-to-right sequences with horizontal lanes → "horizontal"
-  - If most nodes are arranged in top-to-bottom sequences → "vertical"
-  - When in doubt, look at where the start node is positioned relative to end nodes
-  - Default to "horizontal" if swim lanes are present
+  1. **PRIMARY CHECK: Look at WHERE the arrows/connectors attach to the nodes**
+     - If most arrows attach to top/bottom of nodes → "vertical"
+     - If most arrows attach to left/right sides of nodes → "horizontal"
+  2. SECONDARY CHECK: Look at the overall direction of flow
+     - If nodes flow primarily downward → "vertical"
+     - If nodes flow primarily left-to-right → "horizontal"
+  3. When in doubt:
+     - Check if there are clear horizontal swim lanes → "horizontal"
+     - Otherwise default to "vertical" (more common for flowcharts)
 
 PRIORITY #1: Edge Detection - Detect every arrow/edge carefully:
 1. Physically scan the entire diagram looking for arrows
@@ -196,16 +212,25 @@ Notifications Detection (populate nodes[*].notifications)
   - Green checkmark with 'Improved process' → {"id": "notif-3", "type": "positive", "message": "Improved process"}
 
 Lanes (Swim Lane Detection)
-* **Step 1: Detect if swim lanes are used** - Look for distinct horizontal rows of nodes
+**IMPORTANT: Only detect swim lanes if layout is "horizontal". If layout is "vertical", return empty lanes array: "lanes": []**
+
+* **Step 1: Check layout first**
+  - If layout is "vertical" → Skip all swim lane detection, return "lanes": []
+  - If layout is "horizontal" → Proceed with swim lane detection below
+
+* **Step 2: Detect if swim lanes are used** - Look for distinct horizontal rows of nodes
   - Visual cues: colored horizontal bands, horizontal dividing lines, grouped rows
   - If nodes are organized in clear horizontal rows/layers, this is a swim lane diagram
-* **Step 2: Count and identify lanes** - Number them from top to bottom (index 0, 1, 2...)
-* **Step 3: Name each lane:**
+
+* **Step 3: Count and identify lanes** - Number them from top to bottom (index 0, 1, 2...)
+
+* **Step 4: Name each lane:**
   - **Option A: Look for visible labels** - Check left side or within the colored band for text like "End Client", "GLP", "Denovo", "Admin", "Backend"
   - **Option B: If no label found** - Name by pattern:
     * If it matches an Available role, use that role name (keep exact casing)
     * Otherwise, use descriptive name like "Lane 1", "Lane 2", "Lane 3"
-* **Step 4: Assign nodes to lanes:**
+
+* **Step 5: Assign nodes to lanes:**
   - Determine which horizontal row/band each node visually sits in
   - Set node's laneIndex to match that lane (0 = top, 1 = second from top, etc.)
   - **IMPORTANT**: Also set node's laneName to the label of that lane (e.g., "End Client", "GLP", "Lane 1")
@@ -440,10 +465,12 @@ ${rolesList}
 
 **Final Reminders:**
 1. **CRITICAL:** Do NOT calculate positions (x, y). ONLY extract content and connections.
-2. Count arrows first, trace each one carefully, verify your count matches. Edge detection is the most critical part!
-3. Keep node labels complete - do NOT split descriptive text into bulletPoints unless there are explicit bullets/numbers visible
-4. Empty arrays [] for bulletPoints and notifications are expected and correct when nothing is visible
-5. Focus on WHAT the nodes are (content) and HOW they connect (edges), not WHERE they are (positions)
+2. **Layout Detection:** Look at WHERE arrows connect to nodes (top/bottom = vertical, left/right = horizontal)
+3. **Swim Lanes:** ONLY detect lanes if layout is "horizontal". If layout is "vertical", set "lanes": []
+4. Count arrows first, trace each one carefully, verify your count matches. Edge detection is the most critical part!
+5. Keep node labels complete - do NOT split descriptive text into bulletPoints unless there are explicit bullets/numbers visible
+6. Empty arrays [] for bulletPoints and notifications are expected and correct when nothing is visible
+7. Focus on WHAT the nodes are (content) and HOW they connect (edges), not WHERE they are (positions)
 
 Return only the JSON object, no extra text.`
 }
