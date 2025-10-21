@@ -3,7 +3,7 @@
  * Analyzes user journey diagram images using OpenAI Vision API
  */
 
-import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt'
+import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt-optimized'
 import { calculateHorizontalJourneyLayout } from './horizontalJourneyLayoutCalculator'
 import { calculateVerticalJourneyLayout } from './verticalJourneyLayoutCalculator'
 
