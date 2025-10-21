@@ -20,9 +20,24 @@ export async function handler(event, context) {
   }
 
   try {
-    const { base64Image, prompt } = JSON.parse(event.body || '{}')
+    console.log('Diagram-to-journey function invoked')
+    
+    let requestBody
+    try {
+      requestBody = JSON.parse(event.body || '{}')
+    } catch (e) {
+      console.error('Failed to parse request body:', e)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body' }),
+      }
+    }
+
+    const { base64Image, prompt } = requestBody
 
     if (!base64Image || base64Image.trim() === '') {
+      console.error('Missing base64Image in request')
       return {
         statusCode: 400,
         headers,
@@ -31,6 +46,7 @@ export async function handler(event, context) {
     }
 
     if (!prompt || prompt.trim() === '') {
+      console.error('Missing prompt in request')
       return {
         statusCode: 400,
         headers,
@@ -49,6 +65,8 @@ export async function handler(event, context) {
     }
 
     console.log('Calling OpenAI Vision API for diagram analysis...')
+    console.log('Prompt length:', prompt.length)
+    console.log('Image data length:', base64Image.length)
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -95,7 +113,32 @@ export async function handler(event, context) {
     }
 
     const data = await response.json()
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error('Invalid OpenAI response structure:', data)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Invalid response structure from OpenAI',
+          details: data
+        }),
+      }
+    }
+    
     const content = data.choices[0].message.content
+
+    if (!content) {
+      console.error('Empty content from OpenAI')
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'OpenAI returned empty content',
+          details: data
+        }),
+      }
+    }
 
     let journeyData
 
@@ -110,13 +153,15 @@ export async function handler(event, context) {
       
       journeyData = JSON.parse(cleanContent)
     } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', content)
+      console.error('Failed to parse OpenAI response:', parseError.message)
+      console.error('Content preview:', content.substring(0, 500))
       return {
         statusCode: 500,
         headers,
         body: JSON.stringify({ 
-          error: 'Failed to parse AI response',
-          rawResponse: content
+          error: 'Failed to parse AI response as JSON',
+          message: parseError.message,
+          contentPreview: content.substring(0, 200)
         }),
       }
     }
