@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Image as ImageIcon, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
-import { analyzeJourneyImage, type AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
+import { analyzeJourneyImageWithBackground, type AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 
 interface ImportJourneyImageModalProps {
   isOpen: boolean
@@ -16,6 +16,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progressMessage, setProgressMessage] = useState<string>('')
 
   const processFile = useCallback((file: File) => {
     // Validate file type
@@ -81,9 +82,18 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
 
     setAnalyzing(true)
     setError(null)
+    setProgressMessage('Starting analysis...')
 
     try {
-      const result = await analyzeJourneyImage(selectedFile, '', userRoles) // API key handled server-side
+      const result = await analyzeJourneyImageWithBackground(
+        selectedFile, 
+        '', // API key handled server-side
+        userRoles,
+        (message, _elapsed) => {
+          // Progress callback
+          setProgressMessage(message)
+        }
+      )
       
       // Pass the result to parent component
       onImport(result)
@@ -95,6 +105,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
       setError(err instanceof Error ? err.message : 'Failed to analyze image')
     } finally {
       setAnalyzing(false)
+      setProgressMessage('')
     }
   }, [selectedFile, userRoles, onImport])
 
@@ -124,7 +135,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
             {analyzing ? (
               <>
                 <Loader2 size={16} className="mr-2 animate-spin" />
-                Analyzing (may take up to 60s)...
+                {progressMessage || 'Processing...'}
               </>
             ) : (
               'Import Journey'
@@ -137,7 +148,10 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
         {/* Info Banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <p className="text-xs text-blue-800">
-            <strong>Processing time:</strong> Simple diagrams take 10-20 seconds. Complex diagrams with many nodes may take up to 60 seconds.
+            <strong>Processing time:</strong> Simple diagrams take 15-30 seconds. Complex diagrams may take 1-2 minutes. Very complex diagrams can take up to 15 minutes.
+          </p>
+          <p className="text-xs text-blue-700 mt-1">
+            ℹ️ Keep this tab open while processing. You'll see live progress updates.
           </p>
         </div>
 

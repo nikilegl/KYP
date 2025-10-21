@@ -6,6 +6,7 @@
 import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt-optimized'
 import { calculateHorizontalJourneyLayout } from './horizontalJourneyLayoutCalculator'
 import { calculateVerticalJourneyLayout } from './verticalJourneyLayoutCalculator'
+import { supabase } from '../supabase'
 
 export interface JourneyNotification {
   id: string
@@ -69,6 +70,123 @@ export interface AnalyzedJourney {
 }
 
 /**
+ * Analyzes a user journey diagram image using AI via Netlify Background Function (15-min timeout)
+ * Uses polling to check status until complete
+ * @param imageFile - The image file to analyze
+ * @param _apiKey - OpenAI API key (deprecated - kept for backwards compatibility, not used)
+ * @param userRoleNames - Array of available user role names from the workspace
+ * @param onProgress - Optional callback for progress updates
+ */
+export async function analyzeJourneyImageWithBackground(
+  imageFile: File,
+  _apiKey: string,
+  userRoleNames: string[] = [],
+  onProgress?: (message: string, elapsed: number) => void
+): Promise<AnalyzedJourney> {
+  try {
+    // Check if Supabase is configured
+    if (!supabase) {
+      throw new Error('Database not configured')
+    }
+
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log(`Original image size: ${(imageFile.size / 1024).toFixed(0)}KB`)
+    
+    // Compress image
+    const compressedImage = await compressImage(imageFile)
+    const base64Image = await fileToBase64(compressedImage)
+    const prompt = generateDiagramToJourneyPrompt(userRoleNames)
+    
+    // Start background job
+    const response = await fetch('/.netlify/functions/diagram-to-journey-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base64Image: `data:${compressedImage.type};base64,${base64Image}`,
+        prompt: prompt,
+        userId: user.id
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to start processing: ${response.statusText}`)
+    }
+
+    const { jobId } = await response.json()
+    console.log(`Background job started: ${jobId}`)
+    
+    // Poll for results
+    const result = await pollForJobCompletion(jobId, onProgress)
+    
+    return processJourneyData(result)
+    
+  } catch (error) {
+    console.error('Error analyzing journey image:', error)
+    throw error
+  }
+}
+
+/**
+ * Poll database for job completion
+ */
+async function pollForJobCompletion(
+  jobId: string,
+  onProgress?: (message: string, elapsed: number) => void
+): Promise<any> {
+  if (!supabase) {
+    throw new Error('Database not configured')
+  }
+
+  const startTime = Date.now()
+  const maxWaitTime = 15 * 60 * 1000 // 15 minutes
+  const pollInterval = 2000 // 2 seconds
+
+  while (true) {
+    const elapsed = Date.now() - startTime
+    
+    if (elapsed > maxWaitTime) {
+      throw new Error('Processing timeout (15 minutes)')
+    }
+
+    // Query job status
+    const { data: job, error } = await supabase
+      .from('ai_processing_jobs')
+      .select('*')
+      .eq('id', jobId)
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to check job status: ${error.message}`)
+    }
+
+    const elapsedSeconds = Math.floor(elapsed / 1000)
+    
+    if (job.status === 'completed') {
+      console.log(`Job completed in ${elapsedSeconds}s`)
+      return job.result_data
+    }
+    
+    if (job.status === 'failed') {
+      throw new Error(job.error_message || 'Processing failed')
+    }
+    
+    // Still processing
+    if (onProgress) {
+      onProgress(`Processing diagram... (${elapsedSeconds}s)`, elapsedSeconds)
+    }
+    
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, pollInterval))
+  }
+}
+
+/**
+ * Original function (deprecated - kept for compatibility)
  * Analyzes a user journey diagram image using AI via Netlify Function
  * @param imageFile - The image file to analyze
  * @param _apiKey - OpenAI API key (deprecated - kept for backwards compatibility, not used)
