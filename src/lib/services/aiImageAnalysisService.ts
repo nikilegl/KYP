@@ -101,14 +101,21 @@ export async function analyzeJourneyImage(
     if (!response.ok) {
       let errorMessage = `Server error: ${response.status} ${response.statusText}`
       try {
-        const errorData = await response.json()
-        errorMessage = errorData.error || errorData.message || errorMessage
-      } catch (e) {
-        // If we can't parse the error response, use the status text
+        // Read as text first (you can only read the body once)
         const text = await response.text()
         if (text) {
-          errorMessage = text
+          // Try to parse as JSON
+          try {
+            const errorData = JSON.parse(text)
+            errorMessage = errorData.error || errorData.message || text
+          } catch {
+            // If not JSON, use the text directly
+            errorMessage = text
+          }
         }
+      } catch (e) {
+        // If we can't read the response at all, use the status text
+        console.error('Error reading response:', e)
       }
       throw new Error(errorMessage)
     }
