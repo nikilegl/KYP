@@ -19,7 +19,7 @@ YOUR ONLY JOB: Extract content and connections. Do NOT calculate positions.
 Return ONLY valid JSON with this schema:
 {
   "name": "string",
-  "layout": "horizontal",
+  "layout": "horizontal|vertical",
   "lanes": [{"index": 0, "label": "string"}],
   "nodes": [
     {
@@ -43,7 +43,14 @@ Return ONLY valid JSON with this schema:
       ]
     }
   ],
-  "edges": [{"source": "string", "target": "string"}],
+  "edges": [
+    {
+      "source": "string",
+      "target": "string",
+      "label": "string",
+      "data": {"label": "string"}
+    }
+  ],
   "audit": {
     "arrowCountDetected": 0,
     "edgeCountReturned": 0,
@@ -56,12 +63,50 @@ CRITICAL RULES - CONTENT EXTRACTION ONLY
 * **Do NOT try to replicate the layout or spacing** - that is handled by a separate system
 * **ONLY extract:** labels, types, roles, platforms, lanes, edges, bullet points, notifications
 
+Layout Detection (populate "layout" field):
+* **Horizontal Layout:** Nodes flow LEFT-TO-RIGHT with swim lanes as HORIZONTAL ROWS
+  - Visual indicators: Nodes arranged in horizontal rows/bands
+  - Swim lane labels typically on the left side
+  - Time flows left to right (start → middle → end)
+  - Example: Swim lane diagrams where each actor has a horizontal lane
+* **Vertical Layout:** Nodes flow TOP-TO-BOTTOM in a vertical sequence
+  - Visual indicators: Nodes stacked vertically, flowing downward
+  - May have branches that diverge horizontally but main flow is vertical
+  - Time flows top to bottom (start → middle → end)
+  - Example: Traditional flowcharts, decision trees
+* **How to decide:**
+  - Look at the PRIMARY direction of flow (follow the arrows)
+  - If most nodes are arranged in left-to-right sequences with horizontal lanes → "horizontal"
+  - If most nodes are arranged in top-to-bottom sequences → "vertical"
+  - When in doubt, look at where the start node is positioned relative to end nodes
+  - Default to "horizontal" if swim lanes are present
+
 PRIORITY #1: Edge Detection - Detect every arrow/edge carefully:
 1. Physically scan the entire diagram looking for arrows
 2. Count them (set audit.arrowCountDetected)
 3. Trace each arrow from start to end
 4. Create one edge per arrow with correct source and target IDs
 5. Verify audit.edgeCountReturned === audit.arrowCountDetected
+
+Edge Labels (Critical for Branch/Conditional Detection):
+* **Purpose:** Edge labels identify branching, conditional paths, and decision points
+* **What to look for:**
+  - Text on or near arrows (e.g., "Yes", "No", "If successful", "On error", "If approved", "Else")
+  - Decision indicators (checkmark vs X, success vs failure)
+  - Conditional flow markers
+* **Labeling rules:**
+  - **Main path/linear flow edges:** Set 'label: ""' and 'data.label: ""' (empty strings)
+  - **Branch/conditional edges:** Set 'label: "[the text]"' and 'data.label: "[the text]"' (same text in both)
+  - **Convergence edges** (multiple branches rejoining): Set 'label: ""' and 'data.label: ""' (empty strings)
+* **Examples:**
+  - Arrow labeled "If purchase" → {"source": "checkout", "target": "payment", "label": "If purchase", "data": {"label": "If purchase"}}
+  - Arrow labeled "Success" → {"source": "validate", "target": "continue", "label": "Success", "data": {"label": "Success"}}
+  - Arrow with no label (linear flow) → {"source": "step1", "target": "step2", "label": "", "data": {"label": ""}}
+  - Arrow rejoining from branch → {"source": "branch", "target": "merge", "label": "", "data": {"label": ""}}
+* **Impact:** Edge labels determine layout behavior in vertical diagrams:
+  - Unlabeled edges = main path (continues straight down)
+  - Labeled edges = branches (diverge to the right)
+  - This enables proper rendering of decision trees and conditional flows
 
 Node Content Extraction:
 * **Node Labels and Bullet Points:**
@@ -278,11 +323,11 @@ Your JSON should have:
     }
   ],
   "edges": [
-    {"source": "node-1", "target": "node-6"},
-    {"source": "node-6", "target": "node-5"},
-    {"source": "node-5", "target": "node-2"},
-    {"source": "node-2", "target": "node-3"},
-    {"source": "node-3", "target": "node-4"}
+    {"source": "node-1", "target": "node-6", "label": "", "data": {"label": ""}},
+    {"source": "node-6", "target": "node-5", "label": "", "data": {"label": ""}},
+    {"source": "node-5", "target": "node-2", "label": "", "data": {"label": ""}},
+    {"source": "node-2", "target": "node-3", "label": "", "data": {"label": ""}},
+    {"source": "node-3", "target": "node-4", "label": "", "data": {"label": ""}}
   ],
   "audit": {"arrowCountDetected": 5, "edgeCountReturned": 5, "hasCycles": false}
 }
@@ -300,6 +345,95 @@ Key observations:
 - notifications detected from visual indicators (red for pain-points, yellow for warnings, green for positive, blue for info)
 - Nodes without sub-steps have empty bulletPoints arrays []
 - Nodes without visible annotations have empty notifications arrays []
+- All edges have label fields (empty strings for linear flow, text for conditional branches)
+
+Example 2 - Vertical Diagram with Branching (Conditional Flow):
+{
+  "name": "Payment Processing Flow",
+  "layout": "vertical",
+  "lanes": [],
+  "nodes": [
+    {
+      "id": "start",
+      "label": "Initiate payment",
+      "laneIndex": 0,
+      "laneName": "",
+      "type": "start",
+      "bulletPoints": [],
+      "notifications": []
+    },
+    {
+      "id": "validate",
+      "label": "Validate payment details",
+      "laneIndex": 0,
+      "laneName": "",
+      "type": "process",
+      "bulletPoints": ["Check card number", "Verify CVV", "Validate expiry"],
+      "notifications": []
+    },
+    {
+      "id": "process",
+      "label": "Process payment",
+      "laneIndex": 0,
+      "laneName": "",
+      "type": "process",
+      "bulletPoints": [],
+      "notifications": []
+    },
+    {
+      "id": "retry",
+      "label": "Retry payment",
+      "laneIndex": 0,
+      "laneName": "",
+      "type": "process",
+      "bulletPoints": [],
+      "notifications": [
+        {"id": "notif-5", "type": "warning", "message": "Limited to 3 retry attempts"}
+      ]
+    },
+    {
+      "id": "success",
+      "label": "Payment confirmed",
+      "laneIndex": 0,
+      "laneName": "",
+      "type": "end",
+      "bulletPoints": [],
+      "notifications": [
+        {"id": "notif-6", "type": "positive", "message": "Instant confirmation"}
+      ]
+    },
+    {
+      "id": "fail",
+      "label": "Payment failed",
+      "laneIndex": 0,
+      "laneName": "",
+      "type": "end",
+      "bulletPoints": [],
+      "notifications": [
+        {"id": "notif-7", "type": "pain-point", "message": "User sees generic error message"}
+      ]
+    }
+  ],
+  "edges": [
+    {"source": "start", "target": "validate", "label": "", "data": {"label": ""}},
+    {"source": "validate", "target": "process", "label": "", "data": {"label": ""}},
+    {"source": "process", "target": "success", "label": "Success", "data": {"label": "Success"}},
+    {"source": "process", "target": "retry", "label": "Decline", "data": {"label": "Decline"}},
+    {"source": "retry", "target": "process", "label": "", "data": {"label": ""}},
+    {"source": "retry", "target": "fail", "label": "Max retries", "data": {"label": "Max retries"}}
+  ],
+  "audit": {"arrowCountDetected": 6, "edgeCountReturned": 6, "hasCycles": false}
+}
+
+Key observations for branching:
+- Vertical layout detected (nodes flow top-to-bottom)
+- No swim lanes (laneIndex: 0 for all)
+- Main path edges have empty labels: start→validate, validate→process, retry→process
+- Conditional branch edges have descriptive labels: "Success", "Decline", "Max retries"
+- The layout calculator will use these labels to determine layout:
+  * Unlabeled edges = continue straight down (main path)
+  * Labeled edges = diverge to the right (branch/conditional)
+- This creates a decision tree structure with proper branching visualization
 
 Available roles (for lane labels and semantic hints)
 ${rolesList}
