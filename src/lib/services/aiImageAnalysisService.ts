@@ -156,7 +156,7 @@ export async function analyzeJourneyImage(
 /**
  * Compress and resize image to reduce processing time and payload size
  */
-async function compressImage(file: File, maxWidth = 2000, maxHeight = 2000, quality = 0.85): Promise<File> {
+async function compressImage(file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.7): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -168,7 +168,17 @@ async function compressImage(file: File, maxWidth = 2000, maxHeight = 2000, qual
       let width = img.width
       let height = img.height
       
-      if (width > maxWidth || height > maxHeight) {
+      // Only compress if image is large
+      const needsResize = width > maxWidth || height > maxHeight
+      
+      if (!needsResize && file.size < 500 * 1024) {
+        // Image is small enough and dimensions are good - skip compression
+        console.log(`Image already optimized: ${(file.size / 1024).toFixed(0)}KB (${width}x${height}px)`)
+        resolve(file)
+        return
+      }
+      
+      if (needsResize) {
         const ratio = Math.min(maxWidth / width, maxHeight / height)
         width = Math.round(width * ratio)
         height = Math.round(height * ratio)
@@ -187,7 +197,7 @@ async function compressImage(file: File, maxWidth = 2000, maxHeight = 2000, qual
       
       ctx.drawImage(img, 0, 0, width, height)
       
-      // Convert to blob
+      // Convert to blob - always use JPEG for better compression
       canvas.toBlob(
         (blob) => {
           if (!blob) {
@@ -195,16 +205,20 @@ async function compressImage(file: File, maxWidth = 2000, maxHeight = 2000, qual
             return
           }
           
-          // Create new file from blob
-          const compressedFile = new File([blob], file.name, {
-            type: file.type,
-            lastModified: Date.now(),
-          })
-          
-          console.log(`Image compressed: ${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB`)
-          resolve(compressedFile)
+          // Only use compressed version if it's actually smaller
+          if (blob.size < file.size) {
+            const compressedFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            })
+            console.log(`Image compressed: ${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB (${width}x${height}px)`)
+            resolve(compressedFile)
+          } else {
+            console.log(`Image already optimized: ${(file.size / 1024).toFixed(0)}KB (${width}x${height}px)`)
+            resolve(file)
+          }
         },
-        file.type,
+        'image/jpeg',
         quality
       )
     }
