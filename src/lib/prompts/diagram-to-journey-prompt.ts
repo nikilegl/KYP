@@ -12,217 +12,306 @@ export const generateDiagramToJourneyPrompt = (userRoleNames: string[]): string 
     ? userRoleNames.map(name => `"${name}"`).join(', ')
     : '"End Client", "Admin", "Developer"' // Fallback if no roles
   
-  return `You are analyzing a user journey diagram image (possibly from Miro, Figma, or similar tools). Extract the following information and return it as valid JSON:
+  return `You are analyzing a user-journey diagram image (Miro/Figma style).
 
-IMPORTANT: Return ONLY valid JSON, no markdown formatting, no code blocks, no extra text.
+YOUR ONLY JOB: Extract content and connections. Do NOT calculate positions.
 
-Extract:
-
-1. **Nodes**: Each box/shape/card in the diagram representing a step
-   - id: Generate a unique identifier (e.g., "node-1", "node-2")
-   - type: Determine if it's "start" (first step), "process" (middle step), or "end" (final step)
-   - position: Extract x,y coordinates based on visual layout. Measure relative positions from top-left.
-     * Use the actual spacing you see in the diagram
-     * Snap to 15px grid (multiples of 15): Valid values: 0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150...
-     * Try to preserve the visual layout as accurately as possible
-   - data: An object containing:
-     * label: The main text/title of this step
-     * type: Same as the top-level type ("start", "process", or "end")
-     * userRole: The EXACT role name performing this step. Available roles: ${rolesList}
-       IMPORTANT: Match exact casing from available roles. Choose closest match. If unsure, use first role.
-     * variant: Platform mentioned - one of: "CMS", "Legl", "End client", "Back end", "Third party", or ""
-     * thirdPartyName: If variant is "Third party", include service name (e.g., "Stripe", "Auth0", "Slack"). Otherwise ""
-     * bulletPoints: Array of any sub-steps, actions, or details listed in the node
-     * notifications: Array of notifications. Look for pain points, warnings, issues, or positive notes:
-       - id: Generate unique ID (e.g., "notif-1")
-       - type: One of "pain-point", "warning", "info", "positive"
-         * "pain-point": User frustrations, problems, blockers, issues (often marked in red)
-         * "warning": Cautions, edge cases, potential problems (often in yellow/orange)
-         * "info": Additional information, notes, FYI items (often in gray/blue)
-         * "positive": Successes, wins, good outcomes (often in green)
-       - message: The text of the notification
-     * customProperties: Empty object {}
-     * journeyLayout: Analyze overall diagram flow. Set to "horizontal" if nodes flow primarily left-to-right, "vertical" if top-to-bottom
-
-2. **Edges**: Connections/arrows between nodes
-   - id: Generate unique identifier (e.g., "edge-1-2")
-   - source: The id of the source node
-   - target: The id of the target node
-   - type: Always "custom"
-   - label: Any text on or near the arrow/connection (empty string if none)
-   - data: Object with:
-     * label: Same as top-level label
-
-3. **Regions**: Highlighted background areas/groups (often colored boxes containing multiple nodes)
-   - id: Generate unique identifier (e.g., "region-1", "region-2")
-   - type: Always "highlightRegion"
-   - position: x,y coordinates of top-left corner (snapped to 15px grid)
-   - style: Object with:
-     * width: Width in pixels (snapped to 15px grid, typically 600-900)
-     * height: Height in pixels (snapped to 15px grid, typically 400-600)
-     * zIndex: Always -1 (renders behind nodes)
-   - data: Object with:
-     * label: The title/label of the region (e.g., "Authentication Flow", "Payment Process")
-     * backgroundColor: Detect from image color. Map to closest:
-       "#fef3c7" (yellow), "#dbeafe" (blue), "#d1fae5" (green), "#fee2e2" (red), 
-       "#f3e8ff" (purple), "#e0e7ff" (indigo), "#fce7f3" (pink), "#e5e7eb" (gray)
-     * borderColor: Corresponding border color:
-       "#fbbf24" (yellow), "#3b82f6" (blue), "#10b981" (green), "#ef4444" (red),
-       "#a855f7" (purple), "#6366f1" (indigo), "#ec4899" (pink), "#9ca3af" (gray)
-   - draggable: true
-   - selectable: true
-
-4. **Metadata**:
-   - name: Title of the journey if visible in the diagram
-   - description: Any subtitle or description text
-   - layout: Overall journey layout direction ("vertical" or "horizontal")
-
-Return format:
+Return ONLY valid JSON with this schema:
 {
-  "name": "Journey Name",
-  "description": "Journey description",
-  "layout": "vertical",
-  "regions": [
+  "name": "string",
+  "layout": "horizontal",
+  "lanes": [{"index": 0, "label": "string"}],
+  "nodes": [
     {
-      "id": "region-1",
-      "type": "highlightRegion",
-      "position": {"x": 75, "y": 75},
-      "style": {
-        "width": 600,
-        "height": 450,
-        "zIndex": -1
-      },
-      "data": {
-        "label": "Authentication Flow",
-        "backgroundColor": "#dbeafe",
-        "borderColor": "#3b82f6"
-      },
-      "draggable": true,
-      "selectable": true
+      "id": "string",
+      "label": "string",
+      "laneIndex": 0,
+      "laneName": "string",
+      "type": "start|process|end",
+      "userRole": "string",
+      "platform": "End client|GLP|CMS|Legl|Back end|Third party|Other",
+      "thirdPartyName": "string",
+      "roleConfidence": 0.0,
+      "platformConfidence": 0.0,
+      "bulletPoints": ["string"],
+      "notifications": [
+        {
+          "id": "string",
+          "type": "pain-point|warning|info|positive",
+          "message": "string"
+        }
+      ]
     }
+  ],
+  "edges": [{"source": "string", "target": "string"}],
+  "audit": {
+    "arrowCountDetected": 0,
+    "edgeCountReturned": 0,
+    "hasCycles": false,
+    "notes": ""
+  }
+}
+CRITICAL RULES - CONTENT EXTRACTION ONLY
+* **Do NOT calculate or output any position fields (x, y, width, height)**
+* **Do NOT try to replicate the layout or spacing** - that is handled by a separate system
+* **ONLY extract:** labels, types, roles, platforms, lanes, edges, bullet points, notifications
+
+PRIORITY #1: Edge Detection - Detect every arrow/edge carefully:
+1. Physically scan the entire diagram looking for arrows
+2. Count them (set audit.arrowCountDetected)
+3. Trace each arrow from start to end
+4. Create one edge per arrow with correct source and target IDs
+5. Verify audit.edgeCountReturned === audit.arrowCountDetected
+
+Node Content Extraction:
+* **Node Labels and Bullet Points:**
+  - The 'label' field should contain the complete main title/action of the node
+  - Do NOT truncate the label or move parts of it to bulletPoints
+  - ONLY populate bulletPoints if there are EXPLICIT bullet/numbered lists visible
+  - Do NOT duplicate information between label and bulletPoints
+* **ALL nodes MUST be assigned to a lane** by their visual row position:
+  - Look at which horizontal row/band the node sits in
+  - Assign laneIndex accordingly (0 = top row, 1 = second row, etc.)
+  - If no swim lanes exist, all nodes get laneIndex: 0
+
+Other Rules:
+* If a node has multiple parents, include ALL incoming edges (multiple edges can target the same node)
+* Output must be acyclic (audit.hasCycles = false). If a loop is detected, drop the least-confident edge and explain in audit.notes
+* All strings should be trimmed; keep original casing for labels; normalize enums exactly as listed
+* **Critical:** An arrow from node A to node B means edge {source: "A", target: "B"}, NOT the reverse
+User role detection (populate nodes[*].userRole)
+1. Primary heuristic (lane label):If the node sits in lane L, set userRole = lanes.find(l => l.index === laneIndex).label.
+2. Fallbacks (if the lane label is generic or missing):
+    * Use explicit actor text near/in the node (e.g., “Client”, “Admin”, “Developer”).
+    * Use verbs and context (“prints and signs” → likely “End Client”; “save to Denovo” → internal/system role).
+3. Match against available roles and keep exact casing. If no close match, return the lane label as seen or the first item from Available roles.
+4. Set roleConfidence in [0,1].
+Platform detection (populate platform and thirdPartyName)
+Choose one value for platform:
+* End client (end-user actions in client lane)
+* GLP (internal ops in GLP lane)
+* CMS (explicitly mentions CMS)
+* Legl (explicitly mentions Legl)
+* Back end (system/API/server processes, data stores)
+* Third party (external services)
+* Other (none of the above)
+Heuristics & mapping:
+* If a third-party logo/name is visible (e.g., Stripe, Auth0, Slack, Salesforce, Amiqus), set platform = "Third party" and thirdPartyName to that brand (exact casing).
+* If node text includes “API”, “DB”, “server”, “backend”, or clearly system-only actions, prefer Back end.
+* If lane label is a product/team (e.g., “GLP”), align platform to that label unless text indicates a specific third party.
+* If text explicitly mentions CMS or Legl, set platform accordingly.
+* Otherwise infer from lane/wording; if unsure, use Other and leave thirdPartyName empty.
+* Set platformConfidence in [0,1].
+
+Bullet Points Detection (populate nodes[*].bulletPoints)
+* **What to extract:** ONLY explicitly listed sub-steps or details shown as bullets/numbered lists
+* **Visual cues to look for:**
+  - Actual bullet points (•) or numbered lists (1., 2., 3.) inside the node
+  - Clear visual separation between main title and sub-items
+* **CRITICAL - What NOT to extract:**
+  - Do NOT split descriptive text into bullet points
+  - Do NOT create bullet points from a single continuous description
+  - The node label should contain the full action/title - do not truncate it
+* **Guidelines:**
+  - ONLY extract bullet points if there are EXPLICIT bullets or numbered lists visible
+  - Each bullet point should be a distinct, separately listed item
+  - Keep bullet points concise and actionable
+  - Preserve the original wording when possible
+  - If no explicit bullet list exists, bulletPoints MUST be an empty array []
+* **Examples:**
+  - Node showing: 'Complete questionnaire' with bullets below: '• Enter personal details • Upload documents • Review information' → label: "Complete questionnaire", bulletPoints: ['Enter personal details', 'Upload documents', 'Review information']
+  - Node showing: 'Send email to client with terms and conditions' → label: "Send email to client with terms and conditions", bulletPoints: []
+  - Node showing: 'Client accepts offer' → label: "Client accepts offer", bulletPoints: []
+
+Notifications Detection (populate nodes[*].notifications)
+* **What to detect:** Pain points, warnings, information notes, and positive feedback associated with nodes
+* **Visual indicators to look for:**
+  - Red/pink badges, icons, or sticky notes (pain points)
+  - Yellow/amber badges or warning symbols (warnings)
+  - Blue/gray badges or info icons (information)
+  - Green badges or checkmarks (positive feedback)
+  - Text containing keywords: 'pain point', 'issue', 'problem', 'slow', 'confusing', 'warning', 'note', 'FYI', 'success', 'improvement'
+* **Notification types:**
+  - **pain-point**: Problems, issues, friction points, user frustrations, blockers
+    * Keywords: pain, problem, issue, slow, broken, confusing, frustrating, difficult, error
+  - **warning**: Cautions, risks, things to watch out for
+    * Keywords: warning, caution, risk, watch out, be careful, important
+  - **info**: General information, notes, FYI, context
+    * Keywords: note, FYI, info, remember, context, detail
+  - **positive**: Successes, improvements, good outcomes, opportunities
+    * Keywords: success, good, improvement, opportunity, works well, solved
+* **Guidelines:**
+  - Look for sticky notes, badges, or annotations near/on the node
+  - Each notification needs: id (generate unique), type (from above), message (the actual text)
+  - If no notifications visible for a node, notifications should be an empty array []
+  - Be conservative - only create notifications when there's clear visual or textual evidence
+* **Examples:**
+  - Red sticky note on node saying 'User often confused here' → {"id": "notif-1", "type": "pain-point", "message": "User often confused here"}
+  - Yellow badge with 'Check permissions first' → {"id": "notif-2", "type": "warning", "message": "Check permissions first"}
+  - Green checkmark with 'Improved process' → {"id": "notif-3", "type": "positive", "message": "Improved process"}
+
+Lanes (Swim Lane Detection)
+* **Step 1: Detect if swim lanes are used** - Look for distinct horizontal rows of nodes
+  - Visual cues: colored horizontal bands, horizontal dividing lines, grouped rows
+  - If nodes are organized in clear horizontal rows/layers, this is a swim lane diagram
+* **Step 2: Count and identify lanes** - Number them from top to bottom (index 0, 1, 2...)
+* **Step 3: Name each lane:**
+  - **Option A: Look for visible labels** - Check left side or within the colored band for text like "End Client", "GLP", "Denovo", "Admin", "Backend"
+  - **Option B: If no label found** - Name by pattern:
+    * If it matches an Available role, use that role name (keep exact casing)
+    * Otherwise, use descriptive name like "Lane 1", "Lane 2", "Lane 3"
+* **Step 4: Assign nodes to lanes:**
+  - Determine which horizontal row/band each node visually sits in
+  - Set node's laneIndex to match that lane (0 = top, 1 = second from top, etc.)
+  - **IMPORTANT**: Also set node's laneName to the label of that lane (e.g., "End Client", "GLP", "Lane 1")
+  - All nodes in the same visual row should have the same laneIndex AND laneName
+* **Example:**
+  - Top colored band labeled "End Client" → {"index": 0, "label": "End Client"}
+  - Middle colored band labeled "GLP" → {"index": 1, "label": "GLP"}
+  - Bottom colored band labeled "Denovo" → {"index": 2, "label": "Denovo"}
+  - Nodes in top row → laneIndex: 0, laneName: "End Client"
+  - Nodes in middle row → laneIndex: 1, laneName: "GLP"
+  - Nodes in bottom row → laneIndex: 2, laneName: "Denovo"
+* **If NO swim lanes detected** - Create single lane: [{"index": 0, "label": "Main Flow"}] and set all nodes' laneIndex: 0, laneName: "Main Flow"
+Edges (CRITICAL - Most Important Section)
+* **Step 1: COUNT arrows first** - Scan the entire diagram and count every visible arrow/line. Set this count in audit.arrowCountDetected.
+* **Step 2: TRACE each arrow individually:**
+  - Find where the arrow/line physically starts (the tail) → this is the SOURCE node ID
+  - Follow the arrow to where it ends (the arrowhead/tip) → this is the TARGET node ID
+  - Create one edge: {"source": "source-id", "target": "target-id"}
+* **Important detection rules:**
+  - Only record VISIBLE arrows (no assumed connections based on proximity)
+  - Arrows can cross between lanes (vertical arrows are common in swim lanes)
+  - Curved arrows, straight arrows, diagonal arrows - all count
+  - If two nodes are next to each other but NO arrow connects them, do NOT create an edge
+  - Double-check: audit.edgeCountReturned should equal audit.arrowCountDetected
+* **Common mistakes to avoid:**
+  - ❌ Creating edges between adjacent nodes without arrows
+  - ❌ Missing arrows that cross between lanes
+  - ❌ Confusing arrow direction (always trace from tail to head)
+  - ❌ Counting the same arrow twice
+* **Verification:** Before returning, verify that every arrow in the image has a corresponding edge in your JSON.
+
+**Example - Complete Swim Lane Diagram with Edges:**
+
+Visual diagram has 3 colored horizontal bands:
+- Top band (yellow/beige): labeled "End Client" - contains 4 nodes
+- Middle band (blue): labeled "GLP" - contains 1 node
+- Bottom band (purple): labeled "Denovo" - contains 1 node
+
+Arrows detected: 5 arrows total
+- Arrow 1: From "Client accepts offer" (top row) → to "Offer saved to Denovo" (bottom row)
+- Arrow 2: From "Offer saved to Denovo" (bottom row) → to "Send documents" (middle row)
+- Arrow 3: From "Send documents" (middle row) → to "Client prints Terms" (top row)
+- Arrow 4: From "Client prints Terms" (top row) → to "Complete questionnaire" (top row)
+- Arrow 5: From "Complete questionnaire" (top row) → to "Complete Amiqus check" (top row)
+
+Your JSON should have:
+{
+  "lanes": [
+    {"index": 0, "label": "End Client"},
+    {"index": 1, "label": "GLP"},
+    {"index": 2, "label": "Denovo"}
   ],
   "nodes": [
     {
-      "id": "node-1",
+      "id": "node-1", 
+      "label": "Client accepts offer", 
+      "laneIndex": 0, 
+      "laneName": "End Client",
       "type": "start",
-      "position": {"x": 105, "y": 105},
-      "data": {
-        "label": "User opens app",
-        "type": "start",
-        "userRole": "End Client",
-        "variant": "End client",
-        "thirdPartyName": "",
-        "bulletPoints": ["Launch application", "See landing page"],
-        "notifications": [
-          {
-            "id": "notif-1",
-            "type": "pain-point",
-            "message": "Slow loading time frustrates users"
-          }
-        ],
-        "customProperties": {},
-        "journeyLayout": "vertical"
-      }
+      "bulletPoints": ["Review terms", "Sign electronically"],
+      "notifications": [
+        {"id": "notif-1", "type": "pain-point", "message": "Clients often confused about next steps"}
+      ]
     },
     {
-      "id": "node-2",
+      "id": "node-2", 
+      "label": "Client prints Terms", 
+      "laneIndex": 0, 
+      "laneName": "End Client",
       "type": "process",
-      "position": {"x": 105, "y": 360},
-      "data": {
-        "label": "Authenticate with OAuth",
-        "type": "process",
-        "userRole": "End Client",
-        "variant": "Third party",
-        "thirdPartyName": "Auth0",
-        "bulletPoints": ["Click sign in", "Redirect to Auth0", "Enter credentials"],
-        "notifications": [],
-        "customProperties": {},
-        "journeyLayout": "vertical"
-      }
+      "bulletPoints": [],
+      "notifications": []
+    },
+    {
+      "id": "node-3", 
+      "label": "Complete questionnaire", 
+      "laneIndex": 0, 
+      "laneName": "End Client",
+      "type": "process",
+      "bulletPoints": ["Personal details", "Upload ID", "Verify email"],
+      "notifications": [
+        {"id": "notif-2", "type": "warning", "message": "ID verification can take 24 hours"}
+      ]
+    },
+    {
+      "id": "node-4", 
+      "label": "Complete Amiqus check", 
+      "laneIndex": 0, 
+      "laneName": "End Client",
+      "type": "end",
+      "bulletPoints": [],
+      "notifications": [
+        {"id": "notif-3", "type": "positive", "message": "Automated process works well"}
+      ]
+    },
+    {
+      "id": "node-5", 
+      "label": "Send documents", 
+      "laneIndex": 1, 
+      "laneName": "GLP",
+      "type": "process",
+      "bulletPoints": ["Prepare packet", "Email client"],
+      "notifications": []
+    },
+    {
+      "id": "node-6", 
+      "label": "Offer saved to Denovo", 
+      "laneIndex": 2, 
+      "laneName": "Denovo",
+      "type": "process",
+      "bulletPoints": [],
+      "notifications": [
+        {"id": "notif-4", "type": "info", "message": "Backup created automatically"}
+      ]
     }
   ],
   "edges": [
-    {
-      "id": "edge-1-2",
-      "source": "node-1",
-      "target": "node-2",
-      "type": "custom",
-      "label": "",
-      "data": {
-        "label": ""
-      }
-    }
-  ]
+    {"source": "node-1", "target": "node-6"},
+    {"source": "node-6", "target": "node-5"},
+    {"source": "node-5", "target": "node-2"},
+    {"source": "node-2", "target": "node-3"},
+    {"source": "node-3", "target": "node-4"}
+  ],
+  "audit": {"arrowCountDetected": 5, "edgeCountReturned": 5, "hasCycles": false}
 }
 
-Guidelines:
+Key observations:
+- 3 lanes detected, numbered 0-2 from top to bottom with labels
+- Each node assigned to correct lane with BOTH laneIndex and laneName
+- All 4 nodes in top row have laneIndex: 0 AND laneName: "End Client"
+- Node in middle row has laneIndex: 1 AND laneName: "GLP"
+- Node in bottom row has laneIndex: 2 AND laneName: "Denovo"
+- laneName allows the swim lane to be displayed in the Edit Node modal
+- Edges correctly trace arrow connections, even across lanes
+- Even though nodes 2, 3, 4 are adjacent in same lane, flow goes through other lanes first
+- bulletPoints extracted from sub-steps within nodes (e.g., node-1, node-3, node-5)
+- notifications detected from visual indicators (red for pain-points, yellow for warnings, green for positive, blue for info)
+- Nodes without sub-steps have empty bulletPoints arrays []
+- Nodes without visible annotations have empty notifications arrays []
 
-LAYOUT ANALYSIS:
-- Carefully observe the visual arrangement of nodes in the diagram
-- Measure relative positions as accurately as possible
-- GRID SNAPPING: All x, y, width, height values MUST be multiples of 15
-- Preserve the general flow direction (horizontal vs vertical)
-- If nodes flow left-to-right primarily: set layout to "horizontal" and journeyLayout to "horizontal"
-- If nodes flow top-to-bottom primarily: set layout to "vertical" and journeyLayout to "vertical"
-- Typical spacing: 
-  * Horizontal layouts: 350-450px between nodes horizontally
-  * Vertical layouts: 240-300px between nodes vertically
-  * Nodes are typically 320px wide and 100-150px tall
+Available roles (for lane labels and semantic hints)
+${rolesList}
 
-REGION DETECTION:
-- Look for colored background areas, boxes, or grouped sections
-- Regions often have labels like "Phase 1", "Authentication", "Checkout Flow", etc.
-- Regions should encompass all nodes within their visual boundary
-- Region position should be slightly above and to the left of contained nodes (padding ~30px)
-- Region size should contain all child nodes with some padding
-- If nodes are inside a region, they should have parentId set to the region's id
-- Common region colors in diagrams: yellow (warnings/planning), blue (information), green (success/complete), red (errors/critical)
+**Final Reminders:**
+1. **CRITICAL:** Do NOT calculate positions (x, y). ONLY extract content and connections.
+2. Count arrows first, trace each one carefully, verify your count matches. Edge detection is the most critical part!
+3. Keep node labels complete - do NOT split descriptive text into bulletPoints unless there are explicit bullets/numbers visible
+4. Empty arrays [] for bulletPoints and notifications are expected and correct when nothing is visible
+5. Focus on WHAT the nodes are (content) and HOW they connect (edges), not WHERE they are (positions)
 
-PAIN POINT DETECTION (CRITICAL):
-- Look for indicators of user frustration, problems, or difficulties
-- Visual cues: red text, warning symbols, exclamation marks, sad faces
-- Text cues: "pain point", "problem", "issue", "frustrating", "slow", "confusing", "difficult", "error"
-- Create notifications with type "pain-point" for these
-- Extract the specific problem description as the message
-
-NOTIFICATION TYPES:
-- "pain-point": Problems, frustrations, blockers, errors (look for red markers, ❌, ⚠️, problems)
-- "warning": Cautions, edge cases, "watch out for" (look for yellow/orange markers)
-- "info": Additional context, notes, FYI (look for blue markers, ℹ️, notes)
-- "positive": Wins, successes, improvements (look for green markers, ✓, success indicators)
-
-USER ROLE DETECTION:
-- Look for swim lanes, role labels, or actor names
-- Common patterns: "User:", "Admin:", "System:", "Client:", "Developer:"
-- Match to available roles: ${rolesList}
-- Use EXACT casing from the available roles list
-- If role isn't clear, infer from the action context
-
-PLATFORM/VARIANT DETECTION:
-- Look for system indicators: "CMS", "Backend", "Frontend", "Legl", "API"
-- Look for third-party logos or names: Stripe, Auth0, Slack, Salesforce, etc.
-- If third-party detected, set variant to "Third party" AND thirdPartyName to the service name
-
-EDGE LABELS:
-- Only include labels if text is visible on or near the arrow
-- Common labels: "Yes", "No", "Success", "Error", "If X then", conditional paths
-- Empty string "" for unlabeled connections
-
-NODE-TO-REGION RELATIONSHIP:
-- After creating regions, check which nodes are visually inside each region
-- For nodes inside regions, add "parentId" property with the region's id
-- Node positions should be relative to the region's position when they have a parentId
-- Add "extent": "parent" to prevent dragging outside the region
-
-FINAL CHECKS:
-- All coordinates must be multiples of 15
-- All nodes must have complete data objects with all required fields
-- Include empty arrays [] for bulletPoints and notifications if none detected
-- Include empty object {} for customProperties
-- Regions come FIRST in the JSON (before nodes) for proper rendering order
-- Double-check that nodes inside regions have parentId and relative positions
-
-Return ONLY the JSON object, no other text.`
+Return only the JSON object, no extra text.`
 }
 
 // Export with default fallback roles

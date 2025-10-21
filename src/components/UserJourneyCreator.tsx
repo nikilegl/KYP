@@ -107,7 +107,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     userRole: null as UserRole | null,
     bulletPoints: [] as string[],
     notifications: [] as Notification[],
-    customProperties: {} as Record<string, unknown>
+    customProperties: {} as Record<string, unknown>,
+    swimLane: null as string | null // Region ID that this node belongs to
   })
   const [showEdgeLabelModal, setShowEdgeLabelModal] = useState(false)
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
@@ -596,7 +597,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       userRole: null,
       bulletPoints: [''],
       notifications: [],
-      customProperties: {}
+      customProperties: {},
+      swimLane: null
     })
     
     setIsAddingNewNode(true)
@@ -883,7 +885,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           ) || null
         }
 
-        return {
+        // Determine if node belongs to a region based on laneName
+        const laneName = (node.data as any).laneName
+        const matchingRegion = regionNodes.find(region => 
+          region.data.label === laneName
+        )
+
+        const baseNode: any = {
           id: node.id,
           type: node.type,
           position: node.position,
@@ -900,6 +908,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             journeyLayout: analyzedJourney.layout || journeyLayout
           }
         }
+
+        // If node belongs to a region, set parentId and extent
+        if (matchingRegion) {
+          baseNode.parentId = matchingRegion.id
+          baseNode.extent = 'parent'
+        }
+
+        return baseNode
       })
 
       // Convert analyzed edges to React Flow edges
@@ -1175,7 +1191,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         notifications: (node.data?.notifications as Notification[]) || [],
-        customProperties: (node.data?.customProperties as Record<string, unknown>) || {}
+        customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
+        swimLane: (node as any).parentId || null
       })
       setShowConfigModal(true)
     }
@@ -1190,6 +1207,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         type: configForm.type,
         position: { x: Math.random() * 400, y: Math.random() * 400 },
         selectable: true,
+        ...(configForm.swimLane ? { parentId: configForm.swimLane, extent: 'parent' } : {}),
         data: {
           ...configForm,
           journeyLayout
@@ -1214,9 +1232,40 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       if (!configuringNode) return
 
       setNodes((nds) =>
-        nds.map((node) =>
-          node.id === configuringNode.id
-            ? {
+        nds.map((node) => {
+          if (node.id === configuringNode.id) {
+            const updatedNode: any = {
+              ...node,
+              type: configForm.type,
+              data: {
+                ...node.data,
+                ...configForm,
+                journeyLayout
+              }
+            }
+            
+            // Handle parentId and extent based on swimLane
+            if (configForm.swimLane) {
+              updatedNode.parentId = configForm.swimLane
+              updatedNode.extent = 'parent'
+            } else {
+              // Remove parentId and extent if swimLane is null
+              delete updatedNode.parentId
+              delete updatedNode.extent
+            }
+            
+            return updatedNode
+          }
+          return node
+        })
+      )
+
+      // Save to database if journey already exists
+      if (currentJourneyId) {
+        try {
+          const updatedNodes = nodes.map((node) => {
+            if (node.id === configuringNode.id) {
+              const updatedNode: any = {
                 ...node,
                 type: configForm.type,
                 data: {
@@ -1225,26 +1274,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   journeyLayout
                 }
               }
-            : node
-        )
-      )
-
-      // Save to database if journey already exists
-      if (currentJourneyId) {
-        try {
-          const updatedNodes = nodes.map((node) =>
-            node.id === configuringNode.id
-              ? {
-                  ...node,
-                  type: configForm.type,
-                  data: {
-                    ...node.data,
-                    ...configForm,
-                    journeyLayout
-                  }
-                }
-              : node
-          )
+              
+              // Handle parentId and extent based on swimLane
+              if (configForm.swimLane) {
+                updatedNode.parentId = configForm.swimLane
+                updatedNode.extent = 'parent'
+              } else {
+                // Remove parentId and extent if swimLane is null
+                delete updatedNode.parentId
+                delete updatedNode.extent
+              }
+              
+              return updatedNode
+            }
+            return node
+          })
           
           await updateUserJourney(currentJourneyId, {
             flow_data: { nodes: updatedNodes, edges }
@@ -1459,73 +1503,181 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Handle node drag stop - auto-assign to regions
   const handleNodeDragStop = useCallback(
-    (_event: any, node: Node) => {
-      // Skip if the dragged node is itself a region
-      if (node.type === 'highlightRegion') return
-
-      // Find all regions
-      const regions = nodes.filter(n => n.type === 'highlightRegion')
+    (_event: any, _node: Node) => {
+      // Disabled automatic swim lane assignment on drag
+      // Users should manually assign nodes to swim lanes via the Edit Node modal
+      // This prevents unwanted position changes when dragging nodes
       
-      // Check if node is inside any region
-      let newParentId: string | undefined = undefined
-      
-      for (const region of regions) {
-        const regionBounds = {
-          x: region.position.x,
-          y: region.position.y,
-          width: (region.style?.width as number) || 600,
-          height: (region.style?.height as number) || 400,
-        }
-
-        const nodeBounds = {
-          x: node.position.x,
-          y: node.position.y,
-          width: 320, // Node width
-          height: 120, // Approximate node height
-        }
-
-        // Check if node center is inside region
-        const nodeCenterX = nodeBounds.x + nodeBounds.width / 2
-        const nodeCenterY = nodeBounds.y + nodeBounds.height / 2
-
-        const isInside =
-          nodeCenterX >= regionBounds.x &&
-          nodeCenterX <= regionBounds.x + regionBounds.width &&
-          nodeCenterY >= regionBounds.y &&
-          nodeCenterY <= regionBounds.y + regionBounds.height
-
-        if (isInside) {
-          newParentId = region.id
-          break
-        }
-      }
-
-      // Update node's parentId if it changed
-      if (node.parentId !== newParentId) {
-        setNodes((nds) =>
-          nds.map((n) =>
-            n.id === node.id
-              ? {
-                  ...n,
-                  parentId: newParentId,
-                  // Convert position to relative if adding to region
-                  position: newParentId
-                    ? {
-                        x: n.position.x - (regions.find(r => r.id === newParentId)?.position.x || 0),
-                        y: n.position.y - (regions.find(r => r.id === newParentId)?.position.y || 0),
-                      }
-                    : n.position,
-                  extent: newParentId ? ('parent' as const) : undefined,
-                }
-              : n
-          )
-        )
-      }
+      // Future: Could add optional auto-assignment with a modifier key (e.g., hold Shift to auto-assign)
     },
-    [nodes, setNodes]
+    []
   )
 
   // Tidy up node positions with proper spacing
+  // Horizontal layout tidy up function
+  const tidyUpHorizontal = useCallback(() => {
+    if (nodes.length === 0) return
+
+    const HORIZONTAL_SPACING = 40 // 40px between nodes
+    const NODE_WIDTH = 320
+    const REGION_PADDING = 40 // 40px gap between region boundary and nodes inside
+
+    // Separate regions from regular nodes
+    const regions = nodes.filter(n => n.type === 'highlightRegion')
+    const regularNodes = nodes.filter(n => n.type !== 'highlightRegion')
+
+    if (regularNodes.length === 0) return
+
+    // Build adjacency map
+    const adjacencyMap = new Map<string, string[]>()
+    const incomingEdges = new Map<string, number>()
+
+    regularNodes.forEach(node => {
+      adjacencyMap.set(node.id, [])
+      incomingEdges.set(node.id, 0)
+    })
+
+    edges.forEach(edge => {
+      const sourceChildren = adjacencyMap.get(edge.source) || []
+      adjacencyMap.set(edge.source, [...sourceChildren, edge.target])
+      incomingEdges.set(edge.target, (incomingEdges.get(edge.target) || 0) + 1)
+    })
+
+    // Find start node(s)
+    const startNodes = Array.from(incomingEdges.entries())
+      .filter(([_, count]) => count === 0)
+      .map(([nodeId]) => nodeId)
+
+    if (startNodes.length === 0) {
+      console.warn('No start node found')
+      return
+    }
+
+    // BFS to assign horizontal positions
+    const horizontalOrder = new Map<string, number>()
+    const visited = new Set<string>()
+    const queue: string[] = [...startNodes]
+
+    // Start nodes at position 0
+    startNodes.forEach(nodeId => {
+      horizontalOrder.set(nodeId, 0)
+    })
+
+    while (queue.length > 0) {
+      const nodeId = queue.shift()!
+      
+      if (visited.has(nodeId)) continue
+      visited.add(nodeId)
+
+      const currentPosition = horizontalOrder.get(nodeId) || 0
+      const children = adjacencyMap.get(nodeId) || []
+
+      children.forEach(childId => {
+        if (!visited.has(childId)) {
+          // Position child at next position
+          const newPosition = currentPosition + 1
+          const existingPosition = horizontalOrder.get(childId)
+          
+          // If child already has a position (convergence), use the max
+          if (existingPosition === undefined || newPosition > existingPosition) {
+            horizontalOrder.set(childId, newPosition)
+          }
+          
+          queue.push(childId)
+        }
+      })
+    }
+
+    // Convert horizontal order to actual x positions
+    const updatedNodes = regularNodes.map(node => {
+      const position = horizontalOrder.get(node.id) || 0
+      const xPosition = 100 + (position * (NODE_WIDTH + HORIZONTAL_SPACING))
+      
+      return {
+        ...node,
+        position: {
+          x: xPosition,
+          y: node.position.y // Keep existing y position
+        }
+      }
+    })
+
+    // Adjust nodes inside regions to have proper padding
+    const finalNodes = [...regions, ...updatedNodes].map(node => {
+      // Skip if it's a region itself
+      if (node.type === 'highlightRegion') {
+        return node
+      }
+
+      // Check if this node has a parentId (belongs to a region)
+      const nodeParentId = (node as any).parentId
+      
+      if (nodeParentId) {
+        // Find the parent region
+        const parentRegion = regions.find(region => region.id === nodeParentId)
+        
+        if (parentRegion) {
+          // Get region boundaries
+          const regionX = parentRegion.position.x
+          const regionY = parentRegion.position.y
+          const regionWidth = typeof parentRegion.style?.width === 'number' ? parentRegion.style.width : 600
+          const regionHeight = typeof parentRegion.style?.height === 'number' ? parentRegion.style.height : 600
+
+          let adjustedX = node.position.x
+          let adjustedY = node.position.y
+
+          // Enforce minimum REGION_PADDING (40px) from all edges
+          
+          // Left edge: ensure at least 40px from left boundary
+          const minX = regionX + REGION_PADDING
+          if (adjustedX < minX) {
+            adjustedX = minX
+          }
+
+          // Right edge: ensure at least 40px from right boundary
+          const maxX = regionX + regionWidth - REGION_PADDING - NODE_WIDTH
+          if (adjustedX > maxX) {
+            adjustedX = maxX
+          }
+
+          // Top edge: ensure at least 40px from top boundary
+          const minY = regionY + REGION_PADDING
+          if (adjustedY < minY) {
+            adjustedY = minY
+          }
+
+          // Bottom edge: ensure at least 40px from bottom boundary
+          const nodeHeight = 120 // Approximate height
+          const maxY = regionY + regionHeight - REGION_PADDING - nodeHeight
+          if (adjustedY > maxY) {
+            adjustedY = maxY
+          }
+
+          return {
+            ...node,
+            position: {
+              x: adjustedX,
+              y: adjustedY
+            }
+          }
+        }
+      }
+
+      return node
+    })
+
+    setNodes(finalNodes)
+
+    // Save to database if journey exists
+    if (currentJourneyId) {
+      updateUserJourney(currentJourneyId, {
+        flow_data: { nodes: finalNodes, edges }
+      }).catch(error => {
+        console.error('Error saving tidy layout:', error)
+      })
+    }
+  }, [nodes, edges, setNodes, currentJourneyId])
+
   const tidyUpNodes = useCallback(() => {
     if (nodes.length === 0) return
 
@@ -1538,7 +1690,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       action: 'tidyUp'
     })
 
-    // Use requestAnimationFrame to ensure DOM has been updated
+    // Check layout and use appropriate tidy up function
+    if (journeyLayout === 'horizontal') {
+      tidyUpHorizontal()
+      return
+    }
+
+    // Use requestAnimationFrame to ensure DOM has been updated (for vertical layout)
     requestAnimationFrame(() => {
       const VERTICAL_GAP = 36
       const HORIZONTAL_GAP = 48
@@ -2124,7 +2282,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         })
       }
     }) // End of requestAnimationFrame
-  }, [nodes, edges, setNodes, currentJourneyId, journeyName, journeyDescription])
+  }, [nodes, edges, setNodes, currentJourneyId, journeyName, journeyDescription, journeyLayout, tidyUpHorizontal])
 
   // Handle edge label editing
   const handleEdgeLabelClick = useCallback((edgeId: string) => {
@@ -2696,6 +2854,30 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                     <option key={role.id} value={role.id}>{role.name}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Swim Lane (Region) Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Swim Lane (Region)
+                </label>
+                <select
+                  value={configForm.swimLane || ''}
+                  onChange={(e) => {
+                    setConfigForm(prev => ({ ...prev, swimLane: e.target.value || null }))
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">None (No Region)</option>
+                  {nodes.filter(n => n.type === 'highlightRegion').map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {(region.data as any)?.label || region.id}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Assign this node to a region. Nodes inside regions will move together with the region.
+                </p>
               </div>
             </div>
 
