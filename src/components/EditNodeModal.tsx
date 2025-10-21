@@ -13,7 +13,7 @@ interface EditNodeModalProps {
   node: Node | null
   isAddingNewNode: boolean
   userRoles: UserRole[]
-  thirdParties: ThirdParty[]
+  thirdParties: ThirdParty[] // Kept for future validation/suggestions
   availableRegions: Array<{ id: string; label: string }>
   journeyLayout: 'vertical' | 'horizontal'
   onSave: (formData: NodeFormData) => void
@@ -23,8 +23,9 @@ interface EditNodeModalProps {
 export interface NodeFormData {
   label: string
   type: 'start' | 'process' | 'decision' | 'end' | 'label'
-  variant: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+  variant: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Custom' | ''
   thirdPartyName: string
+  customPlatformName: string
   userRole: UserRole | null
   bulletPoints: string[]
   notifications: Notification[]
@@ -38,7 +39,7 @@ export function EditNodeModal({
   node,
   isAddingNewNode,
   userRoles,
-  thirdParties,
+  thirdParties: _thirdParties,
   availableRegions,
   journeyLayout,
   onSave,
@@ -53,6 +54,7 @@ export function EditNodeModal({
     type: 'process',
     variant: 'Legl',
     thirdPartyName: '',
+    customPlatformName: '',
     userRole: null,
     bulletPoints: [''],
     notifications: [],
@@ -64,7 +66,13 @@ export function EditNodeModal({
   useEffect(() => {
     if (node && isOpen) {
       const existingBulletPoints = (node.data?.bulletPoints as string[]) || []
-      const nodeVariant = node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+      let nodeVariant = node.data?.variant as 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | 'Custom' | ''
+      
+      // Convert old 'Third party' to new 'Custom'
+      if (nodeVariant === 'Third party') {
+        nodeVariant = 'Custom'
+      }
+      
       const resolvedVariant = nodeVariant !== undefined && nodeVariant !== null ? nodeVariant : 'Legl'
       
       setFormData({
@@ -72,6 +80,7 @@ export function EditNodeModal({
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
         variant: resolvedVariant,
         thirdPartyName: (node.data?.thirdPartyName as string) || '',
+        customPlatformName: (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         notifications: (node.data?.notifications as Notification[]) || [],
@@ -85,6 +94,7 @@ export function EditNodeModal({
         type: 'process',
         variant: 'Legl',
         thirdPartyName: '',
+        customPlatformName: '',
         userRole: null,
         bulletPoints: [''],
         notifications: [],
@@ -302,28 +312,26 @@ export function EditNodeModal({
             <option value="CMS">CMS</option>
             <option value="Legl">Legl</option>
             <option value="Back end">Back end</option>
-            <option value="Third party">Third party</option>
+            <option value="Custom">Custom</option>
           </select>
         </div>
 
-        {/* Third Party Name (conditionally shown) */}
-        {formData.variant === 'Third party' && (
+        {/* Custom Platform Name (conditionally shown) */}
+        {formData.variant === 'Custom' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Third Party Service
+              Custom Platform Name
             </label>
-            <select
-              value={formData.thirdPartyName}
-              onChange={(e) => setFormData(prev => ({ ...prev, thirdPartyName: e.target.value }))}
+            <input
+              type="text"
+              value={formData.customPlatformName}
+              onChange={(e) => setFormData(prev => ({ ...prev, customPlatformName: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a third party...</option>
-              {thirdParties.map(tp => (
-                <option key={tp.id} value={tp.name}>
-                  {tp.name}
-                </option>
-              ))}
-            </select>
+              placeholder="e.g., Stripe, Mailchimp, Twilio..."
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Enter a custom platform name. If it matches a known third party, we'll show its logo.
+            </p>
           </div>
         )}
 

@@ -20,8 +20,9 @@ export interface UserJourneyNodeData {
   bulletPoints?: string[]
   notifications?: Notification[]
   customProperties?: Record<string, unknown>
-  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
+  variant?: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | 'Custom' | ''
   thirdPartyName?: string
+  customPlatformName?: string
   nodeLayout?: string // Layout classification: 'Simple node', 'Branch node', 'Branch-child node', 'Convergent node', 'Divergent node'
   journeyLayout?: 'vertical' | 'horizontal' // Overall journey layout direction
 }
@@ -46,6 +47,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     customProperties = {},
     variant = 'Legl',
     thirdPartyName = '',
+    customPlatformName = '',
     journeyLayout = 'vertical'
   } = nodeData || {}
   
@@ -80,8 +82,10 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
   }
   
   // Find matching third party logo (case-insensitive)
+  // Check for matching third party for either 'Third party' or 'Custom' variant
+  const platformName = variant === 'Custom' ? customPlatformName : thirdPartyName
   const matchingThirdParty = thirdParties.find(
-    tp => tp.name.toLowerCase() === thirdPartyName.toLowerCase()
+    tp => tp.name.toLowerCase() === platformName.toLowerCase()
   )
   
   // Generate unique gradient ID for Legl logo
@@ -265,8 +269,8 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                     <path fill="#fff" d="M27.1,7.9c0,0,.1,0,.1.1v.7s0,4.6,0,4.6c0,.5,0,.9-.1,1.3-.4,1.1-1.3,1.9-2.3,2.2-.3,0-.6.1-.9.1,0,0,0,0,0,0-1.2,0-2.3-.6-2.9-1.6,0-.2.1-.8.4-.7.3.2,1.3.7,2.1.7s1.2-.3,1.5-.5c.2-.2.4-.7.4-1.2v-.2h0c-.4.5-1,.9-1.9.9-1.5,0-2.9-1.1-2.9-3.1,0-2,1.4-3.1,2.9-3.1,1,0,1.6.5,1.9.9v-.6s0,0,0-.1c.5-.4,1.2-.6,1.8-.6h0ZM30,4.7c0,0,.1,0,.1.1v8.8s0,0,0,.1c-.6.4-1.2.6-2,.6h0c0,0-.1,0-.1-.1V5.5s0,0,0-.1c.6-.4,1.2-.6,2-.6h0ZM16.7,8c1.8,0,3.1,1.2,3.1,3s0,.7,0,.7h-4.4c0,.2,0,.3.1.4,0,.1.1.2.2.3.2.2.6.5,1.4.5.8,0,1.8-.5,2.1-.7.2-.1.5.2.4.4-.6,1-1.7,1.8-2.9,1.8-1.5,0-2.7-1-3.2-2.3,0-.3,0-.6,0-.9,0-2.1,1.5-3.2,3.3-3.2ZM10.4,5.5c0,0,.1,0,.1.1v6.9s0,0,0,0h2.4s0,0,0,0c.3.4.5,1,.5,1.5h0c0,0,0,.1-.1.1h-4.4c-.3,0-.5-.2-.5-.5v-7.4h0,0s.3-.8,1.9-.8ZM23.9,9.9c-.9,0-1.5.7-1.5,1.5s.6,1.5,1.5,1.5c.9,0,1.4-.7,1.4-1.5s-.6-1.5-1.4-1.5ZM16.7,9.3c-.8,0-1.3.7-1.3,1.2h2.5c0-.6-.4-1.2-1.3-1.2Z"/>
                   </svg>
                 </div>
-              ) : variant === 'Third party' && thirdPartyName && matchingThirdParty?.logo ? (
-                // Show third party logo if available
+              ) : ((variant === 'Third party' && thirdPartyName) || (variant === 'Custom' && customPlatformName)) && matchingThirdParty?.logo ? (
+                // Show third party logo if available (for both Third party and Custom variants)
                 <div className="flex items-center justify-center h-5">
                   {matchingThirdParty.logo.includes('<svg') ? (
                     <div 
@@ -276,14 +280,14 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                   ) : (
                     <img 
                       src={matchingThirdParty.logo} 
-                      alt={thirdPartyName}
+                      alt={platformName}
                       className="h-5 object-contain"
                     />
                   )}
                 </div>
               ) : (
                 <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                  {variant === 'Third party' && thirdPartyName ? thirdPartyName : variant}
+                  {variant === 'Custom' && customPlatformName ? customPlatformName : variant === 'Third party' && thirdPartyName ? thirdPartyName : variant}
                 </span>
               )
             )}
