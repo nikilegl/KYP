@@ -114,10 +114,43 @@ export async function analyzeJourneyImageWithBackground(
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to start processing: ${response.statusText}`)
+      let errorMessage = `Failed to start processing: ${response.status} ${response.statusText}`
+      try {
+        const errorText = await response.text()
+        console.error('Background function error response:', errorText)
+        if (errorText) {
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorData.message || errorText
+          } catch {
+            errorMessage = errorText
+          }
+        }
+      } catch (e) {
+        console.error('Error reading error response:', e)
+      }
+      throw new Error(errorMessage)
     }
 
-    const { jobId } = await response.json()
+    // Check if response has content
+    const responseText = await response.text()
+    if (!responseText || responseText.trim() === '') {
+      throw new Error('Background function returned empty response. Function may not be deployed correctly.')
+    }
+
+    let jobData
+    try {
+      jobData = JSON.parse(responseText)
+    } catch (e) {
+      console.error('Failed to parse background function response:', responseText)
+      throw new Error(`Invalid JSON response from background function: ${responseText.substring(0, 100)}`)
+    }
+
+    const { jobId } = jobData
+    if (!jobId) {
+      throw new Error('Background function did not return a job ID')
+    }
+    
     console.log(`Background job started: ${jobId}`)
     
     // Poll for results

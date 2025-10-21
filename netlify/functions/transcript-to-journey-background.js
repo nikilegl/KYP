@@ -3,9 +3,9 @@
  * Returns immediately with job ID, processes in background, saves to database
  */
 
-import { createClient } from '@supabase/supabase-js'
+const { createClient } = require('@supabase/supabase-js')
 
-export async function handler(event, context) {
+exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',

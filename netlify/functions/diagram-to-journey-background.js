@@ -3,9 +3,9 @@
  * Returns immediately with job ID, processes in background, saves to database
  */
 
-import { createClient } from '@supabase/supabase-js'
+const { createClient } = require('@supabase/supabase-js')
 
-export async function handler(event, context) {
+exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -25,9 +25,13 @@ export async function handler(event, context) {
   }
 
   try {
+    console.log('[diagram-to-journey-background] Function invoked')
+    
     const { base64Image, prompt, userId } = JSON.parse(event.body || '{}')
+    console.log(`[diagram-to-journey-background] Parsed request - userId: ${userId}, imageSize: ${base64Image?.length}, promptSize: ${prompt?.length}`)
 
     if (!base64Image || !prompt) {
+      console.error('[diagram-to-journey-background] Missing required fields')
       return {
         statusCode: 400,
         headers,
@@ -36,6 +40,7 @@ export async function handler(event, context) {
     }
 
     if (!userId) {
+      console.error('[diagram-to-journey-background] Missing userId')
       return {
         statusCode: 400,
         headers,
@@ -47,11 +52,14 @@ export async function handler(event, context) {
     const supabaseUrl = process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_KEY
     
+    console.log(`[diagram-to-journey-background] Supabase configured: ${!!supabaseUrl && !!supabaseKey}`)
+    
     if (!supabaseUrl || !supabaseKey) {
+      console.error('[diagram-to-journey-background] Supabase not configured')
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'Supabase not configured' }),
+        body: JSON.stringify({ error: 'Supabase not configured. Check SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.' }),
       }
     }
 
