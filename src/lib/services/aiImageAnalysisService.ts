@@ -69,14 +69,14 @@ export interface AnalyzedJourney {
 }
 
 /**
- * Analyzes a user journey diagram image using AI
+ * Analyzes a user journey diagram image using AI via Netlify Function
  * @param imageFile - The image file to analyze
- * @param apiKey - OpenAI API key
+ * @param _apiKey - OpenAI API key (deprecated - kept for backwards compatibility, not used)
  * @param userRoleNames - Array of available user role names from the workspace
  */
 export async function analyzeJourneyImage(
   imageFile: File,
-  apiKey: string,
+  _apiKey: string,
   userRoleNames: string[] = []
 ): Promise<AnalyzedJourney> {
   try {
@@ -86,54 +86,37 @@ export async function analyzeJourneyImage(
     // Generate prompt with user roles
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
-    // Call OpenAI Vision API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call Netlify Function (which securely calls OpenAI API server-side)
+    const response = await fetch('/.netlify/functions/diagram-to-journey', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-2024-11-20', // Latest GPT-4 Omni with vision (November 2024 version)
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: prompt
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${imageFile.type};base64,${base64Image}`
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 16384, // Increased for complex swim lane diagrams
-        temperature: 0.2 // Slightly higher for better spatial reasoning while maintaining consistency
+        base64Image: `data:${imageFile.type};base64,${base64Image}`,
+        prompt: prompt
       })
     })
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`)
+      throw new Error(`AI analysis error: ${error.error || response.statusText}`)
     }
 
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content
-
-    if (!content) {
-      throw new Error('No response from AI')
-    }
-
-    // Parse the JSON response
-    const parsed = parseAIResponse(content)
+    const result = await response.json()
     
-    // Validate and process the response
-    return processJourneyData(parsed)
+    if (!result.success || !result.journey) {
+      throw new Error('Invalid response from AI service')
+    }
+
+    const journeyData = result.journey
+    
+    if (!journeyData) {
+      throw new Error('No journey data received from AI')
+    }
+
+    // Validate and process the response (data is already parsed JSON object)
+    return processJourneyData(journeyData)
   } catch (error) {
     console.error('Error analyzing journey image:', error)
     throw error
@@ -157,30 +140,6 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-
-/**
- * Parse the AI response text to extract JSON
- */
-function parseAIResponse(content: string): any {
-  try {
-    // Try to parse directly first
-    return JSON.parse(content)
-  } catch (e) {
-    // If direct parse fails, try to extract JSON from markdown code blocks
-    const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1])
-    }
-    
-    // Try to find JSON object in the text
-    const objectMatch = content.match(/\{[\s\S]*\}/)
-    if (objectMatch) {
-      return JSON.parse(objectMatch[0])
-    }
-    
-    throw new Error('Could not parse AI response as JSON')
-  }
-}
 
 /**
  * Process and validate the journey data

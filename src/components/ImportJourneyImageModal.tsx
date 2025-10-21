@@ -11,15 +11,11 @@ interface ImportJourneyImageModalProps {
   userRoles?: string[]
 }
 
-// Get API key from environment variables
-const DEFAULT_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || ''
-
 export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles = [] }: ImportJourneyImageModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [apiKey] = useState(DEFAULT_API_KEY)
 
   const processFile = useCallback((file: File) => {
     // Validate file type
@@ -87,7 +83,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
     setError(null)
 
     try {
-      const result = await analyzeJourneyImage(selectedFile, apiKey, userRoles)
+      const result = await analyzeJourneyImage(selectedFile, '', userRoles) // API key handled server-side
       
       // Pass the result to parent component
       onImport(result)
@@ -100,7 +96,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
     } finally {
       setAnalyzing(false)
     }
-  }, [selectedFile, apiKey, userRoles, onImport])
+  }, [selectedFile, userRoles, onImport])
 
   const handleClose = useCallback(() => {
     setSelectedFile(null)
