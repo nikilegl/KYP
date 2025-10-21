@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Image as ImageIcon, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
@@ -52,22 +52,33 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
     processFile(file)
   }, [processFile])
 
-  const handlePaste = useCallback((event: React.ClipboardEvent) => {
-    const items = event.clipboardData?.items
-    if (!items) return
+  // Add paste event listener when modal is open and no file is selected
+  useEffect(() => {
+    if (!isOpen || selectedFile) return
 
-    // Look for image in clipboard
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item.type.indexOf('image') !== -1) {
-        const blob = item.getAsFile()
-        if (blob) {
-          processFile(blob)
+    const handlePaste = (event: ClipboardEvent) => {
+      const items = event.clipboardData?.items
+      if (!items) return
+
+      // Look for image in clipboard
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile()
+          if (blob) {
+            event.preventDefault()
+            processFile(blob)
+          }
+          break
         }
-        break
       }
     }
-  }, [processFile])
+
+    document.addEventListener('paste', handlePaste)
+    return () => {
+      document.removeEventListener('paste', handlePaste)
+    }
+  }, [isOpen, selectedFile, processFile])
 
   const handleAnalyze = useCallback(async () => {
     if (!selectedFile) return
@@ -136,12 +147,8 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
             className={`
               border-2 border-dashed rounded-lg p-6 text-center
               ${selectedFile ? 'border-green-300 bg-green-50' : 'border-blue-300 bg-blue-50 hover:border-blue-400'}
-              transition-colors cursor-text
+              transition-colors
             `}
-            contentEditable={!selectedFile}
-            onPaste={handlePaste}
-            suppressContentEditableWarning
-            tabIndex={0}
           >
             {selectedFile ? (
               <div className="space-y-2">
@@ -166,7 +173,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
                 <ImageIcon size={48} className="mx-auto text-blue-500" />
                 <div>
                   <p className="text-sm font-medium text-gray-900">
-                    Click here and press Cmd+V (Mac) or Ctrl+V (Windows) to paste
+                    Press Cmd+V (Mac) or Ctrl+V (Windows) to paste
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     Or upload a file below
@@ -236,28 +243,7 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
           </div>
         )}
 
-        {/* Instructions */}
-        {!selectedFile && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
-              <ImageIcon size={16} />
-              How to use
-            </h4>
-            <div className="text-sm text-blue-900 space-y-2">
-              <p className="font-medium">Quick paste (recommended):</p>
-              <ol className="ml-6 list-decimal space-y-1 text-blue-800">
-                <li>Take a screenshot or copy an image from Miro/Figma</li>
-                <li>Click in the paste area above</li>
-                <li>Press Cmd+V (Mac) or Ctrl+V (Windows)</li>
-                <li>Click "Import Journey" to analyze</li>
-              </ol>
-              <p className="text-xs text-blue-700 mt-2">
-                <strong>Tips:</strong> Ensure text is readable, arrows are clear, and mark pain points with colors/icons.
-                Regions and notifications will be auto-detected.
-              </p>
-            </div>
-          </div>
-        )}
+       
       </div>
     </Modal>
   )

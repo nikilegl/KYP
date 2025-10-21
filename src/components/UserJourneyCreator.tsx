@@ -199,13 +199,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Keyboard shortcut listener for Cmd+Z / Ctrl+Z
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't interfere with native undo in input fields
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux)
       if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-        // Prevent default browser undo
-        event.preventDefault()
-        
         // Only undo if we have a snapshot
         if (undoSnapshot) {
+          event.preventDefault()
           handleUndo()
         }
       }
@@ -385,15 +389,24 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Keyboard shortcut for undo (Command+Z / Ctrl+Z)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't interfere with native undo in input fields
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-        event.preventDefault()
-        undo()
+        // Only prevent default if we have history to undo
+        if (historyIndex >= 0 && history[historyIndex]) {
+          event.preventDefault()
+          undo()
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo])
+  }, [undo, historyIndex, history])
 
   // Track selected nodes and update edges highlighting
   useEffect(() => {
@@ -460,7 +473,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Paste nodes from clipboard (Command+V / Ctrl+V)
   const pasteNodes = useCallback(async () => {
     try {
-      // Try to read from clipboard first
+      // First, check if clipboard contains an image
+      // If it does, don't handle the paste (let other handlers like ImportJourneyImageModal handle it)
+      try {
+        const clipboardItems = await navigator.clipboard.read()
+        for (const item of clipboardItems) {
+          if (item.types.some(type => type.startsWith('image/'))) {
+            console.log('Clipboard contains image, skipping node paste')
+            return // Let image handlers deal with it
+          }
+        }
+      } catch (clipboardReadError) {
+        // If clipboard.read() is not supported or fails, continue with text-based paste
+        console.log('Clipboard.read() not available, trying text-based paste')
+      }
+
+      // Try to read from clipboard as text
       let copyData: { nodes: Node[], edges: Edge[] } | null = null
       
       try {
@@ -546,7 +574,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       
       // Don't trigger if user is typing in an input field
       const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return
       }
 
@@ -555,7 +583,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           event.preventDefault()
           copySelectedNodes()
         } else if (event.key === 'v' || event.key === 'V') {
-          event.preventDefault()
+          // Don't prevent default for paste - let pasteNodes decide if it should handle it
+          // This allows image paste handlers (like ImportJourneyImageModal) to work
           pasteNodes()
         }
       }
@@ -909,10 +938,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }
         }
 
-        // If node belongs to a region, set parentId and extent
+        // If node belongs to a region, set parentId for organizational purposes
+        // Note: We don't set extent='parent' to allow dragging nodes between regions
         if (matchingRegion) {
           baseNode.parentId = matchingRegion.id
-          baseNode.extent = 'parent'
         }
 
         return baseNode
@@ -1207,7 +1236,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         type: configForm.type,
         position: { x: Math.random() * 400, y: Math.random() * 400 },
         selectable: true,
-        ...(configForm.swimLane ? { parentId: configForm.swimLane, extent: 'parent' } : {}),
+        ...(configForm.swimLane ? { parentId: configForm.swimLane } : {}),
         data: {
           ...configForm,
           journeyLayout
@@ -1244,14 +1273,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               }
             }
             
-            // Handle parentId and extent based on swimLane
+            // Handle parentId based on swimLane
             if (configForm.swimLane) {
               updatedNode.parentId = configForm.swimLane
-              updatedNode.extent = 'parent'
             } else {
-              // Remove parentId and extent if swimLane is null
+              // Remove parentId if swimLane is null
               delete updatedNode.parentId
-              delete updatedNode.extent
             }
             
             return updatedNode
@@ -1275,14 +1302,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 }
               }
               
-              // Handle parentId and extent based on swimLane
+              // Handle parentId based on swimLane
               if (configForm.swimLane) {
                 updatedNode.parentId = configForm.swimLane
-                updatedNode.extent = 'parent'
               } else {
-                // Remove parentId and extent if swimLane is null
+                // Remove parentId if swimLane is null
                 delete updatedNode.parentId
-                delete updatedNode.extent
               }
               
               return updatedNode

@@ -94,7 +94,7 @@ export function DashboardLayout({
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {children}
       </main>
     </div>
