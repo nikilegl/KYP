@@ -1,198 +1,134 @@
-/**
- * Background function for transcript-to-journey (15-minute timeout)
- * Returns immediately with job ID, processes in background, saves to database
- */
+const { getStore } = require('@netlify/blobs');
 
-const { createClient } = require('@supabase/supabase-js')
-
-exports.handler = async function(event, context) {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  }
-
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' }
-  }
-
+exports.handler = async (event) => {
+  // Only allow POST
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    }
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  try {
-    const { transcript, prompt, userId } = JSON.parse(event.body || '{}')
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Get Netlify Blobs store
+  const store = getStore('ai-jobs');
+  
+  // Store initial job status
+  await store.set(jobId, JSON.stringify({
+    status: 'processing',
+    createdAt: new Date().toISOString()
+  }));
 
-    if (!transcript || !prompt) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Transcript and prompt are required' }),
+  // Return job ID immediately (this makes it a background function)
+  // The processing will continue after this response
+  setTimeout(async () => {
+    try {
+      const { transcript, prompt } = JSON.parse(event.body);
+
+      if (!transcript || !prompt) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'Missing transcript or prompt',
+          completedAt: new Date().toISOString()
+        }));
+        return;
       }
-    }
 
-    if (!userId) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'User ID is required' }),
+      const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+      if (!OPENAI_API_KEY) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'OpenAI API key not configured',
+          completedAt: new Date().toISOString()
+        }));
+        return;
       }
-    }
 
-    // Initialize Supabase client
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY
-    
-    if (!supabaseUrl || !supabaseKey) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Supabase not configured' }),
+      console.log(`[${jobId}] Starting transcript processing...`);
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: prompt
+            },
+            {
+              role: 'user',
+              content: transcript
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 4000
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[${jobId}] OpenAI API error:`, errorText);
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: `OpenAI API error: ${response.status} ${response.statusText}`,
+          completedAt: new Date().toISOString()
+        }));
+        return;
       }
-    }
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
 
-    // Create job record
-    const { data: job, error: jobError } = await supabase
-      .from('ai_processing_jobs')
-      .insert({
-        user_id: userId,
-        job_type: 'transcript',
-        status: 'processing',
-        input_data: { transcriptLength: transcript.length, promptLength: prompt.length }
-      })
-      .select()
-      .single()
-
-    if (jobError) {
-      console.error('Failed to create job:', jobError)
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Failed to create processing job' }),
+      if (!content) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'No content in OpenAI response',
+          completedAt: new Date().toISOString()
+        }));
+        return;
       }
-    }
 
-    console.log(`Job ${job.id} created, starting AI processing...`)
+      // Try to parse the JSON from the response
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       content.match(/\{[\s\S]*\}/);
 
-    // Process AI request in background
-    processInBackground(job.id, transcript, prompt, supabase)
+      if (!jsonMatch) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'Could not find JSON in AI response',
+          completedAt: new Date().toISOString()
+        }));
+        return;
+      }
 
-    // Return immediately with job ID
-    return {
-      statusCode: 202, // Accepted
-      headers,
-      body: JSON.stringify({
-        jobId: job.id,
-        status: 'processing',
-        message: 'Processing started. Poll for results.'
-      }),
-    }
+      const jsonString = jsonMatch[1] || jsonMatch[0];
+      const journey = JSON.parse(jsonString);
 
-  } catch (error) {
-    console.error('Background function error:', error)
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ 
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      }),
-    }
-  }
-}
+      console.log(`[${jobId}] Transcript processing completed successfully`);
 
-// Process in background (this continues after the 202 response)
-async function processInBackground(jobId, transcript, prompt, supabase) {
-  try {
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured')
-    }
-
-    console.log(`[Job ${jobId}] Calling OpenAI API...`)
-    const startTime = Date.now()
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: prompt
-          },
-          {
-            role: 'user',
-            content: transcript
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-        response_format: { type: 'json_object' }
-      })
-    })
-
-    const processingTime = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[Job ${jobId}] OpenAI responded in ${processingTime}s`)
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(`OpenAI API error: ${JSON.stringify(errorData)}`)
-    }
-
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content
-
-    if (!content) {
-      throw new Error('Empty response from OpenAI')
-    }
-
-    // Parse the JSON response
-    let cleanContent = content.trim()
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?$/g, '')
-    } else if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.replace(/```\n?/g, '')
-    }
-
-    const journeyData = JSON.parse(cleanContent)
-
-    // Update job with success
-    await supabase
-      .from('ai_processing_jobs')
-      .update({
+      // Store successful result
+      await store.set(jobId, JSON.stringify({
         status: 'completed',
-        result_data: journeyData,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId)
+        result: journey,
+        completedAt: new Date().toISOString()
+      }));
 
-    console.log(`[Job ${jobId}] Completed successfully`)
-
-  } catch (error) {
-    console.error(`[Job ${jobId}] Failed:`, error)
-    
-    // Update job with error
-    await supabase
-      .from('ai_processing_jobs')
-      .update({
+    } catch (error) {
+      console.error(`[${jobId}] Processing error:`, error);
+      await store.set(jobId, JSON.stringify({
         status: 'failed',
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId)
-  }
-}
+        error: error.message || 'Unknown error',
+        completedAt: new Date().toISOString()
+      }));
+    }
+  }, 0);
 
+  // Return immediately with job ID
+  return {
+    statusCode: 202,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId })
+  };
+};

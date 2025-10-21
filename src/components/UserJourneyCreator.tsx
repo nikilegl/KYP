@@ -118,6 +118,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [importTranscriptText, setImportTranscriptText] = useState('')
   const [importTranscriptError, setImportTranscriptError] = useState<string | null>(null)
   const [importTranscriptLoading, setImportTranscriptLoading] = useState(false)
+  const [importTranscriptProgress, setImportTranscriptProgress] = useState<string>('')
   const [importTranscriptLayout, setImportTranscriptLayout] = useState<'vertical' | 'horizontal'>('vertical')
   const [showEditWithAIModal, setShowEditWithAIModal] = useState(false)
   const [editInstruction, setEditInstruction] = useState('')
@@ -1023,7 +1024,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const journeyData = await convertTranscriptToJourney(
         importTranscriptText,
         dynamicPrompt,
-        userRoleNames
+        userRoleNames,
+        (message) => setImportTranscriptProgress(message) // Progress callback
       )
 
       // Validate the response
@@ -1114,6 +1116,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setImportTranscriptText('')
       setImportTranscriptError(null)
       setImportTranscriptLoading(false)
+      setImportTranscriptProgress('')
 
       // Show success message
       const actionText = nodes.length > 0 ? 'Added' : 'Successfully imported'
@@ -1126,6 +1129,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           : 'Failed to convert transcript. Please try again.'
       )
       setImportTranscriptLoading(false)
+      setImportTranscriptProgress('')
     }
   }, [nodes, edges, importTranscriptText, importTranscriptLayout, userRoles, setNodes, setEdges])
 
@@ -3264,6 +3268,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setShowImportTranscriptModal(false)
           setImportTranscriptText('')
           setImportTranscriptError(null)
+          setImportTranscriptProgress('')
         }}
         title="Import Journey from Transcript"
         size="lg"
@@ -3275,6 +3280,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 setShowImportTranscriptModal(false)
                 setImportTranscriptText('')
                 setImportTranscriptError(null)
+                setImportTranscriptProgress('')
               }}
               disabled={importTranscriptLoading}
             >
@@ -3387,7 +3393,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-700 flex items-center gap-2">
                 <Sparkles size={14} className="animate-pulse" />
-                Analyzing transcript with AI... This may take a moment.
+                {importTranscriptProgress || 'Analyzing transcript with AI... This may take a moment.'}
               </p>
             </div>
           )}
