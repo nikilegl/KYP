@@ -885,7 +885,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           ) || null
         }
 
-        return {
+        // Determine if node belongs to a region based on laneName
+        const laneName = (node.data as any).laneName
+        const matchingRegion = regionNodes.find(region => 
+          region.data.label === laneName
+        )
+
+        const baseNode: any = {
           id: node.id,
           type: node.type,
           position: node.position,
@@ -902,6 +908,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             journeyLayout: analyzedJourney.layout || journeyLayout
           }
         }
+
+        // If node belongs to a region, set parentId and extent
+        if (matchingRegion) {
+          baseNode.parentId = matchingRegion.id
+          baseNode.extent = 'parent'
+        }
+
+        return baseNode
       })
 
       // Convert analyzed edges to React Flow edges
@@ -1489,70 +1503,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Handle node drag stop - auto-assign to regions
   const handleNodeDragStop = useCallback(
-    (_event: any, node: Node) => {
-      // Skip if the dragged node is itself a region
-      if (node.type === 'highlightRegion') return
-
-      // Find all regions
-      const regions = nodes.filter(n => n.type === 'highlightRegion')
+    (_event: any, _node: Node) => {
+      // Disabled automatic swim lane assignment on drag
+      // Users should manually assign nodes to swim lanes via the Edit Node modal
+      // This prevents unwanted position changes when dragging nodes
       
-      // Check if node is inside any region
-      let newParentId: string | undefined = undefined
-      
-      for (const region of regions) {
-        const regionBounds = {
-          x: region.position.x,
-          y: region.position.y,
-          width: (region.style?.width as number) || 600,
-          height: (region.style?.height as number) || 400,
-        }
-
-        const nodeBounds = {
-          x: node.position.x,
-          y: node.position.y,
-          width: 320, // Node width
-          height: 120, // Approximate node height
-        }
-
-        // Check if node center is inside region
-        const nodeCenterX = nodeBounds.x + nodeBounds.width / 2
-        const nodeCenterY = nodeBounds.y + nodeBounds.height / 2
-
-        const isInside =
-          nodeCenterX >= regionBounds.x &&
-          nodeCenterX <= regionBounds.x + regionBounds.width &&
-          nodeCenterY >= regionBounds.y &&
-          nodeCenterY <= regionBounds.y + regionBounds.height
-
-        if (isInside) {
-          newParentId = region.id
-          break
-        }
-      }
-
-      // Update node's parentId if it changed
-      if (node.parentId !== newParentId) {
-        setNodes((nds) =>
-          nds.map((n) =>
-            n.id === node.id
-              ? {
-                  ...n,
-                  parentId: newParentId,
-                  // Convert position to relative if adding to region
-                  position: newParentId
-                    ? {
-                        x: n.position.x - (regions.find(r => r.id === newParentId)?.position.x || 0),
-                        y: n.position.y - (regions.find(r => r.id === newParentId)?.position.y || 0),
-                      }
-                    : n.position,
-                  extent: newParentId ? ('parent' as const) : undefined,
-                }
-              : n
-          )
-        )
-      }
+      // Future: Could add optional auto-assignment with a modifier key (e.g., hold Shift to auto-assign)
     },
-    [nodes, setNodes]
+    []
   )
 
   // Tidy up node positions with proper spacing

@@ -4,6 +4,7 @@
  */
 
 import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt'
+import { calculateJourneyLayout } from './journeyLayoutCalculator'
 
 export interface JourneyNotification {
   id: string
@@ -182,32 +183,73 @@ function parseAIResponse(content: string): any {
 
 /**
  * Process and validate the journey data
+ * 
+ * SEPARATION OF CONCERNS:
+ * - AI Prompt: Extracts CONTENT (labels, types, roles, platforms, lanes, edges, notifications)
+ * - Layout Calculator: Computes POSITIONS (x, y coordinates based on edges and lanes)
+ * - This Function: Combines both to create the final journey structure
  */
 function processJourneyData(data: any): AnalyzedJourney {
-  // Process regions (if any)
-  const regions: JourneyRegion[] = (data.regions || []).map((region: any, index: number) => ({
-    id: region.id || `region-${index + 1}`,
-    type: 'highlightRegion' as const,
-    position: {
-      x: snapToGrid(region.position?.x, 15) || 75,
-      y: snapToGrid(region.position?.y, 15) || 75
-    },
-    style: {
-      width: snapToGrid(region.style?.width, 15) || 600,
-      height: snapToGrid(region.style?.height, 15) || 450,
-      zIndex: -1
-    },
-    data: {
-      label: region.data?.label || `Region ${index + 1}`,
-      backgroundColor: region.data?.backgroundColor || '#dbeafe',
-      borderColor: region.data?.borderColor || '#3b82f6'
-    },
-    draggable: true,
-    selectable: true
+  const detectedLayout = data.layout || 'horizontal'
+  
+  // --- Step 1: Extract content from AI (NO POSITIONS) ---
+  const rawNodes = (data.nodes || []).map((node: any) => ({
+    id: node.id,
+    label: node.label,
+    type: node.type,
+    swimLane: node.laneName, // Use laneName from AI as swimLane identifier
+    laneIndex: node.laneIndex,
+    laneName: node.laneName,
+    userRole: node.userRole,
+    platform: node.platform,
+    thirdPartyName: node.thirdPartyName,
+    bulletPoints: node.bulletPoints || [],
+    notifications: node.notifications || []
   }))
 
-  // Process nodes
-  const nodes: JourneyNode[] = (data.nodes || []).map((node: any, index: number) => {
+  // --- Step 2: Calculate positions based on edges and lanes ---
+  // Layout calculator is the ONLY source of position calculations
+  const layoutResult = calculateJourneyLayout(
+    rawNodes,
+    data.edges || [],
+    detectedLayout
+  )
+
+  // --- Step 3: Process lanes into regions using calculated dimensions ---
+  // Constants must match journeyLayoutCalculator.ts
+  const VERTICAL_GAP_BETWEEN_LANES = 24
+  const START_Y = 40
+  const calculatedSwimLaneHeight = layoutResult.swimLaneHeight || 300
+  const calculatedSwimLaneWidth = layoutResult.swimLaneWidth || 2000
+  
+  const regions: JourneyRegion[] = (data.lanes || []).map((lane: any) => {
+    // Calculate region Y position with gaps (matching layout calculator logic)
+    const regionY = START_Y + (lane.index * (calculatedSwimLaneHeight + VERTICAL_GAP_BETWEEN_LANES))
+    
+    return {
+      id: `region-${lane.index}`,
+      type: 'highlightRegion' as const,
+      position: {
+        x: 0,
+        y: regionY
+      },
+      style: {
+        width: calculatedSwimLaneWidth,
+        height: calculatedSwimLaneHeight,
+        zIndex: -1
+      },
+      data: {
+        label: lane.label || `Lane ${lane.index + 1}`,
+        backgroundColor: getLaneColor(lane.index).bg,
+        borderColor: getLaneColor(lane.index).border
+      },
+      draggable: true,
+      selectable: true
+    }
+  })
+
+  // --- Step 4: Process nodes with positions from layout calculator ---
+  const nodes: JourneyNode[] = layoutResult.nodes.map((node: any) => {
     // Process notifications
     const notifications: JourneyNotification[] = (node.data?.notifications || node.notifications || [])
       .map((notif: any) => ({
@@ -218,14 +260,11 @@ function processJourneyData(data: any): AnalyzedJourney {
       .filter((notif: JourneyNotification) => notif.message)
 
     return {
-      id: node.id || `node-${index + 1}`,
+      id: node.id,
       type: normalizeNodeType(node.type || node.data?.type),
-      position: {
-        x: snapToGrid(node.position?.x, 15) || (index % 3) * 375 + 105,
-        y: snapToGrid(node.position?.y, 15) || Math.floor(index / 3) * 255 + 105
-      },
+      position: node.position, // Use calculated position from layout calculator
       data: {
-        label: node.data?.label || node.label || `Node ${index + 1}`,
+        label: node.data?.label || node.label || node.id,
         type: normalizeNodeType(node.type || node.data?.type),
         userRole: node.data?.userRole || node.userRole || undefined,
         variant: normalizeVariant(node.data?.variant || node.platform),
@@ -235,12 +274,13 @@ function processJourneyData(data: any): AnalyzedJourney {
           : [],
         notifications: notifications.length > 0 ? notifications : [],
         customProperties: node.data?.customProperties || {},
-        journeyLayout: data.layout || node.data?.journeyLayout || 'vertical'
+        journeyLayout: detectedLayout,
+        laneName: node.laneName // Pass through the lane name from AI
       }
     }
   })
 
-  // Process edges
+  // --- Step 5: Process edges (from AI data, not layout calculator) ---
   const edges: JourneyEdge[] = (data.edges || []).map((edge: any, index: number) => ({
     id: edge.id || `edge-${index + 1}`,
     source: edge.source,
@@ -258,8 +298,23 @@ function processJourneyData(data: any): AnalyzedJourney {
     regions: regions.length > 0 ? regions : undefined,
     name: data.name || 'Imported Journey',
     description: data.description || '',
-    layout: data.layout || 'vertical'
+    layout: detectedLayout
   }
+}
+
+/**
+ * Get lane color based on index (cycle through colors)
+ */
+function getLaneColor(index: number): { bg: string; border: string } {
+  const colors = [
+    { bg: '#fef3c7', border: '#f59e0b' }, // Yellow/Amber
+    { bg: '#dbeafe', border: '#3b82f6' }, // Blue
+    { bg: '#e9d5ff', border: '#a855f7' }, // Purple
+    { bg: '#d1fae5', border: '#10b981' }, // Green
+    { bg: '#fce7f3', border: '#ec4899' }, // Pink
+    { bg: '#e0e7ff', border: '#6366f1' }, // Indigo
+  ]
+  return colors[index % colors.length]
 }
 
 /**
@@ -294,13 +349,5 @@ function normalizeNotificationType(type: any): 'pain-point' | 'warning' | 'info'
   if (typeStr.includes('warn')) return 'warning'
   if (typeStr.includes('positive') || typeStr.includes('success') || typeStr.includes('good')) return 'positive'
   return 'info'
-}
-
-/**
- * Snap a value to the nearest multiple of gridSize
- */
-function snapToGrid(value: any, gridSize: number): number {
-  const num = typeof value === 'number' ? value : 0
-  return Math.round(num / gridSize) * gridSize
 }
 
