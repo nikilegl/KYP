@@ -1,4 +1,4 @@
-// Supabase import removed - using Netlify Blobs for background job storage
+import { supabase } from './supabase'
 
 export interface ExtractedExample {
   actor: string
@@ -238,72 +238,31 @@ export const enhanceExtractedExamples = (examples: ExtractedExample[]): Extracte
 }
 
 /**
- * Polls job status until completion
- */
-async function pollJobStatus(jobId: string, onProgress?: (message: string) => void): Promise<any> {
-  const startTime = Date.now()
-  const maxDuration = 15 * 60 * 1000 // 15 minutes max
-  const pollInterval = 2000 // Poll every 2 seconds
-
-  while (true) {
-    const elapsed = Date.now() - startTime
-
-    if (elapsed > maxDuration) {
-      throw new Error('Job timed out after 15 minutes')
-    }
-
-    // Update progress message
-    const elapsedSeconds = Math.floor(elapsed / 1000)
-    if (onProgress) {
-      if (elapsedSeconds < 30) {
-        onProgress(`Processing... ${elapsedSeconds}s`)
-      } else {
-        onProgress(`Still processing... ${elapsedSeconds}s (complex diagram)`)
-      }
-    }
-
-    // Check job status
-    const response = await fetch(`/.netlify/functions/check-job-status?jobId=${jobId}`)
-    
-    if (!response.ok) {
-      throw new Error(`Failed to check job status: ${response.statusText}`)
-    }
-
-    const job = await response.json()
-
-    if (job.status === 'completed') {
-      console.log(`✓ Job ${jobId} completed successfully`)
-      return job.result
-    }
-
-    if (job.status === 'failed') {
-      throw new Error(job.error || 'Job failed')
-    }
-
-    // Job still processing, wait before next poll
-    await new Promise(resolve => setTimeout(resolve, pollInterval))
-  }
-}
-
-/**
  * Converts a phone call transcript to a user journey JSON using OpenAI
- * Uses background processing for long transcripts
  * @param transcript - The raw transcript text
  * @param customPrompt - The prompt to use (should be generated with user roles)
  * @param userRoleNames - Optional array of user role names to include in error messages
- * @param onProgress - Optional callback for progress updates
  * @returns Promise with the user journey JSON
  */
 export const convertTranscriptToJourney = async (
   transcript: string,
   customPrompt: string,
-  _userRoleNames?: string[],
-  onProgress?: (message: string) => void
+  _userRoleNames?: string[]
 ): Promise<any> => {
   try {
-    console.log('Starting background transcript conversion...')
+    console.log('Converting transcript with AI (background function)...')
     
-    // Start the background job
+    // Get current user for background function
+    if (!supabase) {
+      throw new Error('Database not configured')
+    }
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('User not authenticated')
+    }
+    
+    // Call background function (15 minute timeout)
     const response = await fetch('/.netlify/functions/transcript-to-journey-background', {
       method: 'POST',
       headers: {
@@ -312,36 +271,38 @@ export const convertTranscriptToJourney = async (
       body: JSON.stringify({
         transcript,
         prompt: customPrompt,
+        userId: user.id
       }),
     })
 
+    const responseText = await response.text()
+    
     if (!response.ok) {
-      const errorText = await response.text()
-      let errorMessage = 'Failed to start transcript conversion'
+      let errorMessage = 'Failed to convert transcript'
       try {
-        const errorData = JSON.parse(errorText)
+        const errorData = JSON.parse(responseText)
         errorMessage = errorData.error || errorData.message || errorMessage
       } catch {
-        errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
+        errorMessage = responseText || `HTTP ${response.status}: ${response.statusText}`
       }
       throw new Error(errorMessage)
     }
 
-    const { jobId } = await response.json()
-    
-    if (!jobId) {
-      throw new Error('No job ID returned from server')
+    let result
+    try {
+      result = JSON.parse(responseText)
+    } catch {
+      throw new Error('Invalid JSON response from server')
     }
-
-    console.log(`Background job started: ${jobId}`)
     
-    // Poll for completion
-    const result = await pollJobStatus(jobId, onProgress)
+    if (!result.success || !result.journey) {
+      throw new Error(result.error || 'Server response is missing journey data')
+    }
     
-    console.log('✓ Transcript conversion successful!')
-    console.log('Nodes extracted:', result.nodes?.length || 0)
+    console.log('✓ Transcript conversion successful! (jobId:', result.jobId, ')')
+    console.log('Nodes extracted:', result.journey.nodes?.length || 0)
 
-    return result
+    return result.journey
   } catch (error) {
     console.error('Error converting transcript to journey:', error)
     throw error

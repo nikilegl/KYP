@@ -219,66 +219,16 @@ async function pollForJobCompletion(
 }
 
 /**
- * Poll job status via Netlify function
- */
-async function pollJobStatus(jobId: string, onProgress?: (message: string) => void): Promise<any> {
-  const startTime = Date.now()
-  const maxDuration = 15 * 60 * 1000 // 15 minutes max
-  const pollInterval = 2000 // Poll every 2 seconds
-
-  while (true) {
-    const elapsed = Date.now() - startTime
-
-    if (elapsed > maxDuration) {
-      throw new Error('Job timed out after 15 minutes')
-    }
-
-    // Update progress message
-    const elapsedSeconds = Math.floor(elapsed / 1000)
-    if (onProgress) {
-      if (elapsedSeconds < 30) {
-        onProgress(`Analyzing diagram... ${elapsedSeconds}s`)
-      } else {
-        onProgress(`Still analyzing... ${elapsedSeconds}s (complex diagram)`)
-      }
-    }
-
-    // Check job status
-    const response = await fetch(`/.netlify/functions/check-job-status?jobId=${jobId}`)
-    
-    if (!response.ok) {
-      throw new Error(`Failed to check job status: ${response.statusText}`)
-    }
-
-    const job = await response.json()
-
-    if (job.status === 'completed') {
-      console.log(`✓ Job ${jobId} completed successfully`)
-      return job.result
-    }
-
-    if (job.status === 'failed') {
-      throw new Error(job.error || 'Job failed')
-    }
-
-    // Job still processing, wait before next poll
-    await new Promise(resolve => setTimeout(resolve, pollInterval))
-  }
-}
-
-/**
- * Analyzes a user journey diagram image using AI via background function
- * Uses Netlify Blobs for job storage (no database required)
+ * Analyzes a user journey diagram image using AI via Netlify Function
+ * Uses optimized prompt for faster processing (typically 10-20 seconds)
  * @param imageFile - The image file to analyze
  * @param _apiKey - OpenAI API key (deprecated - handled server-side)
  * @param userRoleNames - Array of available user role names from the workspace
- * @param onProgress - Optional callback for progress updates
  */
 export async function analyzeJourneyImage(
   imageFile: File,
   _apiKey: string,
-  userRoleNames: string[] = [],
-  onProgress?: (message: string) => void
+  userRoleNames: string[] = []
 ): Promise<AnalyzedJourney> {
   try {
     console.log(`Original image size: ${(imageFile.size / 1024).toFixed(0)}KB`)
@@ -292,7 +242,17 @@ export async function analyzeJourneyImage(
     // Generate prompt with user roles
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
-    // Start background job
+    // Get current user for background function
+    if (!supabase) {
+      throw new Error('Database not configured')
+    }
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('User not authenticated')
+    }
+
+    // Call background function (15 minute timeout)
     const response = await fetch('/.netlify/functions/diagram-to-journey-background', {
       method: 'POST',
       headers: {
@@ -300,7 +260,8 @@ export async function analyzeJourneyImage(
       },
       body: JSON.stringify({
         base64Image: `data:${compressedImage.type};base64,${base64Image}`,
-        prompt: prompt
+        prompt: prompt,
+        userId: user.id
       })
     })
 
@@ -326,20 +287,19 @@ export async function analyzeJourneyImage(
       throw new Error(errorMessage)
     }
 
-    const { jobId } = await response.json()
+    const result = await response.json()
     
-    if (!jobId) {
-      throw new Error('No job ID returned from server')
+    if (!result.success || !result.journey) {
+      throw new Error(result.error || 'Invalid response from AI service')
     }
 
-    console.log(`Background job started: ${jobId}`)
-    
-    // Poll for completion
-    const journeyData = await pollJobStatus(jobId, onProgress)
+    const journeyData = result.journey
     
     if (!journeyData) {
       throw new Error('No journey data received from AI')
     }
+
+    console.log('✓ Image analysis completed successfully (jobId:', result.jobId, ')')
 
     // Validate and process the response (data is already parsed JSON object)
     return processJourneyData(journeyData)

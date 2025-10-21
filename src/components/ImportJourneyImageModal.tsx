@@ -91,14 +91,13 @@ export function ImportJourneyImageModal({
 
     setAnalyzing(true)
     setError(null)
-    setProgressMessage('Starting analysis...')
+    setProgressMessage('Analyzing with optimized AI...')
 
     try {
       const result = await analyzeJourneyImage(
         selectedFile, 
         '', // API key handled server-side
-        userRoles,
-        (message) => setProgressMessage(message) // Progress callback
+        userRoles
       )
       
       // Pass the result to parent component
@@ -154,10 +153,10 @@ export function ImportJourneyImageModal({
         {/* Info Banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <p className="text-xs text-blue-800">
-            <strong>Processing time:</strong> Simple diagrams take 15-30 seconds. Complex diagrams may take 1-2 minutes.
+            <strong>Processing time:</strong> Simple diagrams: 15-30s. Complex diagrams: 1-2 mins.
           </p>
           <p className="text-xs text-blue-700 mt-1">
-            ℹ️ Keep this tab open while processing. You'll see live progress updates.
+            ⚡ Using background processing (up to 15 minutes for very complex diagrams). Keep this tab open.
           </p>
         </div>
 
