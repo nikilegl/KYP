@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react'
-import { Edit, Trash2, Copy } from 'lucide-react'
+import { Edit } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
 import type { UserRole, ThirdParty } from '../../../lib/supabase'
 
@@ -33,11 +33,9 @@ interface UserJourneyNodeProps {
   showHandles?: boolean
   thirdParties?: ThirdParty[]
   onEdit?: () => void
-  onDuplicate?: () => void
-  onDelete?: () => void
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit }: UserJourneyNodeProps) {
   const nodeData = data as UserJourneyNodeData
   const {
     label = '',
@@ -226,7 +224,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           )}
         </div>
 
-        {/* Right column: Action buttons stacked vertically - Hidden by default, visible on hover */}
+        {/* Right column: Edit button only - Hidden by default, visible on hover */}
         <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={(e) => {
@@ -238,37 +236,6 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           >
             <Edit size={14} />
           </button>
-          {/* Hide Duplicate and Delete buttons for label nodes */}
-          {type !== 'label' && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDuplicate?.()
-                }}
-                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors duration-150"
-                title="Duplicate node"
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  console.log('Delete button clicked, onDelete:', onDelete)
-                  if (onDelete) {
-                    console.log('Calling onDelete')
-                    onDelete()
-                  } else {
-                    console.log('onDelete is undefined')
-                  }
-                }}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-150"
-                title="Delete node"
-              >
-                <Trash2 size={14} />
-              </button>
-            </>
-          )}
         </div>
       </div>
 
