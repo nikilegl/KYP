@@ -942,7 +942,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             bulletPoints: node.data.bulletPoints || [],
             notifications: node.data.notifications || [],
             customProperties: node.data.customProperties || {},
-            journeyLayout: analyzedJourney.layout || journeyLayout
+            // If importing into existing journey, use current layout; otherwise use AI-detected layout
+            journeyLayout: nodes.length > 0 ? journeyLayout : (analyzedJourney.layout || journeyLayout)
           }
         }
 
@@ -1080,7 +1081,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           data: {
             ...node.data,
             userRole: userRoleObj,
-            journeyLayout: importTranscriptLayout
+            // If importing into existing journey, use current layout; otherwise use selected layout
+            journeyLayout: nodes.length > 0 ? journeyLayout : importTranscriptLayout
           },
           selectable: true,
         }
@@ -3155,6 +3157,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onClose={() => setShowImportImageModal(false)}
         onImport={handleImportFromImage}
         userRoles={userRoles.map(role => role.name)}
+        currentJourneyLayout={journeyLayout}
+        hasExistingNodes={nodes.length > 0}
       />
 
       {/* Import JSON Modal */}
@@ -3273,48 +3277,56 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             </p>
           </div>
 
-          {/* Layout Selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Journey Layout
-            </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setImportTranscriptLayout('vertical')}
-                className={`
-                  flex-1 px-4 py-2 rounded-lg border-2 transition-all
-                  ${importTranscriptLayout === 'vertical'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }
-                `}
-                disabled={importTranscriptLoading}
-              >
-                <div className="text-center">
-                  <div className="font-medium">Vertical</div>
-                  <div className="text-xs mt-1">Top to bottom flow</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setImportTranscriptLayout('horizontal')}
-                className={`
-                  flex-1 px-4 py-2 rounded-lg border-2 transition-all
-                  ${importTranscriptLayout === 'horizontal'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }
-                `}
-                disabled={importTranscriptLoading}
-              >
-                <div className="text-center">
-                  <div className="font-medium">Horizontal</div>
-                  <div className="text-xs mt-1">Left to right flow</div>
-                </div>
-              </button>
+          {/* Layout Selector - only show when creating new journey */}
+          {nodes.length === 0 ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Journey Layout
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImportTranscriptLayout('vertical')}
+                  className={`
+                    flex-1 px-4 py-2 rounded-lg border-2 transition-all
+                    ${importTranscriptLayout === 'vertical'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }
+                  `}
+                  disabled={importTranscriptLoading}
+                >
+                  <div className="text-center">
+                    <div className="font-medium">Vertical</div>
+                    <div className="text-xs mt-1">Top to bottom flow</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportTranscriptLayout('horizontal')}
+                  className={`
+                    flex-1 px-4 py-2 rounded-lg border-2 transition-all
+                    ${importTranscriptLayout === 'horizontal'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }
+                  `}
+                  disabled={importTranscriptLoading}
+                >
+                  <div className="text-center">
+                    <div className="font-medium">Horizontal</div>
+                    <div className="text-xs mt-1">Left to right flow</div>
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Adding to existing journey:</strong> New nodes will use the current <strong>{journeyLayout}</strong> layout to match your existing diagram.
+              </p>
+            </div>
+          )}
           
           <div>
             <textarea

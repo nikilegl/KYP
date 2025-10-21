@@ -9,9 +9,18 @@ interface ImportJourneyImageModalProps {
   onClose: () => void
   onImport: (journey: AnalyzedJourney) => void
   userRoles?: string[]
+  currentJourneyLayout?: 'vertical' | 'horizontal'
+  hasExistingNodes?: boolean
 }
 
-export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles = [] }: ImportJourneyImageModalProps) {
+export function ImportJourneyImageModal({ 
+  isOpen, 
+  onClose, 
+  onImport, 
+  userRoles = [], 
+  currentJourneyLayout = 'vertical',
+  hasExistingNodes = false 
+}: ImportJourneyImageModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -154,6 +163,15 @@ export function ImportJourneyImageModal({ isOpen, onClose, onImport, userRoles =
             ℹ️ Keep this tab open while processing. You'll see live progress updates.
           </p>
         </div>
+
+        {/* Existing Journey Message */}
+        {hasExistingNodes && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-800">
+              <strong>Adding to existing journey:</strong> New nodes will use the current <strong>{currentJourneyLayout}</strong> layout to match your existing diagram.
+            </p>
+          </div>
+        )}
 
         {/* Paste Area */}
         <div>
