@@ -5,13 +5,8 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-
-# Increase timeout for AI functions (default is 10s, max is 26s on Pro)
-[functions."diagram-to-journey"]
-  timeout = 26
-
-[functions."transcript-to-journey"]
-  timeout = 26
+  # Free plan: 26s max for regular functions
+  # Background functions: 15 minutes max (available on all plans)
 
 [[redirects]]
   from = "/*"
