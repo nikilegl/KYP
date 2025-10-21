@@ -16,6 +16,7 @@ import {
   NodeTypes,
   EdgeTypes,
   useReactFlow,
+  ConnectionMode,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
@@ -2666,6 +2667,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          connectionMode={ConnectionMode.Loose}
           fitView
           attributionPosition="bottom-left"
           nodesDraggable={true}

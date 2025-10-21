@@ -182,7 +182,14 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           type={handle.type as 'source' | 'target'}
           position={handle.position}
           id={handle.id}
-          className="w-4 h-4 !bg-gray-400 !border-2 !border-white"
+          isConnectable={true}
+          style={{
+            width: '16px',
+            height: '16px',
+            background: '#9ca3af',
+            border: '2px solid white',
+            zIndex: 10
+          }}
         />
       ))}
 
