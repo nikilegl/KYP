@@ -1363,12 +1363,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [isAddingNewNode, configuringNode, setNodes, currentJourneyId, nodes, edges, journeyLayout])
 
 
-  // Delete node with confirmation
-  const handleDeleteNode = useCallback((nodeId: string) => {
-    setNodeToDelete(nodeId)
-    setShowDeleteConfirm(true)
-  }, [])
-
+  // Delete confirmation handlers (for Delete Confirmation Modal)
   const confirmDeleteNode = useCallback(() => {
     if (nodeToDelete) {
       setNodes((nds) => nds.filter((node) => node.id !== nodeToDelete))
@@ -1383,28 +1378,53 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setNodeToDelete(null)
   }, [])
 
-  // Duplicate node
-  const duplicateNode = useCallback((nodeId: string) => {
-    const nodeToDuplicate = nodes.find((node) => node.id === nodeId)
-    if (!nodeToDuplicate) return
+  // Duplicate selected nodes (for Cmd+D shortcut)
+  const duplicateSelectedNodes = useCallback(() => {
+    const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
+    if (selectedNodes.length === 0) return
 
-    const newNodeId = `node-${Date.now()}`
-    const newNode = {
-      ...nodeToDuplicate,
-      id: newNodeId,
-      type: 'process', // Always set to Middle/process type
-      position: {
-        x: nodeToDuplicate.position.x + 50,
-        y: nodeToDuplicate.position.y + 50
-      },
-      data: {
-        ...nodeToDuplicate.data,
-        type: 'process' // Always set to Middle/process type
+    const timestamp = Date.now()
+    const newNodes = selectedNodes.map((node, index) => {
+      const newNodeId = `node-${timestamp}-${index}`
+      return {
+        ...node,
+        id: newNodeId,
+        type: 'process', // Always set to Middle/process type
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50
+        },
+        data: {
+          ...node.data,
+          type: 'process' // Always set to Middle/process type
+        },
+        selected: false // Deselect the new nodes
+      }
+    })
+
+    setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
+  }, [nodes, setNodes])
+
+  // Keyboard shortcut for duplicating selected nodes (Cmd+D)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      if (isModifierPressed && (event.key === 'd' || event.key === 'D')) {
+        event.preventDefault()
+        duplicateSelectedNodes()
       }
     }
 
-    setNodes((nds) => [...nds, newNode])
-  }, [nodes, setNodes])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [duplicateSelectedNodes])
 
   // Add new highlight region
   const addHighlightRegion = useCallback(() => {
@@ -2318,36 +2338,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Define node types with handlers
   const nodeTypes: NodeTypes = useMemo(() => ({
-    start: (props: any) => {
-      console.log('Node props:', props)
-      return (
-        <UserJourneyNode 
-          {...props} 
-          showHandles={true}
-          thirdParties={thirdParties}
-          onEdit={() => {
-            console.log('Edit clicked for node:', props.id)
-            configureNode(props.id)
-          }}
-          onDuplicate={() => {
-            console.log('Duplicate clicked for node:', props.id)
-            duplicateNode(props.id)
-          }}
-          onDelete={() => {
-            console.log('Delete clicked for node:', props.id)
-            handleDeleteNode(props.id)
-          }}
-        />
-      )
-    },
+    start: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        thirdParties={thirdParties}
+        onEdit={() => configureNode(props.id)}
+      />
+    ),
     process: (props: any) => (
       <UserJourneyNode 
         {...props} 
         showHandles={true}
         thirdParties={thirdParties}
         onEdit={() => configureNode(props.id)}
-        onDuplicate={() => duplicateNode(props.id)}
-        onDelete={() => handleDeleteNode(props.id)}
       />
     ),
     decision: (props: any) => (
@@ -2356,8 +2360,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         showHandles={true}
         thirdParties={thirdParties}
         onEdit={() => configureNode(props.id)}
-        onDuplicate={() => duplicateNode(props.id)}
-        onDelete={() => handleDeleteNode(props.id)}
       />
     ),
     end: (props: any) => (
@@ -2366,8 +2368,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         showHandles={true}
         thirdParties={thirdParties}
         onEdit={() => configureNode(props.id)}
-        onDuplicate={() => duplicateNode(props.id)}
-        onDelete={() => handleDeleteNode(props.id)}
+      />
+    ),
+    label: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={false}
+        thirdParties={thirdParties}
+        onEdit={() => configureNode(props.id)}
       />
     ),
     highlightRegion: (props: any) => (
@@ -2376,7 +2384,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureRegion(props.id)}
       />
     ),
-  }), [configureNode, duplicateNode, handleDeleteNode, thirdParties, configureRegion])
+  }), [configureNode, thirdParties, configureRegion])
 
   if (loading) {
     return (
@@ -2590,6 +2598,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }))}
         journeyLayout={journeyLayout}
         onSave={saveNodeConfiguration}
+        onDelete={configuringNode ? () => {
+          // Delete the node directly (confirmation handled in modal)
+          setNodes((nds) => nds.filter((node) => node.id !== configuringNode.id))
+          setEdges((eds) => eds.filter((edge) => edge.source !== configuringNode.id && edge.target !== configuringNode.id))
+        } : undefined}
       />
 
       {/* Delete Confirmation Modal */}

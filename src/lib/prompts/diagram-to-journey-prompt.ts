@@ -27,7 +27,7 @@ Return ONLY valid JSON with this schema:
       "label": "string",
       "laneIndex": 0,
       "laneName": "string",
-      "type": "start|process|end",
+      "type": "start|process|end|label",
       "userRole": "string",
       "platform": "End client|GLP|CMS|Legl|Back end|Third party|Other",
       "thirdPartyName": "string",

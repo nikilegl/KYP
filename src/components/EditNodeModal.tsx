@@ -17,11 +17,12 @@ interface EditNodeModalProps {
   availableRegions: Array<{ id: string; label: string }>
   journeyLayout: 'vertical' | 'horizontal'
   onSave: (formData: NodeFormData) => void
+  onDelete?: () => void
 }
 
 export interface NodeFormData {
   label: string
-  type: 'start' | 'process' | 'decision' | 'end'
+  type: 'start' | 'process' | 'decision' | 'end' | 'label'
   variant: 'CMS' | 'Legl' | 'End client' | 'Back end' | 'Third party' | ''
   thirdPartyName: string
   userRole: UserRole | null
@@ -40,7 +41,8 @@ export function EditNodeModal({
   thirdParties,
   availableRegions,
   journeyLayout,
-  onSave
+  onSave,
+  onDelete
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -201,13 +203,35 @@ export function EditNodeModal({
       title={isAddingNewNode ? 'Add Node' : 'Edit Node'}
       size="lg"
       footerContent={
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>
-            Save
-          </Button>
+        <div className="flex justify-between items-center">
+          {/* Delete button on the left - only show when editing existing node */}
+          <div>
+            {!isAddingNewNode && onDelete && (
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to delete this node?')) {
+                    onDelete()
+                    onClose()
+                  }
+                }}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+              >
+                <Trash2 size={16} className="mr-2" />
+                Delete Node
+              </Button>
+            )}
+          </div>
+          
+          {/* Cancel and Save buttons on the right */}
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>
+              Save
+            </Button>
+          </div>
         </div>
       }
     >
@@ -414,7 +438,8 @@ export function EditNodeModal({
             options={[
               { value: 'start', label: 'Start' },
               { value: 'process', label: 'Middle' },
-              { value: 'end', label: 'End' }
+              { value: 'end', label: 'End' },
+              { value: 'label', label: 'Label' }
             ]}
             value={formData.type}
             onChange={(value) => setFormData(prev => ({ ...prev, type: value as NodeFormData['type'] }))}

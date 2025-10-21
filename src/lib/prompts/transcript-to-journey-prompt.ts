@@ -29,10 +29,10 @@ Extract:
 
 1. Nodes: Each step or action mentioned in the transcript
    - id: Generate a unique identifier (e.g., "node-1", "node-2")
-   - type: Determine if it's "start" (first step), "process" (middle step), or "end" (final step)
+   - type: Determine if it's "start" (first step), "process" (middle step), "end" (final step), or "label" (contextual information with no connections)
    - data: An object containing the following properties:
      * label: The main text/title describing this step
-     * type: Same as the top-level type ("start", "process", or "end")
+     * type: Same as the top-level type ("start", "process", "end", or "label")
      * userRole: The EXACT role name performing this step. Available roles in this workspace: ${rolesList}. 
        IMPORTANT: Match the exact casing and wording from the available roles. ONLY use roles from the list above. If the role mentioned in the transcript doesn't exactly match an available role, choose the closest match. If completely unsure, use the first role from the list.
      * variant: If platform mentioned, one of: "CMS", "Legl", "End client", "Back end", "Third party", or empty string ""

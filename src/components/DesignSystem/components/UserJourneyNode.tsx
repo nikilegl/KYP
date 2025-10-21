@@ -1,9 +1,9 @@
 import { Handle, Position } from '@xyflow/react'
-import { Edit, Trash2, Copy } from 'lucide-react'
+import { Edit } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
 import type { UserRole, ThirdParty } from '../../../lib/supabase'
 
-export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end'
+export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end' | 'label'
 
 export type NotificationType = 'pain-point' | 'warning' | 'info' | 'positive'
 
@@ -33,11 +33,9 @@ interface UserJourneyNodeProps {
   showHandles?: boolean
   thirdParties?: ThirdParty[]
   onEdit?: () => void
-  onDuplicate?: () => void
-  onDelete?: () => void
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit, onDuplicate, onDelete }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit }: UserJourneyNodeProps) {
   const nodeData = data as UserJourneyNodeData
   const {
     label = '',
@@ -141,6 +139,9 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         return [
           { type: 'target', position: targetPos, id: targetId }
         ]
+      case 'label':
+        // Label nodes have no connectors - they're for adding context only
+        return []
       default:
         return []
     }
@@ -150,6 +151,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     <div
       data-id={id}
       className={`
+        group
         px-4 py-3
         w-[320px]
         bg-white
@@ -164,9 +166,13 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         borderLeftWidth: '4px',
         borderLeftColor: borderColor
       }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        onEdit?.()
+      }}
     >
-      {/* Connection Handles - only show when in React Flow context */}
-      {showHandles && getHandlePositions().map((handle) => (
+      {/* Connection Handles - only show when in React Flow context and not a label node */}
+      {showHandles && type !== 'label' && getHandlePositions().map((handle) => (
         <Handle
           key={handle.id}
           type={handle.type as 'source' | 'target'}
@@ -185,9 +191,9 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           </div>
           
           {/* Bullet Points */}
-          {bulletPoints && bulletPoints.length > 0 && (
+          {bulletPoints && bulletPoints.filter(b => b && b.trim()).length > 0 && (
             <ul className="mt-2 space-y-1">
-              {bulletPoints.map((bullet, index) => (
+              {bulletPoints.filter(b => b && b.trim()).map((bullet, index) => (
                 <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
                   <span className="text-gray-400 mt-0.5">•</span>
                   <span className="flex-1">{bullet}</span>
@@ -198,7 +204,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
 
           {/* Notifications */}
           {notifications && notifications.length > 0 && (
-            <div className={`space-y-1.5 ${bulletPoints.length > 0 ? 'mt-2' : 'mt-2'}`}>
+            <div className={`space-y-1.5 ${bulletPoints.filter(b => b && b.trim()).length > 0 ? 'mt-2' : 'mt-2'}`}>
               {notifications.map((notification) => {
                 const style = getNotificationStyle(notification.type)
                 return (
@@ -218,8 +224,8 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           )}
         </div>
 
-        {/* Right column: Action buttons stacked vertically */}
-        <div className="flex flex-col gap-1">
+        {/* Right column: Edit button only - Hidden by default, visible on hover */}
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -230,37 +236,11 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           >
             <Edit size={14} />
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onDuplicate?.()
-            }}
-            className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors duration-150"
-            title="Duplicate node"
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              console.log('Delete button clicked, onDelete:', onDelete)
-              if (onDelete) {
-                console.log('Calling onDelete')
-                onDelete()
-              } else {
-                console.log('onDelete is undefined')
-              }
-            }}
-            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-150"
-            title="Delete node"
-          >
-            <Trash2 size={14} />
-          </button>
         </div>
       </div>
 
-      {/* User Role Tag and Platform Label */}
-      {(userRole || variant) && (
+      {/* User Role Tag and Platform Label - Hidden for label nodes */}
+      {type !== 'label' && (userRole || variant) && (
         <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
           <div>
             {userRole && (
