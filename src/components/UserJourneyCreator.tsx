@@ -37,6 +37,8 @@ import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
+import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyLayoutCalculator'
+import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -127,6 +129,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [importTranscriptText, setImportTranscriptText] = useState('')
   const [importTranscriptError, setImportTranscriptError] = useState<string | null>(null)
   const [importTranscriptLoading, setImportTranscriptLoading] = useState(false)
+  const [importTranscriptLayout, setImportTranscriptLayout] = useState<'vertical' | 'horizontal'>('vertical')
   const [showEditWithAIModal, setShowEditWithAIModal] = useState(false)
   const [editInstruction, setEditInstruction] = useState('')
   const [editAIError, setEditAIError] = useState<string | null>(null)
@@ -199,13 +202,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Keyboard shortcut listener for Cmd+Z / Ctrl+Z
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't interfere with native undo in input fields
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux)
       if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-        // Prevent default browser undo
-        event.preventDefault()
-        
         // Only undo if we have a snapshot
         if (undoSnapshot) {
+          event.preventDefault()
           handleUndo()
         }
       }
@@ -385,15 +392,24 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Keyboard shortcut for undo (Command+Z / Ctrl+Z)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't interfere with native undo in input fields
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-        event.preventDefault()
-        undo()
+        // Only prevent default if we have history to undo
+        if (historyIndex >= 0 && history[historyIndex]) {
+          event.preventDefault()
+          undo()
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo])
+  }, [undo, historyIndex, history])
 
   // Track selected nodes and update edges highlighting
   useEffect(() => {
@@ -460,7 +476,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Paste nodes from clipboard (Command+V / Ctrl+V)
   const pasteNodes = useCallback(async () => {
     try {
-      // Try to read from clipboard first
+      // First, check if clipboard contains an image
+      // If it does, don't handle the paste (let other handlers like ImportJourneyImageModal handle it)
+      try {
+        const clipboardItems = await navigator.clipboard.read()
+        for (const item of clipboardItems) {
+          if (item.types.some(type => type.startsWith('image/'))) {
+            console.log('Clipboard contains image, skipping node paste')
+            return // Let image handlers deal with it
+          }
+        }
+      } catch (clipboardReadError) {
+        // If clipboard.read() is not supported or fails, continue with text-based paste
+        console.log('Clipboard.read() not available, trying text-based paste')
+      }
+
+      // Try to read from clipboard as text
       let copyData: { nodes: Node[], edges: Edge[] } | null = null
       
       try {
@@ -546,7 +577,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       
       // Don't trigger if user is typing in an input field
       const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return
       }
 
@@ -555,7 +586,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           event.preventDefault()
           copySelectedNodes()
         } else if (event.key === 'v' || event.key === 'V') {
-          event.preventDefault()
+          // Don't prevent default for paste - let pasteNodes decide if it should handle it
+          // This allows image paste handlers (like ImportJourneyImageModal) to work
           pasteNodes()
         }
       }
@@ -909,10 +941,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }
         }
 
-        // If node belongs to a region, set parentId and extent
+        // If node belongs to a region, set parentId for organizational purposes
+        // Note: We don't set extent='parent' to allow dragging nodes between regions
         if (matchingRegion) {
           baseNode.parentId = matchingRegion.id
-          baseNode.extent = 'parent'
         }
 
         return baseNode
@@ -961,8 +993,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const dynamicPrompt = generateTranscriptToJourneyPrompt(userRoleNames)
       
       console.log('Using user roles:', userRoleNames)
+      console.log('Selected layout:', importTranscriptLayout)
 
-      // Call OpenAI API to convert transcript to journey JSON
+      // Call OpenAI API to convert transcript to journey JSON (content only, no positions)
       const journeyData = await convertTranscriptToJourney(
         importTranscriptText,
         dynamicPrompt,
@@ -976,8 +1009,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
-      // Convert the AI-generated nodes to React Flow nodes
-      const importedNodes = journeyData.nodes.map((node: any) => {
+      // --- STEP 1: Extract raw content from AI (no positions) ---
+      const rawNodes = journeyData.nodes.map((node: any) => ({
+        id: node.id,
+        type: node.type || 'process',
+        data: node.data
+      }))
+
+      // --- STEP 2: Calculate positions using the appropriate layout calculator ---
+      const layoutResult = importTranscriptLayout === 'horizontal'
+        ? calculateHorizontalJourneyLayout(rawNodes, journeyData.edges || [])
+        : calculateVerticalJourneyLayout(rawNodes, journeyData.edges || [])
+
+      // --- STEP 3: Convert to React Flow nodes with positions and user roles ---
+      const importedNodes = layoutResult.nodes.map((node: any) => {
         // Find matching user role
         let userRoleObj = null
         if (node.data?.userRole) {
@@ -997,22 +1042,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return {
           id: node.id,
           type: node.type || 'process',
-          position: {
-            x: node.position.x,
-            y: node.position.y
-          },
+          position: node.position,
           data: {
             ...node.data,
             userRole: userRoleObj,
-            journeyLayout
+            journeyLayout: importTranscriptLayout
           },
           selectable: true,
         }
       })
 
-      // Set journey metadata
+      // Set journey metadata and layout
       setJourneyName(journeyData.name || 'Imported from Transcript')
       setJourneyDescription(journeyData.description || '')
+      setJourneyLayout(importTranscriptLayout)
       
       // Set nodes and edges
       setNodes(importedNodes)
@@ -1025,7 +1068,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setImportTranscriptLoading(false)
 
       // Show success message
-      alert(`Successfully imported journey from transcript with ${importedNodes.length} nodes!`)
+      alert(`Successfully imported journey from transcript with ${importedNodes.length} nodes in ${importTranscriptLayout} layout!`)
     } catch (error) {
       console.error('Error importing from transcript:', error)
       setImportTranscriptError(
@@ -1035,7 +1078,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       )
       setImportTranscriptLoading(false)
     }
-  }, [importTranscriptText, userRoles, setNodes, setEdges, journeyLayout])
+  }, [importTranscriptText, importTranscriptLayout, userRoles, setNodes, setEdges])
 
   // Handle AI-powered journey editing with natural language
   const handleEditWithAI = useCallback(async () => {
@@ -1207,7 +1250,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         type: configForm.type,
         position: { x: Math.random() * 400, y: Math.random() * 400 },
         selectable: true,
-        ...(configForm.swimLane ? { parentId: configForm.swimLane, extent: 'parent' } : {}),
+        ...(configForm.swimLane ? { parentId: configForm.swimLane } : {}),
         data: {
           ...configForm,
           journeyLayout
@@ -1244,14 +1287,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               }
             }
             
-            // Handle parentId and extent based on swimLane
+            // Handle parentId based on swimLane
             if (configForm.swimLane) {
               updatedNode.parentId = configForm.swimLane
-              updatedNode.extent = 'parent'
             } else {
-              // Remove parentId and extent if swimLane is null
+              // Remove parentId if swimLane is null
               delete updatedNode.parentId
-              delete updatedNode.extent
             }
             
             return updatedNode
@@ -1275,14 +1316,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 }
               }
               
-              // Handle parentId and extent based on swimLane
+              // Handle parentId based on swimLane
               if (configForm.swimLane) {
                 updatedNode.parentId = configForm.swimLane
-                updatedNode.extent = 'parent'
               } else {
-                // Remove parentId and extent if swimLane is null
+                // Remove parentId if swimLane is null
                 delete updatedNode.parentId
-                delete updatedNode.extent
               }
               
               return updatedNode
@@ -3424,6 +3463,49 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               Paste a phone call transcript below. Our AI will automatically extract the user journey, 
               identify steps, roles, and create a complete diagram for you.
             </p>
+          </div>
+
+          {/* Layout Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Journey Layout
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setImportTranscriptLayout('vertical')}
+                className={`
+                  flex-1 px-4 py-2 rounded-lg border-2 transition-all
+                  ${importTranscriptLayout === 'vertical'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }
+                `}
+                disabled={importTranscriptLoading}
+              >
+                <div className="text-center">
+                  <div className="font-medium">Vertical</div>
+                  <div className="text-xs mt-1">Top to bottom flow</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportTranscriptLayout('horizontal')}
+                className={`
+                  flex-1 px-4 py-2 rounded-lg border-2 transition-all
+                  ${importTranscriptLayout === 'horizontal'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }
+                `}
+                disabled={importTranscriptLoading}
+              >
+                <div className="text-center">
+                  <div className="font-medium">Horizontal</div>
+                  <div className="text-xs mt-1">Left to right flow</div>
+                </div>
+              </button>
+            </div>
           </div>
           
           <div>

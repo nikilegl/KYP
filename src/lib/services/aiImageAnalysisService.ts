@@ -4,7 +4,7 @@
  */
 
 import { generateDiagramToJourneyPrompt } from '../prompts/diagram-to-journey-prompt'
-import { calculateJourneyLayout } from './journeyLayoutCalculator'
+import { calculateHorizontalJourneyLayout } from './horizontalJourneyLayoutCalculator'
 
 export interface JourneyNotification {
   id: string
@@ -208,15 +208,14 @@ function processJourneyData(data: any): AnalyzedJourney {
   }))
 
   // --- Step 2: Calculate positions based on edges and lanes ---
-  // Layout calculator is the ONLY source of position calculations
-  const layoutResult = calculateJourneyLayout(
+  // Horizontal layout calculator is the ONLY source of position calculations
+  const layoutResult = calculateHorizontalJourneyLayout(
     rawNodes,
-    data.edges || [],
-    detectedLayout
+    data.edges || []
   )
 
   // --- Step 3: Process lanes into regions using calculated dimensions ---
-  // Constants must match journeyLayoutCalculator.ts
+  // Constants must match horizontalJourneyLayoutCalculator.ts
   const VERTICAL_GAP_BETWEEN_LANES = 24
   const START_Y = 40
   const calculatedSwimLaneHeight = layoutResult.swimLaneHeight || 300

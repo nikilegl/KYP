@@ -410,9 +410,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   }
 
   return (
-    <div className={projectId ? "space-y-6" : "space-y-6 p-6"}>
+    <div className={projectId ? "flex-1 flex flex-col space-y-6 overflow-auto" : "flex-1 flex flex-col space-y-6 p-6 overflow-auto"}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">User Journeys</h2>
           <p className="text-gray-600">Visual flow diagrams showing user interactions and processes</p>
@@ -429,7 +429,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-shrink-0">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
@@ -457,7 +457,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       </div>
 
       {/* User Journeys Table */}
-
+      <div className="flex-1 overflow-auto min-h-0">
         <DataTable
           data={filteredUserJourneys}
           getItemId={(journey) => journey.id}
@@ -468,6 +468,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           onSelectionChange={setSelectedJourneys}
           className="min-w-0"
         />
+      </div>
 
 
 
