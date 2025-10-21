@@ -143,8 +143,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     action: 'tidyUp' | 'aiEdit'
   } | null>(null)
   
-  // History for undo functionality
-  const [history, setHistory] = useState<Node[][]>([])
+  // History for undo functionality (tracks both nodes and edges)
+  const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const isUndoing = useRef(false)
 
@@ -160,6 +160,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     backgroundColor: '#fef3c7',
     borderColor: '#fbbf24'
   })
+
+  // Helper function to snap coordinates to multiples of 8
+  const snapToGrid = useCallback((value: number): number => {
+    return Math.round(value / 8) * 8
+  }, [])
 
   // Undo handler for Tidy Up and AI Edit operations
   const handleUndo = useCallback(() => {
@@ -183,32 +188,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const actionName = undoSnapshot.action === 'tidyUp' ? 'Tidy Up' : 'AI Edit'
     console.log(`✓ Undid ${actionName}`)
   }, [undoSnapshot, setNodes, setEdges])
-
-  // Keyboard shortcut listener for Cmd+Z / Ctrl+Z
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't interfere with native undo in input fields
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux)
-      if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-        // Only undo if we have a snapshot
-        if (undoSnapshot) {
-          event.preventDefault()
-          handleUndo()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [undoSnapshot, handleUndo])
 
   // Load projects and journey on mount
   useEffect(() => {
@@ -346,7 +325,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Save state before drag starts (for undo)
   const onNodeDragStart = useCallback(() => {
     if (!isUndoing.current) {
-      const snapshot = JSON.parse(JSON.stringify(nodes))
+      const snapshot = {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges))
+      }
       setHistory((prev) => {
         // Clear any "future" states if we're not at the end
         const newHistory = prev.slice(0, historyIndex + 1)
@@ -357,14 +339,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
       setHistoryIndex((prev) => prev + 1)
     }
-  }, [nodes, historyIndex])
+  }, [nodes, edges, historyIndex])
 
   // Undo functionality
   const undo = useCallback(() => {
     if (historyIndex >= 0 && history[historyIndex]) {
       isUndoing.current = true
       const previousState = history[historyIndex]
-      setNodes(JSON.parse(JSON.stringify(previousState)))
+      setNodes(JSON.parse(JSON.stringify(previousState.nodes)))
+      setEdges(JSON.parse(JSON.stringify(previousState.edges)))
       setHistoryIndex((prev) => prev - 1)
       
       // Reset the flag after state updates
@@ -372,9 +355,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isUndoing.current = false
       }, 50)
     }
-  }, [historyIndex, history, setNodes])
+  }, [historyIndex, history, setNodes, setEdges])
 
-  // Keyboard shortcut for undo (Command+Z / Ctrl+Z)
+  // Unified keyboard shortcut for undo (Cmd+Z / Ctrl+Z)
+  // Handles both AI/TidyUp undo and node history undo
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Don't interfere with native undo in input fields
@@ -383,9 +367,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux)
       if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-        // Only prevent default if we have history to undo
-        if (historyIndex >= 0 && history[historyIndex]) {
+        // Try AI/TidyUp undo first (takes priority)
+        if (undoSnapshot) {
+          event.preventDefault()
+          handleUndo()
+        }
+        // Fall back to node history undo
+        else if (historyIndex >= 0 && history[historyIndex]) {
           event.preventDefault()
           undo()
         }
@@ -393,8 +383,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, historyIndex, history])
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [undoSnapshot, handleUndo, historyIndex, history, undo])
 
   // Track selected nodes and update edges highlighting
   useEffect(() => {
@@ -508,8 +501,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           ...node,
           id: newId,
           position: {
-            x: node.position.x + 50, // Offset by 50px to make it visible
-            y: node.position.y + 50
+            x: snapToGrid(node.position.x + 50), // Offset by 50px and snap to grid
+            y: snapToGrid(node.position.y + 50)
           },
           selected: true, // Select the pasted nodes
           data: {
@@ -553,7 +546,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     } catch (error) {
       console.error('Failed to paste nodes:', error)
     }
-  }, [copiedNodes, copiedEdges, setNodes, setEdges])
+  }, [copiedNodes, copiedEdges, setNodes, setEdges, snapToGrid])
 
   // Keyboard shortcuts for copy/paste
   useEffect(() => {
@@ -566,21 +559,32 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      // Check if any nodes or edges are selected
+      const hasSelectedNodes = nodes.some(node => node.selected)
+      const hasSelectedEdges = edges.some(edge => edge.selected)
+      const hasSelection = hasSelectedNodes || hasSelectedEdges
+
       if (isModifierPressed) {
         if (event.key === 'c' || event.key === 'C') {
-          event.preventDefault()
-          copySelectedNodes()
+          // Only copy if there are selected nodes/edges
+          if (hasSelection) {
+            event.preventDefault()
+            copySelectedNodes()
+          }
         } else if (event.key === 'v' || event.key === 'V') {
-          // Don't prevent default for paste - let pasteNodes decide if it should handle it
-          // This allows image paste handlers (like ImportJourneyImageModal) to work
-          pasteNodes()
+          // Only paste if there are selected nodes/edges (meaning we're focused on the diagram)
+          if (hasSelection) {
+            // Don't prevent default for paste - let pasteNodes decide if it should handle it
+            // This allows image paste handlers (like ImportJourneyImageModal) to work
+            pasteNodes()
+          }
         }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes])
+  }, [copySelectedNodes, pasteNodes, nodes, edges])
 
   // Handle new connections
   const onConnect = useCallback(
@@ -1263,11 +1267,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Save node configuration
   const saveNodeConfiguration = useCallback(async (formData: NodeFormData) => {
     if (isAddingNewNode) {
-      // Create a new node
+      // Create a new node with position snapped to grid
+      const randomX = Math.random() * 400
+      const randomY = Math.random() * 400
+      
       const newNode: Node = {
         id: `${Date.now()}`,
         type: formData.type,
-        position: { x: Math.random() * 400, y: Math.random() * 400 },
+        position: { 
+          x: snapToGrid(randomX), 
+          y: snapToGrid(randomY) 
+        },
         selectable: true,
         ...(formData.swimLane ? { parentId: formData.swimLane } : {}),
         data: {
@@ -1360,7 +1370,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setShowConfigModal(false)
     setConfiguringNode(null)
     setIsAddingNewNode(false)
-  }, [isAddingNewNode, configuringNode, setNodes, currentJourneyId, nodes, edges, journeyLayout])
+  }, [isAddingNewNode, configuringNode, setNodes, currentJourneyId, nodes, edges, journeyLayout, snapToGrid])
 
 
   // Delete confirmation handlers (for Delete Confirmation Modal)
@@ -1416,15 +1426,154 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      // Check if any nodes are selected
+      const hasSelectedNodes = nodes.some(node => node.selected && node.type !== 'highlightRegion')
+      
       if (isModifierPressed && (event.key === 'd' || event.key === 'D')) {
-        event.preventDefault()
-        duplicateSelectedNodes()
+        // Only duplicate if there are selected nodes
+        if (hasSelectedNodes) {
+          event.preventDefault()
+          duplicateSelectedNodes()
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [duplicateSelectedNodes])
+  }, [duplicateSelectedNodes, nodes])
+
+  // Keyboard shortcut for deleting selected nodes/edges (Delete or Backspace)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Check if any nodes or edges are selected
+      const hasSelectedNodes = nodes.some(node => node.selected)
+      const hasSelectedEdges = edges.some(edge => edge.selected)
+      const hasSelection = hasSelectedNodes || hasSelectedEdges
+      
+      // Handle Backspace key (in addition to Delete which React Flow handles)
+      if ((event.key === 'Backspace' || event.key === 'Delete') && hasSelection) {
+        event.preventDefault()
+        
+        // Save history before deleting
+        if (!isUndoing.current) {
+          const snapshot = {
+            nodes: JSON.parse(JSON.stringify(nodes)),
+            edges: JSON.parse(JSON.stringify(edges))
+          }
+          setHistory((prev) => {
+            const newHistory = prev.slice(0, historyIndex + 1)
+            const updated = [...newHistory, snapshot]
+            return updated.slice(-50)
+          })
+          setHistoryIndex((prev) => prev + 1)
+        }
+        
+        // Delete selected nodes and their connected edges
+        const selectedNodeIds = nodes.filter(node => node.selected).map(node => node.id)
+        
+        setNodes((nds) => nds.filter((node) => !node.selected))
+        setEdges((eds) => eds.filter((edge) => 
+          !edge.selected && !selectedNodeIds.includes(edge.source) && !selectedNodeIds.includes(edge.target)
+        ))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [nodes, edges, setNodes, setEdges, historyIndex, setHistory, setHistoryIndex])
+
+  // Keyboard shortcut for moving selected nodes/regions with arrow keys
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Check if any nodes are selected
+      const hasSelectedNodes = nodes.some(node => node.selected)
+      if (!hasSelectedNodes) {
+        return
+      }
+
+      // Check for arrow keys
+      const isArrowKey = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+      if (!isArrowKey) {
+        return
+      }
+
+      event.preventDefault()
+
+      // Determine movement amount (8px normal, 80px with Shift)
+      const moveAmount = event.shiftKey ? 80 : 8
+
+      // Helper function to snap to grid (multiples of 8)
+      const snapToGrid = (value: number): number => {
+        return Math.round(value / 8) * 8
+      }
+
+      // Calculate delta based on arrow key
+      let deltaX = 0
+      let deltaY = 0
+
+      switch (event.key) {
+        case 'ArrowUp':
+          deltaY = -moveAmount
+          break
+        case 'ArrowDown':
+          deltaY = moveAmount
+          break
+        case 'ArrowLeft':
+          deltaX = -moveAmount
+          break
+        case 'ArrowRight':
+          deltaX = moveAmount
+          break
+      }
+
+      // Save history before moving
+      if (!isUndoing.current) {
+        const snapshot = {
+          nodes: JSON.parse(JSON.stringify(nodes)),
+          edges: JSON.parse(JSON.stringify(edges))
+        }
+        setHistory((prev) => {
+          const newHistory = prev.slice(0, historyIndex + 1)
+          const updated = [...newHistory, snapshot]
+          return updated.slice(-50)
+        })
+        setHistoryIndex((prev) => prev + 1)
+      }
+
+      // Move selected nodes
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.selected) {
+            const newX = snapToGrid(node.position.x + deltaX)
+            const newY = snapToGrid(node.position.y + deltaY)
+            return {
+              ...node,
+              position: {
+                x: newX,
+                y: newY
+              }
+            }
+          }
+          return node
+        })
+      )
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [nodes, edges, setNodes, historyIndex, setHistory, setHistoryIndex])
 
   // Add new highlight region
   const addHighlightRegion = useCallback(() => {
@@ -1432,7 +1581,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const newRegion: Node = {
       id: newRegionId,
       type: 'highlightRegion',
-      position: { x: 100, y: 100 },
+      position: { 
+        x: snapToGrid(100), 
+        y: snapToGrid(100) 
+      },
       style: {
         width: 600,
         height: 400,
@@ -1448,7 +1600,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
 
     setNodes((nds) => [newRegion, ...nds]) // Add region at the beginning (before other nodes)
-  }, [setNodes])
+  }, [setNodes, snapToGrid])
 
   // Configure highlight region (for editing)
   const configureRegion = useCallback((regionId: string) => {
@@ -2522,6 +2674,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           elementsSelectable={true}
           selectNodesOnDrag={true}
           multiSelectionKeyCode="Shift"
+          deleteKeyCode={null}
           edgesReconnectable={true}
           edgesFocusable={true}
           snapToGrid={true}

@@ -45,6 +45,7 @@ export function EditNodeModal({
   onDelete
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const labelInputRef = useRef<HTMLInputElement>(null)
 
   // Initialize form state
   const [formData, setFormData] = useState<NodeFormData>({
@@ -92,6 +93,16 @@ export function EditNodeModal({
       })
     }
   }, [node, isOpen, isAddingNewNode])
+
+  // Auto-focus the label input when modal opens
+  useEffect(() => {
+    if (isOpen && labelInputRef.current) {
+      // Small delay to ensure modal is fully rendered
+      setTimeout(() => {
+        labelInputRef.current?.focus()
+      }, 100)
+    }
+  }, [isOpen])
 
   // Bullet point handlers
   const addBulletPoint = useCallback(() => {
@@ -242,6 +253,7 @@ export function EditNodeModal({
             Label
           </label>
           <input
+            ref={labelInputRef}
             type="text"
             value={formData.label}
             onChange={(e) => setFormData(prev => ({ ...prev, label: e.target.value }))}
