@@ -25,6 +25,7 @@ export function ImportJourneyImageModal({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progressMessage, setProgressMessage] = useState<string>('')
 
   const processFile = useCallback((file: File) => {
     // Validate file type
@@ -90,12 +91,14 @@ export function ImportJourneyImageModal({
 
     setAnalyzing(true)
     setError(null)
+    setProgressMessage('Starting analysis...')
 
     try {
       const result = await analyzeJourneyImage(
         selectedFile, 
         '', // API key handled server-side
-        userRoles
+        userRoles,
+        (message) => setProgressMessage(message) // Progress callback
       )
       
       // Pass the result to parent component
@@ -108,6 +111,7 @@ export function ImportJourneyImageModal({
       setError(err instanceof Error ? err.message : 'Failed to analyze image')
     } finally {
       setAnalyzing(false)
+      setProgressMessage('')
     }
   }, [selectedFile, userRoles, onImport])
 
@@ -137,7 +141,7 @@ export function ImportJourneyImageModal({
             {analyzing ? (
               <>
                 <Loader2 size={16} className="mr-2 animate-spin" />
-                Analyzing...
+                {progressMessage || 'Analyzing...'}
               </>
             ) : (
               'Import Journey'
@@ -150,10 +154,10 @@ export function ImportJourneyImageModal({
         {/* Info Banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <p className="text-xs text-blue-800">
-            <strong>Processing time:</strong> Most diagrams process in 10-20 seconds with our optimized AI.
+            <strong>Processing time:</strong> Simple diagrams take 15-30 seconds. Complex diagrams may take 1-2 minutes.
           </p>
           <p className="text-xs text-blue-700 mt-1">
-            ⚡ Optimized for fast processing - stay on this page while analyzing.
+            ℹ️ Keep this tab open while processing. You'll see live progress updates.
           </p>
         </div>
 

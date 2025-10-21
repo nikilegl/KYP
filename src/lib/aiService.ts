@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+// Supabase import removed - using Netlify Blobs for background job storage
 
 export interface ExtractedExample {
   actor: string
@@ -49,7 +49,7 @@ export const analyzeScreenshot = async (base64Image: string): Promise<AIAnalysis
  * NOTE: This mock simulates what would be extracted from an actual Miro screenshot
  * In real implementation, this would analyze the actual image content
  */
-const mockAIAnalysis = async (base64Image: string): Promise<ExtractedExample[]> => {
+const mockAIAnalysis = async (_base64Image: string): Promise<ExtractedExample[]> => {
   // Simulate processing time
   await new Promise(resolve => setTimeout(resolve, 2000))
   
@@ -238,20 +238,73 @@ export const enhanceExtractedExamples = (examples: ExtractedExample[]): Extracte
 }
 
 /**
+ * Polls job status until completion
+ */
+async function pollJobStatus(jobId: string, onProgress?: (message: string) => void): Promise<any> {
+  const startTime = Date.now()
+  const maxDuration = 15 * 60 * 1000 // 15 minutes max
+  const pollInterval = 2000 // Poll every 2 seconds
+
+  while (true) {
+    const elapsed = Date.now() - startTime
+
+    if (elapsed > maxDuration) {
+      throw new Error('Job timed out after 15 minutes')
+    }
+
+    // Update progress message
+    const elapsedSeconds = Math.floor(elapsed / 1000)
+    if (onProgress) {
+      if (elapsedSeconds < 30) {
+        onProgress(`Processing... ${elapsedSeconds}s`)
+      } else {
+        onProgress(`Still processing... ${elapsedSeconds}s (complex diagram)`)
+      }
+    }
+
+    // Check job status
+    const response = await fetch(`/.netlify/functions/check-job-status?jobId=${jobId}`)
+    
+    if (!response.ok) {
+      throw new Error(`Failed to check job status: ${response.statusText}`)
+    }
+
+    const job = await response.json()
+
+    if (job.status === 'completed') {
+      console.log(`✓ Job ${jobId} completed successfully`)
+      return job.result
+    }
+
+    if (job.status === 'failed') {
+      throw new Error(job.error || 'Job failed')
+    }
+
+    // Job still processing, wait before next poll
+    await new Promise(resolve => setTimeout(resolve, pollInterval))
+  }
+}
+
+/**
  * Converts a phone call transcript to a user journey JSON using OpenAI
+ * Uses background processing for long transcripts
  * @param transcript - The raw transcript text
  * @param customPrompt - The prompt to use (should be generated with user roles)
  * @param userRoleNames - Optional array of user role names to include in error messages
+ * @param onProgress - Optional callback for progress updates
  * @returns Promise with the user journey JSON
  */
 export const convertTranscriptToJourney = async (
   transcript: string,
   customPrompt: string,
-  userRoleNames?: string[]
+  _userRoleNames?: string[],
+  onProgress?: (message: string) => void
 ): Promise<any> => {
   try {
-    console.log('Calling Netlify function to convert transcript...')
-    const response = await fetch('/.netlify/functions/transcript-to-journey', {
+    console.log('Starting background transcript conversion...')
+    
+    // Start the background job
+    const response = await fetch('/.netlify/functions/transcript-to-journey-background', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -262,50 +315,33 @@ export const convertTranscriptToJourney = async (
       }),
     })
 
-    console.log('Response status:', response.status, response.statusText)
-
-    // Get the response text first
-    const responseText = await response.text()
-    console.log('Response text:', responseText)
-
     if (!response.ok) {
-      // Try to parse as JSON for error details
-      let errorMessage = 'Failed to convert transcript'
+      const errorText = await response.text()
+      let errorMessage = 'Failed to start transcript conversion'
       try {
-        const errorData = JSON.parse(responseText)
+        const errorData = JSON.parse(errorText)
         errorMessage = errorData.error || errorData.message || errorMessage
-      } catch (parseError) {
-        // If it's not JSON, use the text as the error message
-        errorMessage = responseText || `HTTP ${response.status}: ${response.statusText}`
+      } catch {
+        errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
       }
       throw new Error(errorMessage)
     }
 
-    // Parse the successful response
-    let result
-    try {
-      result = JSON.parse(responseText)
-    } catch (parseError) {
-      console.error('Failed to parse response as JSON:', responseText)
-      throw new Error('Invalid response from server. Expected JSON but got: ' + responseText.substring(0, 100))
-    }
-
-    if (!result.journey) {
-      console.error('Response missing journey data:', result)
-      throw new Error('Server response is missing journey data')
-    }
-
-    // Log diagnostic information
-    console.log('✓ Transcript conversion successful!')
-    console.log('Nodes extracted:', result.nodesExtracted || result.journey.nodes?.length || 0)
-    console.log('Token usage:', result.usage)
-    console.log('Finish reason:', result.finishReason)
+    const { jobId } = await response.json()
     
-    if (result.finishReason === 'length') {
-      console.warn('⚠️ WARNING: Response may be incomplete - hit token limit!')
+    if (!jobId) {
+      throw new Error('No job ID returned from server')
     }
 
-    return result.journey
+    console.log(`Background job started: ${jobId}`)
+    
+    // Poll for completion
+    const result = await pollJobStatus(jobId, onProgress)
+    
+    console.log('✓ Transcript conversion successful!')
+    console.log('Nodes extracted:', result.nodes?.length || 0)
+
+    return result
   } catch (error) {
     console.error('Error converting transcript to journey:', error)
     throw error

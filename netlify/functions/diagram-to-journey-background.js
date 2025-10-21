@@ -1,211 +1,146 @@
-/**
- * Background function for diagram-to-journey (15-minute timeout)
- * Returns immediately with job ID, processes in background, saves to database
- */
+const { getStore } = require('@netlify/blobs');
 
-const { createClient } = require('@supabase/supabase-js')
-
-exports.handler = async function(event, context) {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  }
-
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' }
-  }
-
+exports.handler = async (event) => {
+  // Only allow POST
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    }
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  try {
-    console.log('[diagram-to-journey-background] Function invoked')
-    
-    const { base64Image, prompt, userId } = JSON.parse(event.body || '{}')
-    console.log(`[diagram-to-journey-background] Parsed request - userId: ${userId}, imageSize: ${base64Image?.length}, promptSize: ${prompt?.length}`)
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Get Netlify Blobs store
+  const store = getStore('ai-jobs');
+  
+  // Store initial job status
+  await store.set(jobId, JSON.stringify({
+    status: 'processing',
+    createdAt: new Date().toISOString()
+  }));
 
-    if (!base64Image || !prompt) {
-      console.error('[diagram-to-journey-background] Missing required fields')
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Image and prompt are required' }),
+  // Return job ID immediately (this makes it a background function)
+  // The processing will continue after this response
+  setTimeout(async () => {
+    try {
+      const { base64Image, prompt } = JSON.parse(event.body);
+
+      if (!base64Image || !prompt) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'Missing image or prompt',
+          completedAt: new Date().toISOString()
+        }));
+        return;
       }
-    }
 
-    if (!userId) {
-      console.error('[diagram-to-journey-background] Missing userId')
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'User ID is required' }),
+      const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+      if (!OPENAI_API_KEY) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'OpenAI API key not configured',
+          completedAt: new Date().toISOString()
+        }));
+        return;
       }
-    }
 
-    // Initialize Supabase client
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY
-    
-    console.log(`[diagram-to-journey-background] Supabase configured: ${!!supabaseUrl && !!supabaseKey}`)
-    
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('[diagram-to-journey-background] Supabase not configured')
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Supabase not configured. Check SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.' }),
-      }
-    }
+      console.log(`[${jobId}] Starting diagram processing...`);
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Create job record
-    const { data: job, error: jobError } = await supabase
-      .from('ai_processing_jobs')
-      .insert({
-        user_id: userId,
-        job_type: 'diagram',
-        status: 'processing',
-        input_data: { imageSize: base64Image.length, promptLength: prompt.length }
-      })
-      .select()
-      .single()
-
-    if (jobError) {
-      console.error('Failed to create job:', jobError)
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Failed to create processing job' }),
-      }
-    }
-
-    console.log(`Job ${job.id} created, starting AI processing...`)
-
-    // Process AI request in background
-    processInBackground(job.id, base64Image, prompt, supabase)
-
-    // Return immediately with job ID
-    return {
-      statusCode: 202, // Accepted
-      headers,
-      body: JSON.stringify({
-        jobId: job.id,
-        status: 'processing',
-        message: 'Processing started. Poll for results.'
-      }),
-    }
-
-  } catch (error) {
-    console.error('Background function error:', error)
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ 
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      }),
-    }
-  }
-}
-
-// Process in background (this continues after the 202 response)
-async function processInBackground(jobId, base64Image, prompt, supabase) {
-  try {
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured')
-    }
-
-    console.log(`[Job ${jobId}] Calling OpenAI Vision API...`)
-    const startTime = Date.now()
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-2024-11-20',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: base64Image,
-                  detail: 'auto'
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: prompt
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Please analyze this user journey diagram and extract the journey data as JSON.'
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: base64Image,
+                    detail: 'high'
+                  }
                 }
-              }
-            ]
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 16384,
-        response_format: { type: 'json_object' }
-      })
-    })
+              ]
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 4000
+        })
+      });
 
-    const processingTime = ((Date.now() - startTime) / 1000).toFixed(1)
-    console.log(`[Job ${jobId}] OpenAI responded in ${processingTime}s`)
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[${jobId}] OpenAI API error:`, errorText);
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: `OpenAI API error: ${response.status} ${response.statusText}`,
+          completedAt: new Date().toISOString()
+        }));
+        return;
+      }
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(`OpenAI API error: ${JSON.stringify(errorData)}`)
-    }
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
 
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content
+      if (!content) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'No content in OpenAI response',
+          completedAt: new Date().toISOString()
+        }));
+        return;
+      }
 
-    if (!content) {
-      throw new Error('Empty response from OpenAI')
-    }
+      // Try to parse the JSON from the response
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       content.match(/\{[\s\S]*\}/);
 
-    // Parse the JSON response
-    let cleanContent = content.trim()
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?$/g, '')
-    } else if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.replace(/```\n?/g, '')
-    }
+      if (!jsonMatch) {
+        await store.set(jobId, JSON.stringify({
+          status: 'failed',
+          error: 'Could not find JSON in AI response',
+          completedAt: new Date().toISOString()
+        }));
+        return;
+      }
 
-    const journeyData = JSON.parse(cleanContent)
+      const jsonString = jsonMatch[1] || jsonMatch[0];
+      const journey = JSON.parse(jsonString);
 
-    // Update job with success
-    await supabase
-      .from('ai_processing_jobs')
-      .update({
+      console.log(`[${jobId}] Diagram processing completed successfully`);
+
+      // Store successful result
+      await store.set(jobId, JSON.stringify({
         status: 'completed',
-        result_data: journeyData,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId)
+        result: journey,
+        completedAt: new Date().toISOString()
+      }));
 
-    console.log(`[Job ${jobId}] Completed successfully`)
-
-  } catch (error) {
-    console.error(`[Job ${jobId}] Failed:`, error)
-    
-    // Update job with error
-    await supabase
-      .from('ai_processing_jobs')
-      .update({
+    } catch (error) {
+      console.error(`[${jobId}] Processing error:`, error);
+      await store.set(jobId, JSON.stringify({
         status: 'failed',
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId)
-  }
-}
+        error: error.message || 'Unknown error',
+        completedAt: new Date().toISOString()
+      }));
+    }
+  }, 0);
 
+  // Return immediately with job ID
+  return {
+    statusCode: 202,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId })
+  };
+};
