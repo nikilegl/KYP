@@ -103,7 +103,8 @@ export async function analyzeJourneyImageWithBackground(
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
     // Start background job
-    const response = await fetch('/.netlify/functions/diagram-to-journey-background', {
+    onProgress?.('Starting AI processing...', 0)
+    const response = await fetch('/.netlify/functions/diagram-to-journey-start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

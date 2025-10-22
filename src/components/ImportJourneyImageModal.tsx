@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Upload, Image as ImageIcon, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
-import { analyzeJourneyImage, type AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
+import { analyzeJourneyImageWithBackground, type AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 
 interface ImportJourneyImageModalProps {
   isOpen: boolean
@@ -91,13 +91,17 @@ export function ImportJourneyImageModal({
 
     setAnalyzing(true)
     setError(null)
-    setProgressMessage('Analyzing with optimized AI...')
+    setProgressMessage('Starting AI processing...')
 
     try {
-      const result = await analyzeJourneyImage(
+      const result = await analyzeJourneyImageWithBackground(
         selectedFile, 
         '', // API key handled server-side
-        userRoles
+        userRoles,
+        (message, elapsed) => {
+          // Update progress message with elapsed time
+          setProgressMessage(`${message} (${elapsed}s)`)
+        }
       )
       
       // Pass the result to parent component
