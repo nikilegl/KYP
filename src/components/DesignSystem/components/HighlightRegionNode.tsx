@@ -21,6 +21,14 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
     borderColor = '#fbbf24'
   } = data || {}
 
+  // Convert hex to rgba with 0.4 opacity for the background
+  const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
   return (
     <>
       {/* Node Resizer - allows dragging corners/edges to resize */}
@@ -35,24 +43,26 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
       {/* Main Region Container */}
       <div
         className={`
-          w-full h-full
+          relative w-full h-full
           rounded-lg
           transition-all duration-200
           ${selected ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}
         `}
         style={{
-          backgroundColor: backgroundColor,
-          opacity: 0.4,
+          backgroundColor: hexToRgba(backgroundColor, 0.4),
           border: `2px dashed ${borderColor}`,
         }}
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          onEdit?.()
+        }}
       >
-        {/* Label at the top */}
+        {/* Label at the top - with full opacity */}
         <div 
-          className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2"
-          style={{ opacity: 1 }}
+          className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2 z-10 pointer-events-none"
         >
           <div
-            className="px-3 py-1 rounded text-sm font-semibold shadow-sm"
+            className="px-3 py-1 rounded text-sm font-semibold shadow-sm pointer-events-auto"
             style={{
               backgroundColor: borderColor,
               color: '#000',
@@ -66,9 +76,10 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
             <button
               onClick={(e) => {
                 e.stopPropagation()
+                e.preventDefault()
                 onEdit()
               }}
-              className="p-1.5 bg-white hover:bg-gray-100 rounded shadow-sm transition-colors"
+              className="p-1.5 bg-white hover:bg-gray-100 rounded shadow-sm transition-colors pointer-events-auto"
               title="Edit region"
             >
               <Edit size={14} className="text-gray-700" />

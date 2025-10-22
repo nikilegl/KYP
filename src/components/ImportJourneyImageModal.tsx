@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { Upload, Image as ImageIcon, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { Upload, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import { analyzeJourneyImageWithBackground, type AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
@@ -174,61 +174,14 @@ export function ImportJourneyImageModal({
         )}
 
         {/* Paste Area */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Paste Image from Clipboard
-          </label>
-          <div
-            className={`
-              border-2 border-dashed rounded-lg p-6 text-center
-              ${selectedFile ? 'border-green-300 bg-green-50' : 'border-blue-300 bg-blue-50 hover:border-blue-400'}
-              transition-colors
-            `}
-          >
-            {selectedFile ? (
-              <div className="space-y-2">
-                <CheckCircle size={48} className="mx-auto text-green-600" />
-                <p className="text-sm font-medium text-green-900">{selectedFile.name}</p>
-                <p className="text-xs text-green-600">
-                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                </p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedFile(null)
-                    setPreviewUrl(null)
-                  }}
-                  className="text-sm text-green-700 hover:text-green-900 underline"
-                >
-                  Change image
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <ImageIcon size={48} className="mx-auto text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Press Cmd+V (Mac) or Ctrl+V (Windows) to paste
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Or upload a file below
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* File Upload Area */}
-        {!selectedFile && (
+        {!selectedFile ? (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Or Upload a File
-            </label>
-            <div
-              className="border-2 border-dashed rounded-lg p-4 text-center border-gray-300 hover:border-gray-400 transition-colors cursor-pointer"
-              onClick={() => document.getElementById('image-upload')?.click()}
-            >
+            <div className="border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+              <ImageIcon size={48} className="mx-auto text-blue-500 mb-3" />
+              <p className="text-base font-medium text-gray-900 mb-2">
+                Paste your diagram here
+              </p>
+              
               <input
                 id="image-upload"
                 type="file"
@@ -236,17 +189,37 @@ export function ImportJourneyImageModal({
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <div className="space-y-2">
-                <Upload size={32} className="mx-auto text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Click to upload
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    PNG or JPEG (MAX. 20MB)
-                  </p>
-                </div>
-              </div>
+              <Button
+                variant="ghost"
+                onClick={() => document.getElementById('image-upload')?.click()}
+                icon={Upload}
+                size="small"
+              >
+                Or upload image file
+              </Button>
+              <p className="text-xs text-gray-500 mt-3">
+                PNG or JPEG
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="text-center p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm font-medium text-green-900">{selectedFile.name}</p>
+              <p className="text-xs text-green-600 mt-1">
+                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+              </p>
+              <Button
+                variant="ghost"
+                size="small"
+                onClick={() => {
+                  setSelectedFile(null)
+                  setPreviewUrl(null)
+                }}
+                className="mt-2"
+              >
+                Change Image
+              </Button>
             </div>
           </div>
         )}

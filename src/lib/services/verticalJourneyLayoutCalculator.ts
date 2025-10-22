@@ -302,55 +302,8 @@ export function calculateVerticalJourneyLayout(
     return 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
   }
   
-  // Position convergent nodes
-  nodes.forEach(node => {
-    const parentCount = nodeParentCount.get(node.id) || 0
-    
-    if (parentCount >= 2) {
-      const parents = parentMap.get(node.id) || []
-      
-      const divergentParent = parents.find(parentId => 
-        nodeLayout.get(parentId) === 'Divergent node'
-      )
-      
-      if (divergentParent) {
-        const divergentParents = parentMap.get(divergentParent) || []
-        if (divergentParents.length > 0) {
-          const branchNodeId = divergentParents[0]
-          const branchNodeX = branchingXPositions.has(branchNodeId) 
-            ? branchingXPositions.get(branchNodeId)!
-            : getNodeXPosition(branchNodeId)
-          branchingXPositions.set(node.id, branchNodeX)
-        }
-      } else {
-        const findBranchAncestor = (nodeId: string, visited = new Set<string>()): string | null => {
-          if (visited.has(nodeId)) return null
-          visited.add(nodeId)
-          
-          const childCount = nodeChildCount.get(nodeId) || 0
-          if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
-            return nodeId
-          }
-          
-          const nodeParents = parentMap.get(nodeId) || []
-          for (const parentId of nodeParents) {
-            const result = findBranchAncestor(parentId, visited)
-            if (result) return result
-          }
-          
-          return null
-        }
-        
-        const branchAncestor = findBranchAncestor(parents[0])
-        if (branchAncestor && branchingXPositions.has(branchAncestor)) {
-          const branchX = branchingXPositions.get(branchAncestor)!
-          branchingXPositions.set(node.id, branchX)
-        }
-      }
-    }
-  })
-  
-  // Position branch nodes and their children level by level
+  // STEP 1: Position branch nodes and their children level by level first
+  // This must happen BEFORE convergent nodes so they can reference branch positions
   const maxLevelForBranching = Math.max(...Array.from(levels.values()), 0)
   for (let level = 0; level <= maxLevelForBranching; level++) {
     const nodesAtLevel = Array.from(levels.entries())
@@ -392,7 +345,65 @@ export function calculateVerticalJourneyLayout(
     })
   }
   
-  // Set default X positions (inherit from parent)
+  // STEP 2: Position convergent nodes - now that branch nodes have positions
+  nodes.forEach(node => {
+    const parentCount = nodeParentCount.get(node.id) || 0
+    
+    if (parentCount >= 2) {
+      const parents = parentMap.get(node.id) || []
+      
+      const divergentParent = parents.find(parentId => 
+        nodeLayout.get(parentId) === 'Divergent node'
+      )
+      
+      if (divergentParent) {
+        const divergentParents = parentMap.get(divergentParent) || []
+        if (divergentParents.length > 0) {
+          const branchNodeId = divergentParents[0]
+          const branchNodeX = branchingXPositions.has(branchNodeId) 
+            ? branchingXPositions.get(branchNodeId)!
+            : getNodeXPosition(branchNodeId)
+          branchingXPositions.set(node.id, branchNodeX)
+        }
+      } else {
+        const findBranchAncestor = (nodeId: string, visited = new Set<string>()): string | null => {
+          if (visited.has(nodeId)) return null
+          visited.add(nodeId)
+          
+          const childCount = nodeChildCount.get(nodeId) || 0
+          if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
+            return nodeId
+          }
+          
+          const nodeParents = parentMap.get(nodeId) || []
+          for (const parentId of nodeParents) {
+            const result = findBranchAncestor(parentId, visited)
+            if (result) return result
+          }
+          
+          return null
+        }
+        
+        // Search through ALL parents to find the branch ancestor, not just the first one
+        // This ensures convergent nodes align with the branch parent, not branch children
+        let branchAncestor: string | null = null
+        for (const parentId of parents) {
+          const ancestor = findBranchAncestor(parentId)
+          if (ancestor) {
+            branchAncestor = ancestor
+            break
+          }
+        }
+        
+        if (branchAncestor && branchingXPositions.has(branchAncestor)) {
+          const branchX = branchingXPositions.get(branchAncestor)!
+          branchingXPositions.set(node.id, branchX)
+        }
+      }
+    }
+  })
+  
+  // STEP 3: Set default X positions (inherit from parent)
   const maxLevel = Math.max(...Array.from(levels.values()), 0)
   for (let level = 0; level <= maxLevel; level++) {
     const nodesAtLevel = Array.from(levels.entries())
