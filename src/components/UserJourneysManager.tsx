@@ -23,6 +23,8 @@ interface UserJourneyWithProject extends UserJourney {
   lawFirms?: LawFirm[]
   createdByUser?: WorkspaceUserInfo
   updatedByUser?: WorkspaceUserInfo
+  nodes_count?: number // Computed property for sorting
+  law_firms_text?: string // Computed property for sorting law firms
 }
 
 interface UserJourneysManagerProps {
@@ -175,7 +177,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             project,
             lawFirms,
             createdByUser: journey.created_by ? usersMap.get(journey.created_by) : undefined,
-            updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined
+            updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined,
+            nodes_count: journey.flow_data?.nodes?.length || 0, // Computed property for sorting
+            law_firms_text: lawFirms.map(firm => firm.name).join(', ') || '' // Computed property for sorting law firms
           }
         })
       )
@@ -376,7 +380,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     {
       key: 'nodes_count',
       header: 'Nodes',
-      sortable: false,
+      sortable: true,
       width: '80px',
       render: (journey) => (
         <div className="text-sm text-gray-600">
@@ -385,9 +389,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       )
     },
     {
-      key: 'law_firms',
+      key: 'law_firms_text',
       header: 'Law Firms',
-      sortable: false,
+      sortable: true,
       width: '250px',
       render: (journey) => (
         <div className="text-sm text-gray-600">
@@ -568,7 +572,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           data={filteredUserJourneys}
           getItemId={(journey) => journey.id}
           columns={columns}
-          sortableFields={['name', 'created_at', 'updated_at']}
+          sortableFields={['name', 'status', 'nodes_count', 'law_firms_text', 'created_at', 'updated_at']}
           onRowClick={(journey) => navigate(`/user-journey-creator?id=${journey.id}`)}
           selectable={true}
           selectedItems={selectedJourneys}

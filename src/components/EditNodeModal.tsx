@@ -4,8 +4,12 @@ import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import type { Notification } from './DesignSystem/components/UserJourneyNode'
-import type { UserRole, ThirdParty } from '../lib/supabase'
-import { Plus, Trash2 } from 'lucide-react'
+import type { UserRole, ThirdParty, Platform } from '../lib/supabase'
+import { Plus, Trash2, GripVertical } from 'lucide-react'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { getPlatforms } from '../lib/database'
 
 interface EditNodeModalProps {
   isOpen: boolean
@@ -20,6 +24,11 @@ interface EditNodeModalProps {
   onDelete?: () => void
 }
 
+interface BulletPoint {
+  id: string
+  text: string
+}
+
 export interface NodeFormData {
   label: string
   type: 'start' | 'process' | 'decision' | 'end' | 'label'
@@ -31,6 +40,66 @@ export interface NodeFormData {
   notifications: Notification[]
   customProperties: Record<string, unknown>
   swimLane: string | null
+}
+
+// Sortable Bullet Point Component
+interface SortableBulletPointProps {
+  id: string
+  bullet: string
+  index: number
+  onUpdate: (index: number, text: string) => void
+  onRemove: (index: number) => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, index: number, bullet: string) => void
+  inputRef: (el: HTMLInputElement | null) => void
+}
+
+function SortableBulletPoint({ id, bullet, index, onUpdate, onRemove, onKeyDown, inputRef }: SortableBulletPointProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-2 group">
+      <button
+        type="button"
+        className="p-1.5 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing mt-1.5"
+        {...attributes}
+        {...listeners}
+        title="Drag to reorder"
+      >
+        <GripVertical size={16} />
+      </button>
+      <span className="text-gray-500 mt-2.5 text-l">•</span>
+      <input
+        ref={inputRef}
+        type="text"
+        value={bullet}
+        onChange={(e) => onUpdate(index, e.target.value)}
+        onKeyDown={(e) => onKeyDown(e, index, bullet)}
+        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+        placeholder="Enter bullet point text"
+      />
+      <button
+        type="button"
+        onClick={() => onRemove(index)}
+        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+        title="Remove bullet point"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  )
 }
 
 export function EditNodeModal({
@@ -47,6 +116,22 @@ export function EditNodeModal({
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   const labelInputRef = useRef<HTMLInputElement>(null)
+  
+  // State for platforms from database
+  const [platforms, setPlatforms] = useState<Platform[]>([])
+  
+  // Internal state for bullet points with stable IDs for drag and drop
+  const [bulletPointsWithIds, setBulletPointsWithIds] = useState<BulletPoint[]>([
+    { id: `bp-${Date.now()}`, text: '' }
+  ])
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   // Initialize form state
   const [formData, setFormData] = useState<NodeFormData>({
@@ -61,6 +146,15 @@ export function EditNodeModal({
     customProperties: {},
     swimLane: null
   })
+  
+  // Load platforms on mount
+  useEffect(() => {
+    const loadPlatforms = async () => {
+      const platformsData = await getPlatforms()
+      setPlatforms(platformsData)
+    }
+    loadPlatforms()
+  }, [])
 
   // Update form when node changes
   useEffect(() => {
@@ -74,6 +168,13 @@ export function EditNodeModal({
       }
       
       const resolvedVariant = nodeVariant !== undefined && nodeVariant !== null ? nodeVariant : 'Legl'
+      
+      // Convert bullet points to objects with IDs
+      const bulletPointsWithNewIds: BulletPoint[] = existingBulletPoints.length > 0
+        ? existingBulletPoints.map((text, index) => ({ id: `bp-${Date.now()}-${index}`, text }))
+        : [{ id: `bp-${Date.now()}`, text: '' }]
+      
+      setBulletPointsWithIds(bulletPointsWithNewIds)
       
       setFormData({
         label: (node.data?.label as string) || '',
@@ -89,6 +190,8 @@ export function EditNodeModal({
       })
     } else if (isAddingNewNode && isOpen) {
       // Reset form for new node
+      setBulletPointsWithIds([{ id: `bp-${Date.now()}`, text: '' }])
+      
       setFormData({
         label: '',
         type: 'process',
@@ -116,33 +219,21 @@ export function EditNodeModal({
 
   // Bullet point handlers
   const addBulletPoint = useCallback(() => {
-    setFormData(prev => ({
-      ...prev,
-      bulletPoints: [...prev.bulletPoints, '']
-    }))
+    setBulletPointsWithIds(prev => [...prev, { id: `bp-${Date.now()}`, text: '' }])
   }, [])
 
   const updateBulletPoint = useCallback((index: number, newText: string) => {
-    setFormData(prev => ({
-      ...prev,
-      bulletPoints: prev.bulletPoints.map((bp, i) => i === index ? newText : bp)
-    }))
+    setBulletPointsWithIds(prev => prev.map((bp, i) => i === index ? { ...bp, text: newText } : bp))
   }, [])
 
   const removeBulletPoint = useCallback((index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      bulletPoints: prev.bulletPoints.filter((_, i) => i !== index)
-    }))
+    setBulletPointsWithIds(prev => prev.filter((_, i) => i !== index))
   }, [])
 
   const handleBulletPointKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number, value: string) => {
     if (e.key === 'Tab' && !e.shiftKey && value.trim()) {
       e.preventDefault()
-      setFormData(prev => ({
-        ...prev,
-        bulletPoints: [...prev.bulletPoints, '']
-      }))
+      setBulletPointsWithIds(prev => [...prev, { id: `bp-${Date.now()}`, text: '' }])
       setTimeout(() => {
         const newIndex = index + 1
         if (bulletInputRefs.current[newIndex]) {
@@ -181,27 +272,28 @@ export function EditNodeModal({
     }))
   }, [])
 
-  // Custom property handlers
-  const addCustomProperty = useCallback(() => {
-    const key = prompt('Property name:')
-    const value = prompt('Property value:')
-    if (key && value) {
-      setFormData(prev => ({
-        ...prev,
-        customProperties: { ...prev.customProperties, [key]: value }
-      }))
+  // Drag and drop handler for bullet points
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setBulletPointsWithIds((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id)
+        const newIndex = items.findIndex((item) => item.id === over.id)
+        
+        return arrayMove(items, oldIndex, newIndex)
+      })
     }
   }, [])
 
-  const removeCustomProperty = useCallback((key: string) => {
-    setFormData(prev => {
-      const { [key]: _, ...rest } = prev.customProperties
-      return { ...prev, customProperties: rest }
-    })
-  }, [])
-
   const handleSave = () => {
-    onSave(formData)
+    // Convert bulletPointsWithIds back to string array
+    const bulletPointsAsStrings = bulletPointsWithIds.map(bp => bp.text)
+    
+    onSave({
+      ...formData,
+      bulletPoints: bulletPointsAsStrings
+    })
   }
 
   const getNotificationColor = (type: Notification['type']) => {
@@ -308,10 +400,13 @@ export function EditNodeModal({
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">None</option>
-            <option value="End client">End client</option>
-            <option value="CMS">CMS</option>
-            <option value="Legl">Legl</option>
-            <option value="Back end">Back end</option>
+            {/* Database platforms */}
+            {platforms.map(platform => (
+              <option key={platform.id} value={platform.name}>
+                {platform.name}
+              </option>
+            ))}
+            {/* Custom option */}
             <option value="Custom">Custom</option>
           </select>
         </div>
@@ -356,44 +451,45 @@ export function EditNodeModal({
           </div>
         )}
 
-        {/* Bullet Points */}
+        {/* Bullet Points with Drag and Drop */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Bullet Points
           </label>
-          <div className="space-y-2">
-            {formData.bulletPoints.map((bullet, index) => (
-              <div key={index} className="flex items-start gap-2 group">
-                <span className="text-gray-500 mt-2.5">•</span>
-                <input
-                  ref={(el) => bulletInputRefs.current[index] = el}
-                  type="text"
-                  value={bullet}
-                  onChange={(e) => updateBulletPoint(index, e.target.value)}
-                  onKeyDown={(e) => handleBulletPointKeyDown(e, index, bullet)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  placeholder="Enter bullet point text"
-                />
-                <Button
-                  variant="ghost"
-                  size="small"
-                  onClick={() => removeBulletPoint(index)}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  ×
-                </Button>
-              </div>
-            ))}
-            <Button
-              variant="outline"
-              size="small"
-              onClick={addBulletPoint}
-              className="w-full"
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={bulletPointsWithIds.map(bp => bp.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <Plus size={16} className="mr-2" />
-              Add Bullet Point
-            </Button>
-          </div>
+              <div className="space-y-2">
+                {bulletPointsWithIds.map((bulletPoint, index) => (
+                  <SortableBulletPoint
+                    key={bulletPoint.id}
+                    id={bulletPoint.id}
+                    bullet={bulletPoint.text}
+                    index={index}
+                    onUpdate={updateBulletPoint}
+                    onRemove={removeBulletPoint}
+                    onKeyDown={handleBulletPointKeyDown}
+                    inputRef={(el) => bulletInputRefs.current[index] = el}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          <Button
+            variant="outline"
+            size="small"
+            onClick={addBulletPoint}
+            className="w-full mt-2"
+          >
+            <Plus size={16} className="mr-2" />
+            Add Bullet Point
+          </Button>
         </div>
 
         {/* Notifications */}
@@ -465,57 +561,6 @@ export function EditNodeModal({
             onChange={(value) => setFormData(prev => ({ ...prev, type: value as NodeFormData['type'] }))}
           />
         </div>
-
-        {/* Node Layout Classification (read-only, for debugging) */}
-        {node && (node.data as any)?.nodeLayout && (
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Layout Classification
-            </label>
-            <p className="text-sm text-gray-700">
-              {(node.data as any).nodeLayout}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              This classification is automatically determined by the node's connections after running "Tidy up"
-            </p>
-          </div>
-        )}
-
-        {/* Custom Properties */}
-        {Object.keys(formData.customProperties).length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Custom Properties
-            </label>
-            <div className="space-y-2">
-              {Object.entries(formData.customProperties).map(([key, value]) => (
-                <div key={key} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                  <span className="text-sm flex-1">
-                    <strong>{key}:</strong> {String(value)}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={() => removeCustomProperty(key)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <Button
-          variant="outline"
-          size="small"
-          onClick={addCustomProperty}
-          className="w-full"
-        >
-          <Plus size={16} className="mr-2" />
-          Add Custom Property
-        </Button>
       </div>
     </Modal>
   )
