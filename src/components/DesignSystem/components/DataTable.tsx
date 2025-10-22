@@ -27,6 +27,7 @@ export interface DataTableProps<T> {
   emptyStateMessage?: string
   bulkActions?: React.ReactNode
   className?: string
+  tableLayout?: 'fixed' | 'auto'
 }
 
 export function DataTable<T>({
@@ -45,7 +46,8 @@ export function DataTable<T>({
   emptyStateIcon: EmptyStateIcon = Users,
   emptyStateMessage = 'No data available',
   bulkActions,
-  className = ''
+  className = '',
+  tableLayout = 'fixed'
 }: DataTableProps<T>) {
   const [sortField, setSortField] = useState<keyof T | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -176,7 +178,7 @@ export function DataTable<T>({
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
+          <table className={`w-full ${tableLayout === 'auto' ? 'table-auto' : 'table-fixed'}`}>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 {selectable && (

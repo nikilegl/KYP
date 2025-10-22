@@ -30,7 +30,8 @@ export const createPlatform = async (
   name: string,
   colour: string,
   icon?: string,
-  description?: string
+  description?: string,
+  logo?: string
 ): Promise<Platform | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
@@ -43,6 +44,7 @@ export const createPlatform = async (
         colour,
         icon: icon || 'Server',
         description,
+        logo,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -74,7 +76,8 @@ export const createPlatform = async (
         name,
         colour,
         icon: icon || 'Server',
-        description
+        description,
+        logo
       }])
       .select()
       .single()

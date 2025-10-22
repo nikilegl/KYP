@@ -90,6 +90,9 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     tp => tp.name.toLowerCase() === platformName.toLowerCase()
   )
   
+  // Find matching platform logo
+  const matchingPlatform = platforms.find(p => p.name === variant)
+  
   // Generate unique gradient ID for Legl logo
   const gradientId = `legl-gradient-${id}`
 
@@ -290,6 +293,22 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                     <img 
                       src={matchingThirdParty.logo} 
                       alt={platformName}
+                      className="h-5 object-contain"
+                    />
+                  )}
+                </div>
+              ) : matchingPlatform?.logo ? (
+                // Show platform logo if available
+                <div className="flex items-center justify-center h-5">
+                  {matchingPlatform.logo.includes('<svg') ? (
+                    <div 
+                      className="h-5 flex items-center"
+                      dangerouslySetInnerHTML={{ __html: matchingPlatform.logo }}
+                    />
+                  ) : (
+                    <img 
+                      src={matchingPlatform.logo} 
+                      alt={variant}
                       className="h-5 object-contain"
                     />
                   )}

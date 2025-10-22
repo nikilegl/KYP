@@ -1,17 +1,37 @@
 import React from 'react'
+import { Upload } from 'lucide-react'
+import { Button } from '../DesignSystem/components/Button'
 import type { Platform } from '../../lib/supabase'
 
 interface PlatformFormProps {
-  platform: Partial<Platform> & { name: string; colour: string; icon?: string; description?: string }
+  platform: Partial<Platform> & { name: string; colour: string; icon?: string; logo?: string; description?: string }
   setPlatform: (platform: any) => void
   isModal?: boolean
+  uploadingLogo?: boolean
+  onLogoUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void
+  fileInputRef?: React.RefObject<HTMLInputElement>
 }
 
 export function PlatformForm({
   platform,
   setPlatform,
-  isModal = false
+  isModal = false,
+  uploadingLogo = false,
+  onLogoUpload,
+  fileInputRef
 }: PlatformFormProps) {
+  const renderLogo = (logo?: string) => {
+    if (!logo) return <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-xs">No logo</div>
+    
+    // If it's SVG content
+    if (logo.includes('<svg')) {
+      return <div className="w-16 h-16 flex items-center justify-center" dangerouslySetInnerHTML={{ __html: logo }} />
+    }
+    
+    // If it's a base64 image
+    return <img src={logo} alt="Logo" className="w-16 h-16 object-contain" />
+  }
+
   return (
     <div className={isModal ? 'space-y-4' : 'bg-white rounded-lg shadow p-6'}>
 
@@ -90,6 +110,41 @@ export function PlatformForm({
             rows={2}
           />
         </div>
+
+        {/* Logo Upload */}
+        {fileInputRef && onLogoUpload && (
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Logo
+            </label>
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                {renderLogo(platform.logo)}
+              </div>
+              <div className="flex-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={onLogoUpload}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingLogo}
+                  className="flex items-center gap-2"
+                >
+                  <Upload size={16} />
+                  {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                </Button>
+                <p className="mt-1 text-xs text-gray-500">
+                  SVG, PNG, or JPG. Max 2MB.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
