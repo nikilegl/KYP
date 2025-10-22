@@ -28,6 +28,7 @@ import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
 import { EditNodeModal, type NodeFormData } from './EditNodeModal'
+import { EditJourneyModal } from './EditJourneyModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
@@ -353,9 +354,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Undo functionality
   const undo = useCallback(() => {
+    console.log('Undo called. Current historyIndex:', historyIndex, 'History length:', history.length)
     if (historyIndex >= 0 && history[historyIndex]) {
       isUndoing.current = true
       const previousState = history[historyIndex]
+      console.log('Undoing to index:', historyIndex - 1, 'Restoring state with nodes:', previousState.nodes.length, 'edges:', previousState.edges.length)
       setNodes(JSON.parse(JSON.stringify(previousState.nodes)))
       setEdges(JSON.parse(JSON.stringify(previousState.edges)))
       setHistoryIndex((prev) => prev - 1)
@@ -363,24 +366,36 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Reset the flag after state updates
       setTimeout(() => {
         isUndoing.current = false
+        console.log('Undo complete. New historyIndex:', historyIndex - 1)
       }, 50)
+    } else {
+      console.log('Cannot undo: no history available')
     }
   }, [historyIndex, history, setNodes, setEdges])
 
   // Redo functionality
   const redo = useCallback(() => {
+    console.log('Redo called. Current historyIndex:', historyIndex, 'History length:', history.length)
     // Check if there are states ahead to redo
     if (historyIndex < history.length - 1) {
       isUndoing.current = true
-      const nextState = history[historyIndex + 1]
-      setNodes(JSON.parse(JSON.stringify(nextState.nodes)))
-      setEdges(JSON.parse(JSON.stringify(nextState.edges)))
-      setHistoryIndex((prev) => prev + 1)
+      const nextIndex = historyIndex + 1
+      const nextState = history[nextIndex]
+      console.log('Redoing to index:', nextIndex, 'Nodes:', nextState?.nodes?.length, 'Edges:', nextState?.edges?.length)
       
-      // Reset the flag after state updates
-      setTimeout(() => {
-        isUndoing.current = false
-      }, 50)
+      if (nextState) {
+        setNodes(JSON.parse(JSON.stringify(nextState.nodes)))
+        setEdges(JSON.parse(JSON.stringify(nextState.edges)))
+        setHistoryIndex(nextIndex)
+        
+        // Reset the flag after state updates
+        setTimeout(() => {
+          isUndoing.current = false
+          console.log('Redo complete. New historyIndex:', nextIndex)
+        }, 50)
+      }
+    } else {
+      console.log('Cannot redo: at end of history')
     }
   }, [historyIndex, history, setNodes, setEdges])
 
@@ -394,16 +409,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      const key = event.key.toLowerCase()
+      const isZ = key === 'z'
+      
+      if (!isZ) return
+
       // Check for Cmd+Shift+Z (Mac) or Ctrl+Shift+Z (Windows/Linux) - REDO
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'z') {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey) {
+        console.log('Redo triggered. historyIndex:', historyIndex, 'history.length:', history.length)
         // Only works with node history (no redo for AI/TidyUp snapshots)
         if (historyIndex < history.length - 1) {
           event.preventDefault()
+          console.log('Redoing to state at index:', historyIndex + 2)
           redo()
+        } else {
+          console.log('Cannot redo: no forward states available')
         }
       }
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO
-      else if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
+      else if ((event.metaKey || event.ctrlKey) && !event.shiftKey) {
         // Try AI/TidyUp undo first (takes priority)
         if (undoSnapshot) {
           event.preventDefault()
@@ -2973,180 +2997,58 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </Modal>
       )}
 
-      {/* Name Edit Modal */}
-      {showNameEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Edit Journey Details
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Journey Name *
-                </label>
-                <input
-                  type="text"
-                  value={journeyName}
-                  onChange={(e) => setJourneyName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter journey name"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={journeyDescription}
-                  onChange={(e) => setJourneyDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Optional description"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Layout
-                </label>
-                <select
-                  value={journeyLayout}
-                  onChange={(e) => setJourneyLayout(e.target.value as 'vertical' | 'horizontal')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="vertical">Vertical (Top to Bottom)</option>
-                  <option value="horizontal">Horizontal (Left to Right)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <select
-                  value={journeyStatus}
-                  onChange={(e) => setJourneyStatus(e.target.value as 'draft' | 'published')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="draft">Draft (Only visible to you)</option>
-                  <option value="published">Published (Visible to all workspace members)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Epic
-                </label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">No Epic</option>
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
-              </div>
+      {/* Edit Journey Details Modal */}
+      <EditJourneyModal
+        isOpen={showNameEditModal}
+        onClose={() => {
+          setShowNameEditModal(false)
+          setSelectedLawFirmIds([])
+          setLawFirmSearchQuery('')
+        }}
+        onSave={async () => {
+          // Save to database if journey already exists
+          if (currentJourneyId && journeyName.trim()) {
+            try {
+              await updateUserJourney(currentJourneyId, {
+                name: journeyName,
+                description: journeyDescription,
+                layout: journeyLayout,
+                status: journeyStatus,
+                project_id: selectedProjectId || null
+              })
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Law Firms
-                </label>
-                <input
-                  type="text"
-                  value={lawFirmSearchQuery}
-                  onChange={(e) => setLawFirmSearchQuery(e.target.value)}
-                  placeholder="Search law firms..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
-                />
-                <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
-                  {lawFirms
-                    .filter(firm => 
-                      lawFirmSearchQuery.trim() === '' || 
-                      firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
-                    )
-                    .map(firm => (
-                      <label
-                        key={firm.id}
-                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedLawFirmIds.includes(firm.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedLawFirmIds(prev => [...prev, firm.id])
-                            } else {
-                              setSelectedLawFirmIds(prev => prev.filter(id => id !== firm.id))
-                            }
-                          }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">{firm.name}</span>
-                      </label>
-                    ))}
-                  {lawFirms.filter(firm => 
-                    lawFirmSearchQuery.trim() === '' || 
-                    firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
-                  ).length === 0 && (
-                    <div className="px-3 py-4 text-center">
-                      <p className="text-sm text-gray-500 mb-2">No law firms found</p>
-                      <Button
-                        variant="outline"
-                        size="small"
-                        icon={Plus}
-                        onClick={() => {
-                          setShowAddLawFirmModal(true)
-                        }}
-                      >
-                        Add Law Firm
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                {selectedLawFirmIds.length > 0 && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    {selectedLawFirmIds.length} law firm{selectedLawFirmIds.length !== 1 ? 's' : ''} selected
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 mt-6">
-              <Button
-                variant="ghost"
-                onClick={() => setShowNameEditModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={async () => {
-                  // Save to database if journey already exists
-                  if (currentJourneyId && journeyName.trim()) {
-                    try {
-                      await updateUserJourney(currentJourneyId, {
-                        name: journeyName,
-                        description: journeyDescription,
-                        layout: journeyLayout,
-                        status: journeyStatus,
-                        project_id: selectedProjectId || null
-                      })
-                      
-                      // Save law firm associations
-                      await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
-                    } catch (error) {
-                      console.error('Error saving journey details:', error)
-                    }
-                  }
-                  setShowNameEditModal(false)
-                }}
-                disabled={!journeyName.trim()}
-              >
-                Save Details
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+              // Save law firm associations
+              await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
+            } catch (error) {
+              console.error('Error saving journey details:', error)
+            }
+          }
+          setShowNameEditModal(false)
+        }}
+        journeyName={journeyName}
+        journeyDescription={journeyDescription}
+        journeyLayout={journeyLayout}
+        journeyStatus={journeyStatus}
+        selectedProjectId={selectedProjectId}
+        selectedLawFirmIds={selectedLawFirmIds}
+        lawFirmSearchQuery={lawFirmSearchQuery}
+        projects={projects}
+        lawFirms={lawFirms}
+        onNameChange={setJourneyName}
+        onDescriptionChange={setJourneyDescription}
+        onLayoutChange={setJourneyLayout}
+        onStatusChange={setJourneyStatus}
+        onProjectChange={setSelectedProjectId}
+        onLawFirmSearchChange={setLawFirmSearchQuery}
+        onLawFirmToggle={(firmId, checked) => {
+          if (checked) {
+            setSelectedLawFirmIds(prev => [...prev, firmId])
+          } else {
+            setSelectedLawFirmIds(prev => prev.filter(id => id !== firmId))
+          }
+        }}
+        onAddLawFirmClick={() => setShowAddLawFirmModal(true)}
+      />
 
       {/* Save Modal */}
       {showSaveModal && (
