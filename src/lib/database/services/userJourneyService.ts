@@ -13,6 +13,8 @@ export interface UserJourney {
   }
   created_at: string
   updated_at: string
+  created_by?: string | null
+  updated_by?: string | null
   short_id?: number
 }
 
@@ -140,6 +142,9 @@ export const createUserJourney = async (
   }
 
   try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
     const { data, error } = await supabase
       .from('user_journeys')
       .insert([
@@ -148,7 +153,9 @@ export const createUserJourney = async (
           name,
           description,
           layout,
-          flow_data: flowData
+          flow_data: flowData,
+          created_by: user?.id || null,
+          updated_by: user?.id || null
         }
       ])
       .select()
@@ -203,11 +210,15 @@ export const updateUserJourney = async (
   }
 
   try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
     const { data, error } = await supabase
       .from('user_journeys')
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null
       })
       .eq('id', journeyId)
       .select()

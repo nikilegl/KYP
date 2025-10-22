@@ -12,9 +12,17 @@ import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
 
+interface WorkspaceUserInfo {
+  id: string
+  email: string
+  full_name?: string
+}
+
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
   lawFirms?: LawFirm[]
+  createdByUser?: WorkspaceUserInfo
+  updatedByUser?: WorkspaceUserInfo
 }
 
 interface UserJourneysManagerProps {
@@ -112,7 +120,43 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       // Load all journeys (including those without projects)
       const allJourneys = await getUserJourneys()
       
-      // Enrich with project data and law firms
+      // Get unique user IDs from created_by and updated_by
+      const userIds = new Set<string>()
+      allJourneys.forEach(journey => {
+        if (journey.created_by) userIds.add(journey.created_by)
+        if (journey.updated_by) userIds.add(journey.updated_by)
+      })
+      
+      console.log('📊 User Journey Tracking Debug:')
+      console.log('- Total journeys:', allJourneys.length)
+      console.log('- Journeys with created_by:', allJourneys.filter(j => j.created_by).length)
+      console.log('- Journeys with updated_by:', allJourneys.filter(j => j.updated_by).length)
+      console.log('- Unique user IDs:', Array.from(userIds))
+      
+      // Fetch user information if we have Supabase configured
+      const usersMap = new Map<string, WorkspaceUserInfo>()
+      if (supabase && userIds.size > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('workspace_users')
+          .select('user_id, full_name, user_email')
+          .in('user_id', Array.from(userIds))
+        
+        console.log('- Fetched users:', users?.length || 0)
+        if (usersError) console.error('- Error fetching users:', usersError)
+        
+        if (users) {
+          users.forEach(user => {
+            usersMap.set(user.user_id, {
+              id: user.user_id,
+              full_name: user.full_name,
+              email: user.user_email
+            })
+          })
+          console.log('- Users map size:', usersMap.size)
+        }
+      }
+      
+      // Enrich with project data, law firms, and user information
       const journeysWithData: UserJourneyWithProject[] = await Promise.all(
         allJourneys.map(async journey => {
           const project = journey.project_id 
@@ -128,7 +172,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           return {
             ...journey,
             project,
-            lawFirms
+            lawFirms,
+            createdByUser: journey.created_by ? usersMap.get(journey.created_by) : undefined,
+            updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined
           }
         })
       )
@@ -334,23 +380,65 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       key: 'created_at',
       header: 'Created',
       sortable: true,
-      width: '120px',
-      render: (journey) => (
-        <div className="text-sm text-gray-600">
-          {new Date(journey.created_at).toLocaleDateString()}
-        </div>
-      )
+      width: '180px',
+      render: (journey) => {
+        const createdDate = new Date(journey.created_at)
+        const formattedDate = createdDate.toLocaleDateString('en-GB', { 
+          day: 'numeric', 
+          month: 'short', 
+          year: '2-digit' 
+        })
+        const formattedTime = createdDate.toLocaleTimeString('en-GB', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        }).toLowerCase()
+        
+        return (
+          <div className="break-words whitespace-normal">
+            <div className="text-xs text-gray-500 mb-1">
+              {formattedDate}, {formattedTime}
+            </div>
+            {journey.createdByUser && (
+              <div className="font-medium text-gray-900">
+                {journey.createdByUser.full_name || journey.createdByUser.email}
+              </div>
+            )}
+          </div>
+        )
+      }
     },
     {
       key: 'updated_at',
       header: 'Last Updated',
       sortable: true,
-      width: '120px',
-      render: (journey) => (
-        <div className="text-sm text-gray-600">
-          {new Date(journey.updated_at).toLocaleDateString()}
-        </div>
-      )
+      width: '180px',
+      render: (journey) => {
+        const updatedDate = new Date(journey.updated_at)
+        const formattedDate = updatedDate.toLocaleDateString('en-GB', { 
+          day: 'numeric', 
+          month: 'short', 
+          year: '2-digit' 
+        })
+        const formattedTime = updatedDate.toLocaleTimeString('en-GB', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        }).toLowerCase()
+        
+        return (
+          <div className="break-words whitespace-normal">
+            <div className="text-xs text-gray-500 mb-1">
+              {formattedDate}, {formattedTime}
+            </div>
+            {journey.updatedByUser && (
+              <div className="font-medium text-gray-900">
+                {journey.updatedByUser.full_name || journey.updatedByUser.email}
+              </div>
+            )}
+          </div>
+        )
+      }
     },
     {
       key: 'actions',
