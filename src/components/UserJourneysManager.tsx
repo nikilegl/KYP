@@ -5,6 +5,7 @@ import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
+import { EditJourneyModal } from './EditJourneyModal'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
@@ -665,7 +666,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
       {/* Edit Journey Modal */}
       {showEditModal && journeyToEdit && (
-        <Modal
+        <EditJourneyModal
           isOpen={showEditModal}
           onClose={() => {
             setShowEditModal(false)
@@ -673,163 +674,31 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             setSelectedLawFirmIds([])
             setLawFirmSearchQuery('')
           }}
-          title="Edit Journey Details"
-          size="md"
-          footerContent={
-            <div className="flex items-center justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setShowEditModal(false)
-                  setJourneyToEdit(null)
-                  setSelectedLawFirmIds([])
-                  setLawFirmSearchQuery('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={saveEdit}
-                disabled={!editForm.name.trim()}
-              >
-                Save Details
-              </Button>
-            </div>
-          }
-        >
-          <div className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Journey Name *
-              </label>
-              <input
-                type="text"
-                value={editForm.name}
-                onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter journey name"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                value={editForm.description}
-                onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Optional description"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Layout
-              </label>
-              <select
-                value={editForm.layout}
-                onChange={(e) => setEditForm(prev => ({ ...prev, layout: e.target.value as 'vertical' | 'horizontal' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="vertical">Vertical (Top to Bottom)</option>
-                <option value="horizontal">Horizontal (Left to Right)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                value={editForm.status}
-                onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value as 'draft' | 'published' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="draft">Draft (Only visible to you)</option>
-                <option value="published">Published (Visible to all workspace members)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Epic
-              </label>
-              <select
-                value={editForm.project_id}
-                onChange={(e) => setEditForm(prev => ({ ...prev, project_id: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">No Epic</option>
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>{project.name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Law Firms
-              </label>
-              <input
-                type="text"
-                value={lawFirmSearchQuery}
-                onChange={(e) => setLawFirmSearchQuery(e.target.value)}
-                placeholder="Search law firms..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
-              />
-              <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
-                {lawFirms
-                  .filter(firm => 
-                    lawFirmSearchQuery.trim() === '' || 
-                    firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
-                  )
-                  .map(firm => (
-                    <label
-                      key={firm.id}
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedLawFirmIds.includes(firm.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedLawFirmIds(prev => [...prev, firm.id])
-                          } else {
-                            setSelectedLawFirmIds(prev => prev.filter(id => id !== firm.id))
-                          }
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{firm.name}</span>
-                    </label>
-                  ))}
-                {lawFirms.filter(firm => 
-                  lawFirmSearchQuery.trim() === '' || 
-                  firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
-                ).length === 0 && (
-                  <div className="px-3 py-4 text-center">
-                    <p className="text-sm text-gray-500 mb-2">No law firms found</p>
-                    <Button
-                      variant="outline"
-                      size="small"
-                      icon={Plus}
-                      onClick={() => {
-                        setShowAddLawFirmModal(true)
-                      }}
-                    >
-                      Add Law Firm
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {selectedLawFirmIds.length > 0 && (
-                <div className="mt-2 text-sm text-gray-600">
-                  {selectedLawFirmIds.length} law firm{selectedLawFirmIds.length !== 1 ? 's' : ''} selected
-                </div>
-              )}
-            </div>
-          </div>
-        </Modal>
+          onSave={saveEdit}
+          journeyName={editForm.name}
+          journeyDescription={editForm.description}
+          journeyLayout={editForm.layout}
+          journeyStatus={editForm.status}
+          selectedProjectId={editForm.project_id}
+          selectedLawFirmIds={selectedLawFirmIds}
+          lawFirmSearchQuery={lawFirmSearchQuery}
+          projects={projects}
+          lawFirms={lawFirms}
+          onNameChange={(name) => setEditForm(prev => ({ ...prev, name }))}
+          onDescriptionChange={(description) => setEditForm(prev => ({ ...prev, description }))}
+          onLayoutChange={(layout) => setEditForm(prev => ({ ...prev, layout }))}
+          onStatusChange={(status) => setEditForm(prev => ({ ...prev, status }))}
+          onProjectChange={(project_id) => setEditForm(prev => ({ ...prev, project_id }))}
+          onLawFirmSearchChange={setLawFirmSearchQuery}
+          onLawFirmToggle={(firmId, checked) => {
+            if (checked) {
+              setSelectedLawFirmIds(prev => [...prev, firmId])
+            } else {
+              setSelectedLawFirmIds(prev => prev.filter(id => id !== firmId))
+            }
+          }}
+          onAddLawFirmClick={() => setShowAddLawFirmModal(true)}
+        />
       )}
 
       {/* Add Law Firm Modal - Opens from Edit Journey Details when no search results */}
