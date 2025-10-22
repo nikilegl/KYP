@@ -66,7 +66,7 @@ export function CustomEdge(props: CustomEdgeProps) {
         id={id}
         d={edgePath}
         fill="none"
-        stroke="rgba(0,0,0,0.01)" // Nearly transparent but not completely
+        stroke="transparent"
         strokeWidth={150}
         className="react-flow__edge-interaction"
         onMouseEnter={() => setIsHovered(true)}
@@ -74,7 +74,8 @@ export function CustomEdge(props: CustomEdgeProps) {
         style={{ 
           cursor: 'pointer',
           strokeLinecap: 'round',
-          strokeLinejoin: 'round'
+          strokeLinejoin: 'round',
+          pointerEvents: 'stroke'
         }}
       />
       {/* Visible edge path */}
