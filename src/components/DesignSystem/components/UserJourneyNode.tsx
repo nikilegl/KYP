@@ -194,50 +194,14 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         />
       ))}
 
-      {/* Main content row: Title + Bullets on left, Action buttons on right */}
+      {/* Title Row: Title + Edit button */}
       <div className="flex items-start justify-between gap-3">
-        {/* Left column: Title and bullet points */}
-        <div className="flex-1 min-w-0">
-          <div className="text-base font-semibold text-gray-900 break-words">
-            {convertEmojis(label)}
-          </div>
-          
-          {/* Bullet Points */}
-          {bulletPoints && bulletPoints.filter(b => b && b.trim()).length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {bulletPoints.filter(b => b && b.trim()).map((bullet, index) => (
-                <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
-                  <span className="text-gray-400 mt-0.5">•</span>
-                  <span className="flex-1">{convertEmojis(bullet)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Notifications */}
-          {notifications && notifications.length > 0 && (
-            <div className={`space-y-1.5 ${bulletPoints.filter(b => b && b.trim()).length > 0 ? 'mt-2' : 'mt-2'}`}>
-              {notifications.map((notification) => {
-                const style = getNotificationStyle(notification.type)
-                return (
-                  <div
-                    key={notification.id}
-                    className={`
-                      ${style.bg} ${style.border} ${style.text}
-                      border rounded px-2 py-1.5
-                      text-xs
-                    `}
-                  >
-                    <span>{convertEmojis(notification.message)}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+        <div className="flex-1 min-w-0 text-base font-semibold text-gray-900 break-words">
+          {convertEmojis(label)}
         </div>
-
-        {/* Right column: Edit button only - Hidden by default, visible on hover */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        
+        {/* Edit button - Hidden by default, visible on hover */}
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -250,6 +214,39 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           </button>
         </div>
       </div>
+      
+      {/* Bullet Points - Full width */}
+      {bulletPoints && bulletPoints.filter(b => b && b.trim()).length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {bulletPoints.filter(b => b && b.trim()).map((bullet, index) => (
+            <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
+              <span className="text-gray-400 mt-0.5">•</span>
+              <span className="flex-1">{convertEmojis(bullet)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Notifications - Full width */}
+      {notifications && notifications.length > 0 && (
+        <div className={`space-y-1.5 ${bulletPoints.filter(b => b && b.trim()).length > 0 ? 'mt-2' : 'mt-2'}`}>
+          {notifications.map((notification) => {
+            const style = getNotificationStyle(notification.type)
+            return (
+              <div
+                key={notification.id}
+                className={`
+                  ${style.bg} ${style.border} ${style.text}
+                  border rounded px-2 py-1.5
+                  text-xs
+                `}
+              >
+                <span>{convertEmojis(notification.message)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* User Role Tag and Platform Label - Hidden for label nodes */}
       {type !== 'label' && (userRole || variant) && (
