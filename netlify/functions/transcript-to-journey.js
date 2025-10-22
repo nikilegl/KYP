@@ -60,8 +60,7 @@ export async function handler(event, context) {
           }
         ],
         temperature: 0.5,
-        max_tokens: 16000,
-        response_format: { type: 'json_object' }
+        max_tokens: 16000
       })
     })
 

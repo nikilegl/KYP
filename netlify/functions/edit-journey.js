@@ -113,8 +113,7 @@ Return the COMPLETE updated journey as compact JSON.`
           }
         ],
         temperature: 0.2,
-        max_tokens: 8000,
-        response_format: { type: 'json_object' }
+        max_tokens: 8000
       })
     })
 
