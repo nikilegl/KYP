@@ -10,6 +10,7 @@ import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmServ
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
+import { convertEmojis } from '../utils/emojiConverter'
 
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
@@ -296,7 +297,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       width: '200px',
       render: (journey: UserJourneyWithProject) => (
         <span className="font-medium text-gray-900">
-          {journey.project?.name || (journey.project_id ? 'Unknown Epic' : '-')}
+          {convertEmojis(journey.project?.name || (journey.project_id ? 'Unknown Epic' : '-'))}
         </span>
       )
     }] : []),
@@ -306,7 +307,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       sortable: true,
       width: '300px',
       render: (journey) => (
-        <div className="font-medium text-gray-900 break-words whitespace-normal">{journey.name}</div>
+        <div className="font-medium text-gray-900 break-words whitespace-normal">{convertEmojis(journey.name)}</div>
       )
     },
     {

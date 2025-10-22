@@ -2,6 +2,7 @@ import { Handle, Position } from '@xyflow/react'
 import { Edit } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
 import type { UserRole, ThirdParty } from '../../../lib/supabase'
+import { convertEmojis } from '../../../utils/emojiConverter'
 
 export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end' | 'label'
 
@@ -198,7 +199,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         {/* Left column: Title and bullet points */}
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold text-gray-900 break-words">
-            {label}
+            {convertEmojis(label)}
           </div>
           
           {/* Bullet Points */}
@@ -207,7 +208,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
               {bulletPoints.filter(b => b && b.trim()).map((bullet, index) => (
                 <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
                   <span className="text-gray-400 mt-0.5">•</span>
-                  <span className="flex-1">{bullet}</span>
+                  <span className="flex-1">{convertEmojis(bullet)}</span>
                 </li>
               ))}
             </ul>
@@ -227,7 +228,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                       text-xs
                     `}
                   >
-                    <span>{notification.message}</span>
+                    <span>{convertEmojis(notification.message)}</span>
                   </div>
                 )
               })}

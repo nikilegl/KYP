@@ -5,6 +5,7 @@ import {
   getBezierPath,
 } from '@xyflow/react'
 import { PlusCircle } from 'lucide-react'
+import { convertEmojis } from '../../../utils/emojiConverter'
 
 interface CustomEdgeData {
   label?: string
@@ -107,7 +108,7 @@ export function CustomEdge(props: CustomEdgeProps) {
                   : 'bg-white border-gray-300 hover:border-blue-500 text-gray-700'
               }`}
             >
-              <span className="font-medium">{data.label}</span>
+              <span className="font-medium">{convertEmojis(data.label)}</span>
               <PlusCircle
                 size={16}
                 className={data?.highlighted ? "text-green-600" : "text-blue-500"}

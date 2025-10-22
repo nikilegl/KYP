@@ -26,6 +26,7 @@ import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, MoreVertical } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
+import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
 import { EditNodeModal, type NodeFormData } from './EditNodeModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import type { UserRole, Project, LawFirm, ThirdParty } from '../lib/supabase'
@@ -39,6 +40,7 @@ import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
 import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyLayoutCalculator'
 import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
+import { convertEmojis } from '../utils/emojiConverter'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -2115,82 +2117,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       return 100 + (horizontalPos * (NODE_WIDTH + HORIZONTAL_GAP))
     }
     
-    // STEP 1: Position all non-branch-child nodes first (including convergent nodes)
-    console.log('=== STEP 1: Positioning Parent Nodes ===')
-    
-    // First, align convergent nodes with their branch node (or divergent parent if applicable)
-    console.log('=== Aligning Convergent Nodes ===')
-    nodes.forEach(node => {
-      const parentCount = nodeParentCount.get(node.id) || 0
-      
-      // If this is a convergent node (2+ parents)
-      if (parentCount >= 2) {
-        const parents = parentMap.get(node.id) || []
-        const nodeLabel = (node.data as any)?.label || node.id
-        
-        // Check if any parent is divergent
-        const divergentParent = parents.find(parentId => {
-          const layout = nodeLayout.get(parentId)
-          return layout === 'Divergent node'
-        })
-        
-        if (divergentParent) {
-          // Convergent node should have the SAME X as the branch node (not the divergent node)
-          // The Y coordinate will naturally place it below the divergent due to level-based positioning
-          
-          // Get the branch node (parent of the divergent node)
-          const divergentParents = parentMap.get(divergentParent) || []
-          if (divergentParents.length > 0) {
-            const branchNodeId = divergentParents[0]
-            const branchNodeX = branchingXPositions.has(branchNodeId) 
-              ? branchingXPositions.get(branchNodeId)!
-              : getNodeXPosition(branchNodeId)
-            
-            // Convergent should be at the branch node's X (NOT divergent's X)
-            branchingXPositions.set(node.id, branchNodeX)
-            const divergentLabel = nodes.find(n => n.id === divergentParent)
-            const branchLabel = nodes.find(n => n.id === branchNodeId)
-            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchNodeId} (parent of divergent ${(divergentLabel?.data as any)?.label || divergentParent}) at x=${branchNodeX}`)
-          }
-        } else {
-          // Find the branch node that these parents branch from
-          // Traverse up from parents to find common ancestor that is a branch node
-          const findBranchAncestor = (nodeId: string, visited = new Set<string>()): string | null => {
-            if (visited.has(nodeId)) return null
-            visited.add(nodeId)
-            
-            // Check if this node is a branch node with branching layout
-            const childCount = nodeChildCount.get(nodeId) || 0
-            if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
-              return nodeId
-            }
-            
-            // Check parents
-            const nodeParents = parentMap.get(nodeId) || []
-            for (const parentId of nodeParents) {
-              const result = findBranchAncestor(parentId, visited)
-              if (result) return result
-            }
-            
-            return null
-          }
-          
-          // Find branch ancestor from first parent
-          const branchAncestor = findBranchAncestor(parents[0])
-          
-          if (branchAncestor && branchingXPositions.has(branchAncestor)) {
-            const branchX = branchingXPositions.get(branchAncestor)!
-            branchingXPositions.set(node.id, branchX)
-            const branchLabel = nodes.find(n => n.id === branchAncestor)
-            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchAncestor} at x=${branchX}`)
-          }
-        }
-      }
-    })
-    
-    // STEP 2: Now position branch nodes and their children
+    // STEP 1: Position branch nodes first so convergent nodes can reference them
     // Process level by level to ensure parents are positioned before children
-    console.log('=== STEP 2: Positioning Branch Nodes and Children ===')
+    console.log('=== STEP 1: Positioning Branch Nodes and Children First ===')
     const maxLevelForBranching = Math.max(...Array.from(levels.values()), 0)
     for (let level = 0; level <= maxLevelForBranching; level++) {
       const nodesAtLevel = Array.from(levels.entries())
@@ -2249,9 +2178,89 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
     }
     
-    // Default: All nodes inherit their parent's X position
+    // STEP 2: Now position convergent nodes - they can reference branch positions
+    console.log('=== STEP 2: Aligning Convergent Nodes with Branch Ancestors ===')
+    nodes.forEach(node => {
+      const parentCount = nodeParentCount.get(node.id) || 0
+      
+      // If this is a convergent node (2+ parents)
+      if (parentCount >= 2) {
+        const parents = parentMap.get(node.id) || []
+        const nodeLabel = (node.data as any)?.label || node.id
+        
+        // Check if any parent is divergent
+        const divergentParent = parents.find(parentId => {
+          const layout = nodeLayout.get(parentId)
+          return layout === 'Divergent node'
+        })
+        
+        if (divergentParent) {
+          // Convergent node should have the SAME X as the branch node (not the divergent node)
+          // The Y coordinate will naturally place it below the divergent due to level-based positioning
+          
+          // Get the branch node (parent of the divergent node)
+          const divergentParents = parentMap.get(divergentParent) || []
+          if (divergentParents.length > 0) {
+            const branchNodeId = divergentParents[0]
+            const branchNodeX = branchingXPositions.has(branchNodeId) 
+              ? branchingXPositions.get(branchNodeId)!
+              : getNodeXPosition(branchNodeId)
+            
+            // Convergent should be at the branch node's X (NOT divergent's X)
+            branchingXPositions.set(node.id, branchNodeX)
+            const divergentLabel = nodes.find(n => n.id === divergentParent)
+            const branchLabel = nodes.find(n => n.id === branchNodeId)
+            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchNodeId} (parent of divergent ${(divergentLabel?.data as any)?.label || divergentParent}) at x=${branchNodeX}`)
+          }
+        } else {
+          // Find the branch node that these parents branch from
+          // Traverse up from parents to find common ancestor that is a branch node
+          const findBranchAncestor = (nodeId: string, visited = new Set<string>()): string | null => {
+            if (visited.has(nodeId)) return null
+            visited.add(nodeId)
+            
+            // Check if this node is a branch node with branching layout
+            const childCount = nodeChildCount.get(nodeId) || 0
+            if (childCount >= 2 && branchesWithLayout.get(nodeId)) {
+              return nodeId
+            }
+            
+            // Check parents
+            const nodeParents = parentMap.get(nodeId) || []
+            for (const parentId of nodeParents) {
+              const result = findBranchAncestor(parentId, visited)
+              if (result) return result
+            }
+            
+            return null
+          }
+          
+          // Search through ALL parents to find the branch ancestor, not just the first one
+          // This ensures convergent nodes align with the branch parent, not branch children
+          let branchAncestor: string | null = null
+          for (const parentId of parents) {
+            const ancestor = findBranchAncestor(parentId)
+            if (ancestor) {
+              branchAncestor = ancestor
+              break
+            }
+          }
+          
+          if (branchAncestor && branchingXPositions.has(branchAncestor)) {
+            const branchX = branchingXPositions.get(branchAncestor)!
+            branchingXPositions.set(node.id, branchX)
+            const branchLabel = nodes.find(n => n.id === branchAncestor)
+            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchAncestor} at x=${branchX}`)
+          } else {
+            console.log(`  Convergent node ${nodeLabel}: No branch ancestor found (branchAncestor=${branchAncestor}, hasPosition=${branchAncestor ? branchingXPositions.has(branchAncestor) : 'N/A'})`)
+          }
+        }
+      }
+    })
+    
+    // STEP 3: Default: All nodes inherit their parent's X position
     // Only branch children, convergent nodes, and divergent nodes get different positions
-    console.log('=== Setting Default X Positions (inherit from parent) ===')
+    console.log('=== STEP 3: Setting Default X Positions (inherit from parent) ===')
     
     // Process nodes level by level to ensure parents are positioned before children
     const maxLevel = Math.max(...Array.from(levels.values()), 0)
@@ -2580,13 +2589,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               <div className="flex items-center gap-2 mb-2">
                 <FolderOpen size={14} className="text-gray-400" />
                 <p className="text-sm text-gray-500">
-                  {projects.find(p => p.id === selectedProjectId)?.name || 'Unknown'}
+                  {convertEmojis(projects.find(p => p.id === selectedProjectId)?.name || 'Unknown')}
                 </p>
               </div>
             )}
             <div className="flex items-center gap-3 mb-1">
               
-              <h2 className="text-2xl font-bold text-gray-900">{journeyName}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
               <button
                 onClick={() => setShowNameEditModal(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -2596,7 +2605,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               </button>
             </div>
             {journeyDescription && (
-              <p className="text-gray-600">{journeyDescription}</p>
+              <p className="text-gray-600">{convertEmojis(journeyDescription)}</p>
             )}
             
           </div>
@@ -3265,144 +3274,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       </Modal>
 
       {/* Import Transcript Modal */}
-      <Modal
+      <ImportJourneyTranscriptModal
         isOpen={showImportTranscriptModal}
-        onClose={() => {
-          setShowImportTranscriptModal(false)
-          setImportTranscriptText('')
-          setImportTranscriptError(null)
-        }}
-        title="Import Journey from Transcript"
-        size="lg"
-        footerContent={
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowImportTranscriptModal(false)
-                setImportTranscriptText('')
-                setImportTranscriptError(null)
-              }}
-              disabled={importTranscriptLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleImportFromTranscript}
-              disabled={!importTranscriptText.trim() || importTranscriptLoading}
-            >
-              {importTranscriptLoading ? (
-                <>
-                  <Sparkles size={16} className="animate-pulse" />
-                  Converting...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Import
-                </>
-              )}
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-6 space-y-4">
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800 font-medium mb-1">
-              <Sparkles size={14} className="inline mr-1" />
-              AI-Powered Transcript Analysis
-            </p>
-            <p className="text-sm text-blue-700">
-              Paste a phone call transcript below. Our AI will automatically extract the user journey, 
-              identify steps, roles, and create a complete diagram for you.
-            </p>
-          </div>
-
-          {/* Layout Selector - only show when creating new journey */}
-          {nodes.length === 0 ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Journey Layout
-              </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setImportTranscriptLayout('vertical')}
-                  className={`
-                    flex-1 px-4 py-2 rounded-lg border-2 transition-all
-                    ${importTranscriptLayout === 'vertical'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                    }
-                  `}
-                  disabled={importTranscriptLoading}
-                >
-                  <div className="text-center">
-                    <div className="font-medium">Vertical</div>
-                    <div className="text-xs mt-1">Top to bottom flow</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImportTranscriptLayout('horizontal')}
-                  className={`
-                    flex-1 px-4 py-2 rounded-lg border-2 transition-all
-                    ${importTranscriptLayout === 'horizontal'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                    }
-                  `}
-                  disabled={importTranscriptLoading}
-                >
-                  <div className="text-center">
-                    <div className="font-medium">Horizontal</div>
-                    <div className="text-xs mt-1">Left to right flow</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm text-amber-800">
-                <strong>Adding to existing journey:</strong> New nodes will use the current <strong>{journeyLayout}</strong> layout to match your existing diagram.
-              </p>
-            </div>
-          )}
-          
-          <div>
-            <textarea
-              value={importTranscriptText}
-              onChange={(e) => {
-                setImportTranscriptText(e.target.value)
-                setImportTranscriptError(null)
-              }}
-              placeholder='Paste your transcript here, e.g.:
-
-"The client called to discuss their new property purchase. They mentioned they need to complete ID verification and provide proof of funds. The lawyer explained they would need to upload bank statements from the last 3 months..."'
-              className="w-full h-64 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              disabled={importTranscriptLoading}
-            />
-          </div>
-
-          {importTranscriptError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{importTranscriptError}</p>
-            </div>
-          )}
-
-          {importTranscriptLoading && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-700 flex items-center gap-2">
-                <Sparkles size={14} className="animate-pulse" />
-                {importTranscriptProgress || 'Starting AI processing...'}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Keep this tab open. Up to 15 minutes for complex transcripts.
-              </p>
-            </div>
-          )}
-        </div>
-      </Modal>
+        onClose={() => setShowImportTranscriptModal(false)}
+        onImport={handleImportFromTranscript}
+        transcriptText={importTranscriptText}
+        onTranscriptTextChange={setImportTranscriptText}
+        error={importTranscriptError}
+        onErrorChange={setImportTranscriptError}
+        loading={importTranscriptLoading}
+        progressMessage={importTranscriptProgress}
+        layout={importTranscriptLayout}
+        onLayoutChange={setImportTranscriptLayout}
+        hasExistingNodes={nodes.length > 0}
+        currentJourneyLayout={journeyLayout}
+      />
 
       {/* Edit with AI Modal */}
       <Modal
@@ -3433,12 +3319,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             >
               {editAILoading ? (
                 <>
-                  <Sparkles size={16} className="animate-pulse" />
+                  <Sparkles size={16} className="animate-pulse mr-2" />
                   Applying...
                 </>
               ) : (
                 <>
-                  <Sparkles size={16} />
+                  <Sparkles size={16} className="mr-2" />
                   Apply Changes
                 </>
               )}
@@ -3510,7 +3396,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           {editAILoading && (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-700 flex items-center gap-2">
-                <Sparkles size={14} className="animate-pulse" />
+                <Sparkles size={14} className="animate-pulse mr-2" />
                 AI is analyzing your journey and applying changes... This may take a moment.
               </p>
             </div>
