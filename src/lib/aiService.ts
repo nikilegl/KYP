@@ -247,51 +247,76 @@ export const enhanceExtractedExamples = (examples: ExtractedExample[]): Extracte
 export const convertTranscriptToJourney = async (
   transcript: string,
   customPrompt: string,
-  _userRoleNames?: string[]
+  _userRoleNames?: string[],
+  onProgress?: (message: string) => void
 ): Promise<any> => {
   try {
-    console.log('Converting transcript with AI...')
+    console.log('Converting transcript with AI (async processing)...')
     
-    // Call regular function with optimized prompt
-    const response = await fetch('/.netlify/functions/transcript-to-journey', {
+    // Get current user
+    if (!supabase) {
+      throw new Error('Database not configured')
+    }
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('User not authenticated')
+    }
+
+    // Step 1: Start the job
+    onProgress?.('Starting AI processing...')
+    const startResponse = await fetch('/.netlify/functions/transcript-start', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         transcript,
-        prompt: customPrompt
+        prompt: customPrompt,
+        userId: user.id
       }),
     })
 
-    const responseText = await response.text()
+    if (!startResponse.ok) {
+      const errorText = await startResponse.text()
+      throw new Error(errorText || `Failed to start: ${startResponse.status}`)
+    }
+
+    const { jobId } = await startResponse.json()
+    console.log(`Job started: ${jobId}`)
+
+    // Step 2: Poll for completion
+    const maxAttempts = 180 // 15 minutes (5 second intervals)
+    let attempts = 0
     
-    if (!response.ok) {
-      let errorMessage = 'Failed to convert transcript'
-      try {
-        const errorData = JSON.parse(responseText)
-        errorMessage = errorData.error || errorData.message || errorMessage
-      } catch {
-        errorMessage = responseText || `HTTP ${response.status}: ${response.statusText}`
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
+      attempts++
+      
+      const elapsed = attempts * 5
+      onProgress?.(`Processing... ${elapsed}s elapsed`)
+      
+      const statusResponse = await fetch(`/.netlify/functions/job-status?jobId=${jobId}`)
+      
+      if (!statusResponse.ok) {
+        throw new Error('Failed to check job status')
       }
-      throw new Error(errorMessage)
-    }
-
-    let result
-    try {
-      result = JSON.parse(responseText)
-    } catch {
-      throw new Error('Invalid JSON response from server')
+      
+      const statusData = await statusResponse.json()
+      
+      if (statusData.status === 'completed') {
+        console.log('✓ Transcript conversion successful!')
+        console.log('Nodes extracted:', statusData.result?.nodes?.length || 0)
+        return statusData.result
+      }
+      
+      if (statusData.status === 'failed') {
+        throw new Error(statusData.error || 'Processing failed')
+      }
+      
+      // Otherwise, keep polling (status is 'processing')
     }
     
-    if (!result.journey) {
-      throw new Error('Server response is missing journey data')
-    }
+    throw new Error('Processing timeout after 15 minutes')
     
-    console.log('✓ Transcript conversion successful!')
-    console.log('Nodes extracted:', result.journey.nodes?.length || 0)
-
-    return result.journey
   } catch (error) {
     console.error('Error converting transcript to journey:', error)
     throw error
