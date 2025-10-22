@@ -7,12 +7,15 @@ export interface UserJourney {
   name: string
   description?: string
   layout?: 'vertical' | 'horizontal'
+  status?: 'draft' | 'published'
   flow_data?: {
     nodes: Node[]
     edges: Edge[]
   }
   created_at: string
   updated_at: string
+  created_by?: string | null
+  updated_by?: string | null
   short_id?: number
 }
 
@@ -34,6 +37,10 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
   }
 
   try {
+    // Get current user to filter draft journeys
+    const { data: { user } } = await supabase.auth.getUser()
+    const currentUserId = user?.id
+    
     let query = supabase
       .from('user_journeys')
       .select('*')
@@ -47,7 +54,18 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
     const { data, error } = await query
 
     if (error) throw error
-    return data || []
+    
+    // Filter results: show published journeys to all, but draft journeys only to creator
+    const filteredData = (data || []).filter(journey => {
+      // If published, show to everyone
+      if (journey.status === 'published') return true
+      // If draft, only show to creator
+      if (journey.status === 'draft') return journey.created_by === currentUserId
+      // Default to showing if no status (for backwards compatibility)
+      return true
+    })
+    
+    return filteredData
   } catch (error) {
     console.error('Error fetching user journeys:', error)
     
@@ -140,6 +158,9 @@ export const createUserJourney = async (
   }
 
   try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
     const { data, error } = await supabase
       .from('user_journeys')
       .insert([
@@ -148,7 +169,9 @@ export const createUserJourney = async (
           name,
           description,
           layout,
-          flow_data: flowData
+          flow_data: flowData,
+          created_by: user?.id || null,
+          updated_by: user?.id || null
         }
       ])
       .select()
@@ -171,6 +194,7 @@ export const updateUserJourney = async (
     name?: string
     description?: string
     layout?: 'vertical' | 'horizontal'
+    status?: 'draft' | 'published'
     flow_data?: { nodes: Node[]; edges: Edge[] }
     project_id?: string | null
   }
@@ -203,11 +227,15 @@ export const updateUserJourney = async (
   }
 
   try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
     const { data, error } = await supabase
       .from('user_journeys')
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null
       })
       .eq('id', journeyId)
       .select()

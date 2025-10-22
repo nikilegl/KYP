@@ -226,9 +226,12 @@ export interface UserJourney {
   project_id: string
   name: string
   layout?: 'vertical' | 'horizontal'
+  status?: 'draft' | 'published'
   short_id: number
   created_at: string
   updated_at: string
+  created_by?: string | null
+  updated_by?: string | null
 }
 
 export interface UserJourneyNode {

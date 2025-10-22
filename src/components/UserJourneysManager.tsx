@@ -12,9 +12,17 @@ import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
 
+interface WorkspaceUserInfo {
+  id: string
+  email: string
+  full_name?: string
+}
+
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
   lawFirms?: LawFirm[]
+  createdByUser?: WorkspaceUserInfo
+  updatedByUser?: WorkspaceUserInfo
 }
 
 interface UserJourneysManagerProps {
@@ -41,6 +49,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     name: '',
     description: '',
     layout: 'vertical' as 'vertical' | 'horizontal',
+    status: 'draft' as 'draft' | 'published',
     project_id: ''
   })
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
@@ -112,7 +121,43 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       // Load all journeys (including those without projects)
       const allJourneys = await getUserJourneys()
       
-      // Enrich with project data and law firms
+      // Get unique user IDs from created_by and updated_by
+      const userIds = new Set<string>()
+      allJourneys.forEach(journey => {
+        if (journey.created_by) userIds.add(journey.created_by)
+        if (journey.updated_by) userIds.add(journey.updated_by)
+      })
+      
+      console.log('📊 User Journey Tracking Debug:')
+      console.log('- Total journeys:', allJourneys.length)
+      console.log('- Journeys with created_by:', allJourneys.filter(j => j.created_by).length)
+      console.log('- Journeys with updated_by:', allJourneys.filter(j => j.updated_by).length)
+      console.log('- Unique user IDs:', Array.from(userIds))
+      
+      // Fetch user information if we have Supabase configured
+      const usersMap = new Map<string, WorkspaceUserInfo>()
+      if (supabase && userIds.size > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('workspace_users')
+          .select('user_id, full_name, user_email')
+          .in('user_id', Array.from(userIds))
+        
+        console.log('- Fetched users:', users?.length || 0)
+        if (usersError) console.error('- Error fetching users:', usersError)
+        
+        if (users) {
+          users.forEach(user => {
+            usersMap.set(user.user_id, {
+              id: user.user_id,
+              full_name: user.full_name,
+              email: user.user_email
+            })
+          })
+          console.log('- Users map size:', usersMap.size)
+        }
+      }
+      
+      // Enrich with project data, law firms, and user information
       const journeysWithData: UserJourneyWithProject[] = await Promise.all(
         allJourneys.map(async journey => {
           const project = journey.project_id 
@@ -128,7 +173,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           return {
             ...journey,
             project,
-            lawFirms
+            lawFirms,
+            createdByUser: journey.created_by ? usersMap.get(journey.created_by) : undefined,
+            updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined
           }
         })
       )
@@ -165,6 +212,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       name: journey.name,
       description: journey.description || '',
       layout: journey.layout || 'vertical',
+      status: journey.status || 'draft',
       project_id: journey.project_id || ''
     })
     // Set selected law firms
@@ -181,6 +229,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         name: editForm.name,
         description: editForm.description,
         layout: editForm.layout,
+        status: editForm.status,
         project_id: editForm.project_id || null
       })
       
@@ -198,6 +247,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               name: editForm.name, 
               description: editForm.description,
               layout: editForm.layout,
+              status: editForm.status,
               project_id: editForm.project_id || null,
               project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined,
               lawFirms: updatedLawFirms
@@ -306,6 +356,24 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       )
     },
     {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (journey) => {
+        const status = journey.status || 'draft'
+        return (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            status === 'published' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-100 text-gray-800'
+          }`}>
+            {status === 'published' ? 'Published' : 'Draft'}
+          </span>
+        )
+      }
+    },
+    {
       key: 'nodes_count',
       header: 'Nodes',
       sortable: false,
@@ -334,23 +402,65 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       key: 'created_at',
       header: 'Created',
       sortable: true,
-      width: '120px',
-      render: (journey) => (
-        <div className="text-sm text-gray-600">
-          {new Date(journey.created_at).toLocaleDateString()}
-        </div>
-      )
+      width: '180px',
+      render: (journey) => {
+        const createdDate = new Date(journey.created_at)
+        const formattedDate = createdDate.toLocaleDateString('en-GB', { 
+          day: 'numeric', 
+          month: 'short', 
+          year: '2-digit' 
+        })
+        const formattedTime = createdDate.toLocaleTimeString('en-GB', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        }).toLowerCase()
+        
+        return (
+          <div className="break-words whitespace-normal">
+            <div className="text-xs text-gray-500 mb-1">
+              {formattedDate}, {formattedTime}
+            </div>
+            {journey.createdByUser && (
+              <div className="font-medium text-gray-900">
+                {journey.createdByUser.full_name || journey.createdByUser.email}
+              </div>
+            )}
+          </div>
+        )
+      }
     },
     {
       key: 'updated_at',
       header: 'Last Updated',
       sortable: true,
-      width: '120px',
-      render: (journey) => (
-        <div className="text-sm text-gray-600">
-          {new Date(journey.updated_at).toLocaleDateString()}
-        </div>
-      )
+      width: '180px',
+      render: (journey) => {
+        const updatedDate = new Date(journey.updated_at)
+        const formattedDate = updatedDate.toLocaleDateString('en-GB', { 
+          day: 'numeric', 
+          month: 'short', 
+          year: '2-digit' 
+        })
+        const formattedTime = updatedDate.toLocaleTimeString('en-GB', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        }).toLowerCase()
+        
+        return (
+          <div className="break-words whitespace-normal">
+            <div className="text-xs text-gray-500 mb-1">
+              {formattedDate}, {formattedTime}
+            </div>
+            {journey.updatedByUser && (
+              <div className="font-medium text-gray-900">
+                {journey.updatedByUser.full_name || journey.updatedByUser.email}
+              </div>
+            )}
+          </div>
+        )
+      }
     },
     {
       key: 'actions',
@@ -621,6 +731,19 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               >
                 <option value="vertical">Vertical (Top to Bottom)</option>
                 <option value="horizontal">Horizontal (Left to Right)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <select
+                value={editForm.status}
+                onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value as 'draft' | 'published' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="draft">Draft (Only visible to you)</option>
+                <option value="published">Published (Visible to all workspace members)</option>
               </select>
             </div>
             <div>
