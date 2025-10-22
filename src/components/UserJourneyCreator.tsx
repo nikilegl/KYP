@@ -2604,8 +2604,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            {/* Status Badge */}
-            <div className="mb-3">
+            {/* Status Badge and Epic on same row */}
+            <div className="flex items-center gap-3 mb-3">
+            {selectedProjectId && (
+                <div className="flex items-center gap-2">
+                  <FolderOpen size={14} className="text-gray-400" />
+                  <p className="text-sm text-gray-500">
+                    {convertEmojis(projects.find(p => p.id === selectedProjectId)?.name || 'Unknown')}
+                  </p>
+                </div>
+              )}
+
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                 journeyStatus === 'published' 
                   ? 'bg-green-100 text-green-800' 
@@ -2613,16 +2622,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               }`}>
                 {journeyStatus === 'published' ? 'Published' : 'Draft'}
               </span>
+              
+             
             </div>
             
-          {selectedProjectId && (
-              <div className="flex items-center gap-2 mb-2">
-                <FolderOpen size={14} className="text-gray-400" />
-                <p className="text-sm text-gray-500">
-                  {convertEmojis(projects.find(p => p.id === selectedProjectId)?.name || 'Unknown')}
-                </p>
-              </div>
-            )}
             <div className="flex items-center gap-3 mb-1">
               
               <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
