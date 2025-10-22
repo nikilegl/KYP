@@ -369,6 +369,8 @@ export const editJourneyWithAI = async (
     // Trigger background function (fire and forget - Netlify returns 202 immediately)
     onProgress?.('Starting AI processing...')
     
+    console.log('Triggering edit-journey-background function...')
+    
     // Don't wait for this to complete - it will run in background for up to 15 minutes
     fetch('/.netlify/functions/edit-journey-background', {
       method: 'POST',
@@ -378,6 +380,8 @@ export const editJourneyWithAI = async (
         instruction,
         userId: user.id
       }),
+    }).then(res => {
+      console.log('Background function trigger response:', res.status, res.statusText)
     }).catch(err => {
       console.error('Failed to trigger background function:', err)
     })
@@ -386,6 +390,7 @@ export const editJourneyWithAI = async (
     const startTime = Date.now()
     const maxWaitTime = 15 * 60 * 1000 // 15 minutes
     const pollInterval = 5000 // 5 seconds
+    const jobCreationTimeout = 30000 // 30 seconds to wait for job creation
     
     // Wait a moment for job to be created
     await new Promise(resolve => setTimeout(resolve, 2000))
@@ -418,17 +423,33 @@ export const editJourneyWithAI = async (
       const job = jobs?.[0]
       if (!job) {
         // Job not created yet, keep waiting
+        if (elapsed > jobCreationTimeout) {
+          throw new Error(
+            'Background job was not created within 30 seconds. ' +
+            'This might indicate the background function failed to start. ' +
+            'Please check that edit-journey-background function is deployed.'
+          )
+        }
+        console.log('No job found yet, waiting...')
         await new Promise(resolve => setTimeout(resolve, pollInterval))
         continue
       }
       
+      console.log(`Job status: ${job.status}, created: ${job.created_at}`)
+      
       if (job.status === 'completed') {
         console.log('✓ Journey editing successful!')
         console.log('Nodes in result:', job.result_data?.nodes?.length || 0)
+        
+        if (!job.result_data) {
+          throw new Error('Job completed but no result data returned')
+        }
+        
         return job.result_data
       }
       
       if (job.status === 'failed') {
+        console.error('Job failed:', job.error_message)
         throw new Error(job.error_message || 'Processing failed')
       }
       
