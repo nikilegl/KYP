@@ -1,5 +1,6 @@
 import { NodeResizer } from '@xyflow/react'
 import { Edit } from 'lucide-react'
+import { convertEmojis } from '../../../utils/emojiConverter'
 
 export interface HighlightRegionNodeData {
   label: string
@@ -68,7 +69,7 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
               color: '#000',
             }}
           >
-            {label}
+            {convertEmojis(label)}
           </div>
           
           {/* Edit button - only show when selected */}

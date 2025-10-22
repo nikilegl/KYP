@@ -40,6 +40,7 @@ import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
 import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyLayoutCalculator'
 import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
+import { convertEmojis } from '../utils/emojiConverter'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -2588,13 +2589,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               <div className="flex items-center gap-2 mb-2">
                 <FolderOpen size={14} className="text-gray-400" />
                 <p className="text-sm text-gray-500">
-                  {projects.find(p => p.id === selectedProjectId)?.name || 'Unknown'}
+                  {convertEmojis(projects.find(p => p.id === selectedProjectId)?.name || 'Unknown')}
                 </p>
               </div>
             )}
             <div className="flex items-center gap-3 mb-1">
               
-              <h2 className="text-2xl font-bold text-gray-900">{journeyName}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
               <button
                 onClick={() => setShowNameEditModal(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -2604,7 +2605,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               </button>
             </div>
             {journeyDescription && (
-              <p className="text-gray-600">{journeyDescription}</p>
+              <p className="text-gray-600">{convertEmojis(journeyDescription)}</p>
             )}
             
           </div>
