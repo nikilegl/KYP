@@ -130,6 +130,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [editAIError, setEditAIError] = useState<string | null>(null)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [editAILoading, setEditAILoading] = useState(false)
+  const [editAIProgress, setEditAIProgress] = useState<string>('')
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
   const [lawFirmSearchQuery, setLawFirmSearchQuery] = useState('')
@@ -1205,8 +1206,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       console.log('Current nodes:', currentJourney.nodes.length)
       console.log('Instruction:', editInstruction)
 
-      // Call OpenAI API to edit the journey
-      const updatedJourney = await editJourneyWithAI(currentJourney, editInstruction)
+      // Call OpenAI API to edit the journey (with progress updates)
+      const updatedJourney = await editJourneyWithAI(
+        currentJourney, 
+        editInstruction,
+        (progress) => {
+          setEditAIProgress(progress)
+        }
+      )
 
       // Convert the AI-updated nodes back to React Flow format
       const updatedNodes = updatedJourney.nodes.map((node: any) => {
@@ -1258,6 +1265,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setEditInstruction('')
       setEditAIError(null)
       setEditAILoading(false)
+      setEditAIProgress('')
 
       // Show success message
       alert(`Successfully applied AI edits! Updated ${updatedNodes.length} nodes.`)
@@ -1269,6 +1277,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           : 'Failed to apply edits. Please try again.'
       )
       setEditAILoading(false)
+      setEditAIProgress('')
     }
   }, [editInstruction, journeyName, journeyDescription, nodes, edges, userRoles, setNodes, setEdges])
 
@@ -3334,9 +3343,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       <Modal
         isOpen={showEditWithAIModal}
         onClose={() => {
-          setShowEditWithAIModal(false)
-          setEditInstruction('')
-          setEditAIError(null)
+          if (!editAILoading) {
+            setShowEditWithAIModal(false)
+            setEditInstruction('')
+            setEditAIError(null)
+            setEditAIProgress('')
+          }
         }}
         title="Edit Journey with AI"
         size="lg"
@@ -3345,9 +3357,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <Button
               variant="outline"
               onClick={() => {
-                setShowEditWithAIModal(false)
-                setEditInstruction('')
-                setEditAIError(null)
+                if (!editAILoading) {
+                  setShowEditWithAIModal(false)
+                  setEditInstruction('')
+                  setEditAIError(null)
+                  setEditAIProgress('')
+                }
               }}
               disabled={editAILoading}
             >
@@ -3437,7 +3452,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-700 flex items-center gap-2">
                 <Sparkles size={14} className="animate-pulse mr-2" />
-                AI is analyzing your journey and applying changes... This may take a moment.
+                {editAIProgress || 'AI is analyzing your journey and applying changes... This may take a moment.'}
               </p>
             </div>
           )}
