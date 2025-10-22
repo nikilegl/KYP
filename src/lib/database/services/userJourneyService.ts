@@ -7,6 +7,7 @@ export interface UserJourney {
   name: string
   description?: string
   layout?: 'vertical' | 'horizontal'
+  status?: 'draft' | 'published'
   flow_data?: {
     nodes: Node[]
     edges: Edge[]
@@ -36,6 +37,10 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
   }
 
   try {
+    // Get current user to filter draft journeys
+    const { data: { user } } = await supabase.auth.getUser()
+    const currentUserId = user?.id
+    
     let query = supabase
       .from('user_journeys')
       .select('*')
@@ -49,7 +54,18 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
     const { data, error } = await query
 
     if (error) throw error
-    return data || []
+    
+    // Filter results: show published journeys to all, but draft journeys only to creator
+    const filteredData = (data || []).filter(journey => {
+      // If published, show to everyone
+      if (journey.status === 'published') return true
+      // If draft, only show to creator
+      if (journey.status === 'draft') return journey.created_by === currentUserId
+      // Default to showing if no status (for backwards compatibility)
+      return true
+    })
+    
+    return filteredData
   } catch (error) {
     console.error('Error fetching user journeys:', error)
     
@@ -178,6 +194,7 @@ export const updateUserJourney = async (
     name?: string
     description?: string
     layout?: 'vertical' | 'horizontal'
+    status?: 'draft' | 'published'
     flow_data?: { nodes: Node[]; edges: Edge[] }
     project_id?: string | null
   }

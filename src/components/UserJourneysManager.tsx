@@ -49,6 +49,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     name: '',
     description: '',
     layout: 'vertical' as 'vertical' | 'horizontal',
+    status: 'draft' as 'draft' | 'published',
     project_id: ''
   })
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
@@ -211,6 +212,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       name: journey.name,
       description: journey.description || '',
       layout: journey.layout || 'vertical',
+      status: journey.status || 'draft',
       project_id: journey.project_id || ''
     })
     // Set selected law firms
@@ -227,6 +229,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         name: editForm.name,
         description: editForm.description,
         layout: editForm.layout,
+        status: editForm.status,
         project_id: editForm.project_id || null
       })
       
@@ -244,6 +247,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               name: editForm.name, 
               description: editForm.description,
               layout: editForm.layout,
+              status: editForm.status,
               project_id: editForm.project_id || null,
               project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined,
               lawFirms: updatedLawFirms
@@ -350,6 +354,24 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           <div className="font-medium text-gray-900">{convertEmojis(journey.name)}</div>
         </div>
       )
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (journey) => {
+        const status = journey.status || 'draft'
+        return (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            status === 'published' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-100 text-gray-800'
+          }`}>
+            {status === 'published' ? 'Published' : 'Draft'}
+          </span>
+        )
+      }
     },
     {
       key: 'nodes_count',
@@ -709,6 +731,19 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               >
                 <option value="vertical">Vertical (Top to Bottom)</option>
                 <option value="horizontal">Horizontal (Left to Right)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <select
+                value={editForm.status}
+                onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value as 'draft' | 'published' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="draft">Draft (Only visible to you)</option>
+                <option value="published">Published (Visible to all workspace members)</option>
               </select>
             </div>
             <div>

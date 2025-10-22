@@ -96,6 +96,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [journeyLayout, setJourneyLayout] = useState<'vertical' | 'horizontal'>('vertical')
+  const [journeyStatus, setJourneyStatus] = useState<'draft' | 'published'>('draft')
   const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -255,6 +256,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setJourneyName(journey.name)
           setJourneyDescription(journey.description || '')
           setJourneyLayout(journey.layout || 'vertical')
+          setJourneyStatus(journey.status || 'draft')
           setSelectedProjectId(journey.project_id || '')
           
           // Load associated law firms
@@ -663,6 +665,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           name: journeyName,
           description: journeyDescription,
           layout: journeyLayout,
+          status: journeyStatus,
           flow_data: flowData,
           project_id: selectedProjectId || null
         })
@@ -676,7 +679,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setTimeout(() => setJustSaved(false), 3000)
         }
       } else {
-        // Create new journey
+        // Create new journey (default to draft)
         const created = await createUserJourney(
           journeyName,
           journeyDescription,
@@ -703,7 +706,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     } finally {
       setSaving(false)
     }
-  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, selectedLawFirmIds])
+  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, journeyStatus, selectedLawFirmIds])
 
   // Export journey as JSON
   const exportJourney = useCallback(() => {
@@ -2585,6 +2588,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
+            {/* Status Badge */}
+            <div className="mb-3">
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                journeyStatus === 'published' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {journeyStatus === 'published' ? 'Published' : 'Draft'}
+              </span>
+            </div>
+            
           {selectedProjectId && (
               <div className="flex items-center gap-2 mb-2">
                 <FolderOpen size={14} className="text-gray-400" />
@@ -2959,6 +2973,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select
+                  value={journeyStatus}
+                  onChange={(e) => setJourneyStatus(e.target.value as 'draft' | 'published')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="draft">Draft (Only visible to you)</option>
+                  <option value="published">Published (Visible to all workspace members)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Epic
                 </label>
                 <select
@@ -3051,6 +3078,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                       await updateUserJourney(currentJourneyId, {
                         name: journeyName,
                         description: journeyDescription,
+                        layout: journeyLayout,
+                        status: journeyStatus,
                         project_id: selectedProjectId || null
                       })
                       
