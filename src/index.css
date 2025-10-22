@@ -305,3 +305,27 @@ body.modal-open {
   background-color: #dbeafe;
   color: #1d4ed8;
 }
+
+/* React Flow edge interaction improvements */
+.react-flow__edge-interaction {
+  pointer-events: stroke !important;
+  cursor: pointer !important;
+}
+
+/* Ensure edge selection works properly */
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge.selected path {
+  stroke: #3b82f6 !important;
+  stroke-width: 4 !important;
+}
+
+/* Make edges more visible */
+.react-flow__edge-path {
+  stroke-width: 3;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #3b82f6 !important;
+  stroke-width: 4 !important;
+}

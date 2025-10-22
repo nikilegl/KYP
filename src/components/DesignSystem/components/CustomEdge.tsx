@@ -61,28 +61,32 @@ export function CustomEdge(props: CustomEdgeProps) {
 
   return (
     <>
-      {/* Invisible wider path for easier hover and selection */}
+      {/* Interactive invisible path with large hit area */}
       <path
+        id={id}
         d={edgePath}
         fill="none"
-        stroke="transparent"
-        strokeWidth={50}
-        className="react-flow__edge-path"
+        stroke="rgba(0,0,0,0.01)" // Nearly transparent but not completely
+        strokeWidth={150}
+        className="react-flow__edge-interaction"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+        style={{ 
+          cursor: 'pointer',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round'
+        }}
       />
       {/* Visible edge path */}
       <path
         d={edgePath}
         fill="none"
-        strokeWidth={isHighlighted ? 3 : 2}
-        stroke={data?.highlighted ? '#10b981' : (isHighlighted ? '#3b82f6' : '#b1b1b7')}
+        strokeWidth={isHighlighted ? 4 : 3}
+        stroke={data?.highlighted ? '#10b981' : (isHighlighted ? '#3b82f6' : '#9ca3af')}
         className={`react-flow__edge-path ${selected ? 'selected' : ''} ${data?.highlighted ? 'highlighted' : ''}`}
         style={{ 
           pointerEvents: 'none',
-          stroke: data?.highlighted ? '#10b981' : (isHighlighted ? '#3b82f6' : '#b1b1b7'),
-          strokeWidth: isHighlighted ? 3 : 2,
+          transition: 'stroke 0.15s ease, stroke-width 0.15s ease',
         }}
         markerEnd={markerEnd}
       />

@@ -2733,6 +2733,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          defaultEdgeOptions={{
+            style: { strokeWidth: 3, stroke: '#9ca3af' },
+            interactionWidth: 50
+          }}
           connectionMode={ConnectionMode.Loose}
           fitView
           attributionPosition="bottom-left"
