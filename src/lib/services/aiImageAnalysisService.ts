@@ -102,9 +102,11 @@ export async function analyzeJourneyImageWithBackground(
     const base64Image = await fileToBase64(compressedImage)
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
-    // Start background job
+    // Trigger background function (fire and forget)
     onProgress?.('Starting AI processing...', 0)
-    const response = await fetch('/.netlify/functions/diagram-to-journey-start', {
+    
+    // Don't wait for this to complete - it will run in background for up to 15 minutes
+    fetch('/.netlify/functions/diagram-to-journey-background', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -112,50 +114,12 @@ export async function analyzeJourneyImageWithBackground(
         prompt: prompt,
         userId: user.id
       })
+    }).catch(err => {
+      console.error('Failed to trigger background function:', err)
     })
-
-    if (!response.ok) {
-      let errorMessage = `Failed to start processing: ${response.status} ${response.statusText}`
-      try {
-        const errorText = await response.text()
-        console.error('Background function error response:', errorText)
-        if (errorText) {
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorData.message || errorText
-          } catch {
-            errorMessage = errorText
-          }
-        }
-      } catch (e) {
-        console.error('Error reading error response:', e)
-      }
-      throw new Error(errorMessage)
-    }
-
-    // Check if response has content
-    const responseText = await response.text()
-    if (!responseText || responseText.trim() === '') {
-      throw new Error('Background function returned empty response. Function may not be deployed correctly.')
-    }
-
-    let jobData
-    try {
-      jobData = JSON.parse(responseText)
-    } catch (e) {
-      console.error('Failed to parse background function response:', responseText)
-      throw new Error(`Invalid JSON response from background function: ${responseText.substring(0, 100)}`)
-    }
-
-    const { jobId } = jobData
-    if (!jobId) {
-      throw new Error('Background function did not return a job ID')
-    }
     
-    console.log(`Background job started: ${jobId}`)
-    
-    // Poll for results
-    const result = await pollForJobCompletion(jobId, onProgress)
+    // Poll database directly for job completion
+    const result = await pollDatabaseForJobCompletion(user.id, 'diagram', onProgress)
     
     return processJourneyData(result)
     
@@ -166,10 +130,11 @@ export async function analyzeJourneyImageWithBackground(
 }
 
 /**
- * Poll database for job completion
+ * Poll database directly for job completion
  */
-async function pollForJobCompletion(
-  jobId: string,
+async function pollDatabaseForJobCompletion(
+  userId: string,
+  jobType: 'diagram' | 'transcript',
   onProgress?: (message: string, elapsed: number) => void
 ): Promise<any> {
   if (!supabase) {
@@ -180,6 +145,9 @@ async function pollForJobCompletion(
   const maxWaitTime = 15 * 60 * 1000 // 15 minutes
   const pollInterval = 2000 // 2 seconds
 
+  // Wait a moment for job to be created
+  await new Promise(resolve => setTimeout(resolve, 2000))
+
   while (true) {
     const elapsed = Date.now() - startTime
     
@@ -187,18 +155,32 @@ async function pollForJobCompletion(
       throw new Error('Processing timeout (15 minutes)')
     }
 
-    // Query job status
-    const { data: job, error } = await supabase
+    const elapsedSeconds = Math.floor(elapsed / 1000)
+    
+    // Query latest job for this user of this type
+    const { data: jobs, error } = await supabase
       .from('ai_processing_jobs')
       .select('*')
-      .eq('id', jobId)
-      .single()
+      .eq('user_id', userId)
+      .eq('job_type', jobType)
+      .order('created_at', { ascending: false })
+      .limit(1)
 
     if (error) {
-      throw new Error(`Failed to check job status: ${error.message}`)
+      console.error('Error querying job:', error)
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+      continue
     }
 
-    const elapsedSeconds = Math.floor(elapsed / 1000)
+    const job = jobs?.[0]
+    if (!job) {
+      // Job not created yet, keep waiting
+      if (onProgress) {
+        onProgress(`Initializing... (${elapsedSeconds}s)`, elapsedSeconds)
+      }
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+      continue
+    }
     
     if (job.status === 'completed') {
       console.log(`Job completed in ${elapsedSeconds}s`)

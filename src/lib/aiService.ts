@@ -251,7 +251,7 @@ export const convertTranscriptToJourney = async (
   onProgress?: (message: string) => void
 ): Promise<any> => {
   try {
-    console.log('Converting transcript with AI (async processing)...')
+    console.log('Converting transcript with AI (background processing)...')
     
     // Get current user
     if (!supabase) {
@@ -263,9 +263,11 @@ export const convertTranscriptToJourney = async (
       throw new Error('User not authenticated')
     }
 
-    // Step 1: Start the job
+    // Trigger background function (fire and forget - Netlify returns 202 immediately)
     onProgress?.('Starting AI processing...')
-    const startResponse = await fetch('/.netlify/functions/transcript-start', {
+    
+    // Don't wait for this to complete - it will run in background for up to 15 minutes
+    fetch('/.netlify/functions/transcript-to-journey-background', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -273,49 +275,63 @@ export const convertTranscriptToJourney = async (
         prompt: customPrompt,
         userId: user.id
       }),
+    }).catch(err => {
+      console.error('Failed to trigger background function:', err)
     })
 
-    if (!startResponse.ok) {
-      const errorText = await startResponse.text()
-      throw new Error(errorText || `Failed to start: ${startResponse.status}`)
-    }
-
-    const { jobId } = await startResponse.json()
-    console.log(`Job started: ${jobId}`)
-
-    // Step 2: Poll for completion
-    const maxAttempts = 180 // 15 minutes (5 second intervals)
-    let attempts = 0
+    // Poll database directly for job completion
+    const startTime = Date.now()
+    const maxWaitTime = 15 * 60 * 1000 // 15 minutes
+    const pollInterval = 5000 // 5 seconds
     
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
-      attempts++
+    // Wait a moment for job to be created
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    while (true) {
+      const elapsed = Date.now() - startTime
       
-      const elapsed = attempts * 5
-      onProgress?.(`Processing... ${elapsed}s elapsed`)
+      if (elapsed > maxWaitTime) {
+        throw new Error('Processing timeout after 15 minutes')
+      }
+
+      const elapsedSeconds = Math.floor(elapsed / 1000)
+      onProgress?.(`Processing... ${elapsedSeconds}s elapsed`)
       
-      const statusResponse = await fetch(`/.netlify/functions/job-status?jobId=${jobId}`)
+      // Query latest job for this user of type 'transcript'
+      const { data: jobs, error: queryError } = await supabase
+        .from('ai_processing_jobs')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('job_type', 'transcript')
+        .order('created_at', { ascending: false })
+        .limit(1)
       
-      if (!statusResponse.ok) {
-        throw new Error('Failed to check job status')
+      if (queryError) {
+        console.error('Error querying job:', queryError)
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        continue
       }
       
-      const statusData = await statusResponse.json()
+      const job = jobs?.[0]
+      if (!job) {
+        // Job not created yet, keep waiting
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        continue
+      }
       
-      if (statusData.status === 'completed') {
+      if (job.status === 'completed') {
         console.log('✓ Transcript conversion successful!')
-        console.log('Nodes extracted:', statusData.result?.nodes?.length || 0)
-        return statusData.result
+        console.log('Nodes extracted:', job.result_data?.nodes?.length || 0)
+        return job.result_data
       }
       
-      if (statusData.status === 'failed') {
-        throw new Error(statusData.error || 'Processing failed')
+      if (job.status === 'failed') {
+        throw new Error(job.error_message || 'Processing failed')
       }
       
-      // Otherwise, keep polling (status is 'processing')
+      // Still processing, wait and poll again
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
     }
-    
-    throw new Error('Processing timeout after 15 minutes')
     
   } catch (error) {
     console.error('Error converting transcript to journey:', error)
