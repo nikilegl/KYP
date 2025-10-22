@@ -38,8 +38,8 @@ interface SettingsManagerProps {
   onNavigateToStakeholdersWithFilter: (userRoleId: string) => void
   
   // Platform handlers
-  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string) => Promise<void>
-  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string }) => Promise<boolean>
+  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string, logo?: string) => Promise<void>
+  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string; logo?: string }) => Promise<boolean>
   onDeletePlatform: (platformId: string) => Promise<void>
   
   // User permission handlers

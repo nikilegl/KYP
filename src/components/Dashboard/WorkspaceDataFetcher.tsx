@@ -762,14 +762,14 @@ export function WorkspaceDataFetcher({
   }
 
   // Platform handlers
-  const handleCreatePlatform = async (name: string, colour: string, icon?: string, description?: string) => {
-    const platform = await createPlatform(name, colour, icon, description)
+  const handleCreatePlatform = async (name: string, colour: string, icon?: string, description?: string, logo?: string) => {
+    const platform = await createPlatform(name, colour, icon, description, logo)
     if (platform) {
       setPlatforms([platform, ...platforms])
     }
   }
 
-  const handleUpdatePlatform = async (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string }): Promise<boolean> => {
+  const handleUpdatePlatform = async (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string; logo?: string }): Promise<boolean> => {
     const updatedPlatform = await updatePlatform(platformId, updates)
     if (updatedPlatform) {
       setPlatforms(platforms.map(platform => 

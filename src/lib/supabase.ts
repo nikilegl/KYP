@@ -166,6 +166,7 @@ export interface Platform {
   description?: string
   colour: string
   icon?: string
+  logo?: string
   created_at: string
   updated_at: string
 }

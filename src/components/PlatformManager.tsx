@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Plus, Server, Database, Zap, User, Globe, ExternalLink, Cloud, Cpu, HardDrive, Monitor } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
@@ -8,8 +8,8 @@ import type { Platform } from '../lib/supabase'
 
 interface PlatformManagerProps {
   platforms: Platform[]
-  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string) => Promise<void>
-  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string }) => Promise<boolean>
+  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string, logo?: string) => Promise<void>
+  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string; logo?: string }) => Promise<boolean>
   onDeletePlatform: (platformId: string) => Promise<void>
 }
 
@@ -26,9 +26,59 @@ export function PlatformManager({
     name: '', 
     colour: '#3B82F6', 
     icon: 'Server',
-    description: ''
+    description: '',
+    logo: ''
   })
   const [saving, setSaving] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type (SVG preferred, but allow images)
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Validate file size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('File size must be less than 2MB')
+      return
+    }
+
+    setUploadingLogo(true)
+
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result as string
+        
+        // If it's an SVG, store as text, otherwise as base64
+        if (file.type === 'image/svg+xml') {
+          // Read as text for SVG
+          const textReader = new FileReader()
+          textReader.onload = (evt) => {
+            const svgText = evt.target?.result as string
+            setFormData(prev => ({ ...prev, logo: svgText }))
+            setUploadingLogo(false)
+          }
+          textReader.readAsText(file)
+        } else {
+          setFormData(prev => ({ ...prev, logo: result }))
+          setUploadingLogo(false)
+        }
+      }
+      reader.readAsDataURL(file)
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      setUploadingLogo(false)
+      alert('Failed to upload logo')
+    }
+  }
 
   const handleCreate = async () => {
     setSaving(true)
@@ -37,9 +87,10 @@ export function PlatformManager({
         formData.name, 
         formData.colour, 
         formData.icon,
-        formData.description
+        formData.description,
+        formData.logo
       )
-      setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '' })
+      setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
       setShowCreateModal(false)
     } catch (error) {
       console.error('Error creating platform:', error)
@@ -57,13 +108,14 @@ export function PlatformManager({
         name: formData.name,
         colour: formData.colour,
         icon: formData.icon,
-        description: formData.description
+        description: formData.description,
+        logo: formData.logo
       })
       
       if (success) {
         setShowEditModal(false)
         setSelectedPlatform(null)
-        setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '' })
+        setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
       } else {
         console.error('Failed to update platform')
       }
@@ -80,7 +132,8 @@ export function PlatformManager({
       name: platform.name,
       colour: platform.colour,
       icon: platform.icon || 'Server',
-      description: platform.description || ''
+      description: platform.description || '',
+      logo: platform.logo || ''
     })
     setShowEditModal(true)
   }
@@ -110,65 +163,64 @@ export function PlatformManager({
     return IconComponent
   }
 
+  const renderLogo = (logo?: string) => {
+    if (!logo) return null
+    
+    // If it's SVG content
+    if (logo.includes('<svg')) {
+      return <div className="w-8 h-8 flex items-center justify-center mr-3" dangerouslySetInnerHTML={{ __html: logo }} />
+    }
+    
+    // If it's a base64 image
+    return <img src={logo} alt="Logo" className="w-8 h-8 object-contain mr-3" />
+  }
+
   // Define columns for DataTable
   const columns: Column<Platform>[] = [
     {
       key: 'platform',
       header: 'Platform',
       sortable: true,
-      width: '30%',
       render: (platform) => {
         const IconComponent = getIcon(platform.icon)
         return (
-          <div className="flex items-center">
-            <div 
-              className="flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: platform.colour }}
-            >
-              <IconComponent size={20} className="text-white" />
-            </div>
-            <div className="ml-4">
-              <div className="text-sm font-medium text-gray-900">
+          <div className="flex items-center min-w-0">
+            {platform.logo ? (
+              renderLogo(platform.logo)
+            ) : (
+              <div 
+                className="flex-shrink-0 h-8 w-8 rounded-lg flex items-center justify-center mr-3"
+                style={{ backgroundColor: platform.colour }}
+              >
+                <IconComponent size={16} className="text-white" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-900 truncate">
                 {platform.name}
               </div>
+              {platform.description && (
+                <div className="text-xs text-gray-500 truncate">
+                  {platform.description}
+                </div>
+              )}
             </div>
           </div>
         )
       }
     },
     {
-      key: 'description',
-      header: 'Description',
-      width: '35%',
-      render: (platform) => (
-        <div className="text-sm text-gray-500">
-          {platform.description || '-'}
-        </div>
-      )
-    },
-    {
       key: 'colour',
-      header: 'Colour',
-      width: '20%',
+      header: 'Color',
       render: (platform) => (
         <div className="flex items-center gap-2">
           <div 
-            className="w-6 h-6 rounded border border-gray-300"
+            className="w-5 h-5 rounded border border-gray-300 flex-shrink-0"
             style={{ backgroundColor: platform.colour }}
           />
-          <span className="text-sm text-gray-500 font-mono">
+          <span className="text-xs text-gray-500 font-mono">
             {platform.colour}
           </span>
-        </div>
-      )
-    },
-    {
-      key: 'icon',
-      header: 'Icon',
-      width: '15%',
-      render: (platform) => (
-        <div className="text-sm text-gray-500">
-          {platform.icon || 'Server'}
         </div>
       )
     }
@@ -203,6 +255,7 @@ export function PlatformManager({
         onDelete={handleDelete}
         emptyStateIcon={Server as any}
         emptyStateMessage="No platforms yet. Click 'Add Platform' to create your first platform."
+        tableLayout="auto"
       />
 
       {/* Create Modal */}
@@ -210,7 +263,7 @@ export function PlatformManager({
         isOpen={showCreateModal}
         onClose={() => {
           setShowCreateModal(false)
-          setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '' })
+          setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
         }}
         title="Create Platform"
         size="md"
@@ -220,7 +273,7 @@ export function PlatformManager({
               variant="ghost"
               onClick={() => {
                 setShowCreateModal(false)
-                setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '' })
+                setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
               }}
             >
               Cancel
@@ -240,6 +293,9 @@ export function PlatformManager({
             platform={formData}
             setPlatform={setFormData}
             isModal={true}
+            uploadingLogo={uploadingLogo}
+            onLogoUpload={handleLogoUpload}
+            fileInputRef={fileInputRef}
           />
         </div>
       </Modal>
@@ -250,7 +306,7 @@ export function PlatformManager({
         onClose={() => {
           setShowEditModal(false)
           setSelectedPlatform(null)
-          setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '' })
+          setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
         }}
         title="Edit Platform"
         size="md"
@@ -261,7 +317,7 @@ export function PlatformManager({
               onClick={() => {
                 setShowEditModal(false)
                 setSelectedPlatform(null)
-                setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '' })
+                setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
               }}
             >
               Cancel
@@ -281,6 +337,9 @@ export function PlatformManager({
             platform={formData}
             setPlatform={setFormData}
             isModal={true}
+            uploadingLogo={uploadingLogo}
+            onLogoUpload={handleLogoUpload}
+            fileInputRef={editFileInputRef}
           />
         </div>
       </Modal>
