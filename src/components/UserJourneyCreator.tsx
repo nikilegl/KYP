@@ -367,18 +367,43 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [historyIndex, history, setNodes, setEdges])
 
-  // Unified keyboard shortcut for undo (Cmd+Z / Ctrl+Z)
-  // Handles both AI/TidyUp undo and node history undo
+  // Redo functionality
+  const redo = useCallback(() => {
+    // Check if there are states ahead to redo
+    if (historyIndex < history.length - 1) {
+      isUndoing.current = true
+      const nextState = history[historyIndex + 1]
+      setNodes(JSON.parse(JSON.stringify(nextState.nodes)))
+      setEdges(JSON.parse(JSON.stringify(nextState.edges)))
+      setHistoryIndex((prev) => prev + 1)
+      
+      // Reset the flag after state updates
+      setTimeout(() => {
+        isUndoing.current = false
+      }, 50)
+    }
+  }, [historyIndex, history, setNodes, setEdges])
+
+  // Unified keyboard shortcut for undo (Cmd+Z / Ctrl+Z) and redo (Cmd+Shift+Z / Ctrl+Shift+Z)
+  // Handles both AI/TidyUp undo and node history undo/redo
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't interfere with native undo in input fields
+      // Don't interfere with native undo/redo in input fields
       const target = event.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return
       }
 
-      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux)
-      if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
+      // Check for Cmd+Shift+Z (Mac) or Ctrl+Shift+Z (Windows/Linux) - REDO
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'z') {
+        // Only works with node history (no redo for AI/TidyUp snapshots)
+        if (historyIndex < history.length - 1) {
+          event.preventDefault()
+          redo()
+        }
+      }
+      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO
+      else if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
         // Try AI/TidyUp undo first (takes priority)
         if (undoSnapshot) {
           event.preventDefault()
@@ -397,7 +422,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [undoSnapshot, handleUndo, historyIndex, history, undo])
+  }, [undoSnapshot, handleUndo, historyIndex, history, undo, redo])
 
   // Track selected nodes and update edges highlighting
   useEffect(() => {

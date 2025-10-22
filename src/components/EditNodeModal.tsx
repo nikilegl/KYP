@@ -4,7 +4,7 @@ import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import type { Notification } from './DesignSystem/components/UserJourneyNode'
 import type { UserRole, ThirdParty, Platform } from '../lib/supabase'
-import { Plus, Trash2, GripVertical } from 'lucide-react'
+import { Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -146,26 +146,46 @@ function SortableNotification({ notification, index, totalCount, colors, onUpdat
 
   const showDragHandle = totalCount > 1
 
+  // Get emoji for notification type
+  const getNotificationEmoji = (type: string) => {
+    switch (type) {
+      case 'pain-point': return '🔴'
+      case 'warning': return '⚠️'
+      case 'info': return 'ℹ️'
+      case 'positive': return '✅'
+      default: return 'ℹ️'
+    }
+  }
+
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 group">
       <div className={`flex-1 p-3 rounded-lg border ${colors.border} ${colors.bg}`}>
-        <select
-          value={notification.type}
-          onChange={(e) => onUpdate(notification.id, 'type', e.target.value)}
-          className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-        >
-          <option value="pain-point">🔴 Pain Point</option>
-          <option value="warning">⚠️ Warning</option>
-          <option value="info">ℹ️ Info</option>
-          <option value="positive">✅ Positive</option>
-        </select>
-        <input
-          type="text"
-          value={notification.message}
-          onChange={(e) => onUpdate(notification.id, 'message', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-          placeholder="Enter notification message"
-        />
+        <div className="flex gap-2">
+          <div className="relative">
+            <select
+              value={notification.type}
+              onChange={(e) => onUpdate(notification.id, 'type', e.target.value)}
+              className="appearance-none px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer text-transparent"
+              style={{ width: '4rem' }}
+            >
+              <option value="pain-point">🔴 Pain Point</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="info">ℹ️ Info</option>
+              <option value="positive">✅ Positive</option>
+            </select>
+            <div className="absolute inset-0 flex items-center justify-center gap-1 pointer-events-none">
+              <span className="text-lg">{getNotificationEmoji(notification.type)}</span>
+              <ChevronDown size={14} className="text-gray-400" />
+            </div>
+          </div>
+          <input
+            type="text"
+            value={notification.message}
+            onChange={(e) => onUpdate(notification.id, 'message', e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            placeholder="Enter notification message"
+          />
+        </div>
       </div>
       {showDragHandle && (
         <button
@@ -591,10 +611,12 @@ export function EditNodeModal({
         </div>
 
         {/* User Role and Platform - Side by side */}
-        <div className="grid grid-cols-2 gap-4 grid grid-cols-2 gap-4 border-t py-4 border-b">
+        <div className="grid grid-cols-2 gap-4 border-t py-4 border-b">
           {/* User Role */}
           <div>
-          
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              User Role
+            </label>
             <select
               value={formData.userRole?.id || ''}
               onChange={(e) => {
@@ -610,13 +632,13 @@ export function EditNodeModal({
                 </option>
               ))}
             </select>
-            
           </div>
 
-        
           {/* Platform/Variant */}
           <div>
-            
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Platform
+            </label>
             <select
               value={formData.variant}
               onChange={(e) => setFormData(prev => ({ 
@@ -667,15 +689,15 @@ export function EditNodeModal({
             <button
               type="button"
               onClick={() => setFormData(prev => ({ ...prev, type: 'start' }))}
-              className={`relative p-4 pb-6 pt-4 border-2 rounded-lg transition-all ${
+              className={`relative px-3 py-2 pb-4 border-2 rounded-lg transition-all ${
                 formData.type === 'start'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
               }`}
             >
-              <div className="flex flex-col items-center gap-2">
-                <div className="h-2"></div>
-                <span className="font-medium">Start</span>
+              <div className="flex flex-col items-center gap-1">
+                <div className="h-1"></div>
+                <span className="font-medium text-sm">Start</span>
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
               </div>
             </button>
@@ -684,15 +706,15 @@ export function EditNodeModal({
             <button
               type="button"
               onClick={() => setFormData(prev => ({ ...prev, type: 'process' }))}
-              className={`relative p-4 pb-6 pt-6 border-2 rounded-lg transition-all ${
+              className={`relative px-3 py-2 pb-4 pt-4 border-2 rounded-lg transition-all ${
                 formData.type === 'process'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
               }`}
             >
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-1">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
-                <span className="font-medium">Middle</span>
+                <span className="font-medium text-sm">Middle</span>
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
               </div>
             </button>
@@ -701,16 +723,16 @@ export function EditNodeModal({
             <button
               type="button"
               onClick={() => setFormData(prev => ({ ...prev, type: 'end' }))}
-              className={`relative p-4 pb-4 pt-6 border-2 rounded-lg transition-all ${
+              className={`relative px-3 py-2 pt-4 border-2 rounded-lg transition-all ${
                 formData.type === 'end'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
               }`}
             >
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-1">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
-                <span className="font-medium">End</span>
-                <div className="h-2"></div>
+                <span className="font-medium text-sm">End</span>
+                <div className="h-1"></div>
               </div>
             </button>
 
@@ -718,16 +740,16 @@ export function EditNodeModal({
             <button
               type="button"
               onClick={() => setFormData(prev => ({ ...prev, type: 'label' }))}
-              className={`relative p-4 border-2 rounded-lg transition-all ${
+              className={`relative px-3 py-2 border-2 rounded-lg transition-all ${
                 formData.type === 'label'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
               }`}
             >
-              <div className="flex flex-col items-center gap-2">
-                <div className="h-2"></div>
-                <span className="font-medium">Label</span>
-                <div className="h-2"></div>
+              <div className="flex flex-col items-center gap-1">
+                <div className="h-1"></div>
+                <span className="font-medium text-sm">Label</span>
+                <div className="h-1"></div>
               </div>
             </button>
           </div>
