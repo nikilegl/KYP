@@ -242,26 +242,15 @@ export async function analyzeJourneyImage(
     // Generate prompt with user roles
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
-    // Get current user for background function
-    if (!supabase) {
-      throw new Error('Database not configured')
-    }
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      throw new Error('User not authenticated')
-    }
-
-    // Call background function (15 minute timeout)
-    const response = await fetch('/.netlify/functions/diagram-to-journey-background', {
+    // Call regular function with optimized prompt
+    const response = await fetch('/.netlify/functions/diagram-to-journey', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         base64Image: `data:${compressedImage.type};base64,${base64Image}`,
-        prompt: prompt,
-        userId: user.id
+        prompt: prompt
       })
     })
 
@@ -290,7 +279,7 @@ export async function analyzeJourneyImage(
     const result = await response.json()
     
     if (!result.success || !result.journey) {
-      throw new Error(result.error || 'Invalid response from AI service')
+      throw new Error('Invalid response from AI service')
     }
 
     const journeyData = result.journey
@@ -299,7 +288,7 @@ export async function analyzeJourneyImage(
       throw new Error('No journey data received from AI')
     }
 
-    console.log('✓ Image analysis completed successfully (jobId:', result.jobId, ')')
+    console.log('✓ Image analysis completed successfully')
 
     // Validate and process the response (data is already parsed JSON object)
     return processJourneyData(journeyData)

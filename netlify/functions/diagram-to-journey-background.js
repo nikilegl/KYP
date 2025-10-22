@@ -164,10 +164,18 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Background function error:', error)
+    console.error('Error stack:', error.stack)
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message || 'Internal server error' })
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({ 
+        success: false,
+        error: error.message || 'Internal server error',
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      })
     }
   }
 }

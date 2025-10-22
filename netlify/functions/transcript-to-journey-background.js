@@ -13,9 +13,18 @@ export async function handler(event) {
   }
 
   try {
+    console.log('Background function called')
+    console.log('Environment check:', {
+      hasOpenAI: !!process.env.OPENAI_API_KEY,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      hasSupabaseKey: !!process.env.SUPABASE_SERVICE_KEY
+    })
+
     const { transcript, prompt, userId } = JSON.parse(event.body || '{}')
+    console.log('Request parsed:', { hasTranscript: !!transcript, hasPrompt: !!prompt, userId })
 
     if (!transcript || !prompt || !userId) {
+      console.error('Missing required fields')
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Missing required fields: transcript, prompt, userId' })

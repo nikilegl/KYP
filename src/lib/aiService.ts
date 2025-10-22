@@ -250,28 +250,17 @@ export const convertTranscriptToJourney = async (
   _userRoleNames?: string[]
 ): Promise<any> => {
   try {
-    console.log('Converting transcript with AI (background function)...')
+    console.log('Converting transcript with AI...')
     
-    // Get current user for background function
-    if (!supabase) {
-      throw new Error('Database not configured')
-    }
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      throw new Error('User not authenticated')
-    }
-    
-    // Call background function (15 minute timeout)
-    const response = await fetch('/.netlify/functions/transcript-to-journey-background', {
+    // Call regular function with optimized prompt
+    const response = await fetch('/.netlify/functions/transcript-to-journey', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         transcript,
-        prompt: customPrompt,
-        userId: user.id
+        prompt: customPrompt
       }),
     })
 
@@ -295,11 +284,11 @@ export const convertTranscriptToJourney = async (
       throw new Error('Invalid JSON response from server')
     }
     
-    if (!result.success || !result.journey) {
-      throw new Error(result.error || 'Server response is missing journey data')
+    if (!result.journey) {
+      throw new Error('Server response is missing journey data')
     }
     
-    console.log('✓ Transcript conversion successful! (jobId:', result.jobId, ')')
+    console.log('✓ Transcript conversion successful!')
     console.log('Nodes extracted:', result.journey.nodes?.length || 0)
 
     return result.journey
