@@ -353,9 +353,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Undo functionality
   const undo = useCallback(() => {
+    console.log('Undo called. Current historyIndex:', historyIndex, 'History length:', history.length)
     if (historyIndex >= 0 && history[historyIndex]) {
       isUndoing.current = true
       const previousState = history[historyIndex]
+      console.log('Undoing to index:', historyIndex - 1, 'Restoring state with nodes:', previousState.nodes.length, 'edges:', previousState.edges.length)
       setNodes(JSON.parse(JSON.stringify(previousState.nodes)))
       setEdges(JSON.parse(JSON.stringify(previousState.edges)))
       setHistoryIndex((prev) => prev - 1)
@@ -363,24 +365,36 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Reset the flag after state updates
       setTimeout(() => {
         isUndoing.current = false
+        console.log('Undo complete. New historyIndex:', historyIndex - 1)
       }, 50)
+    } else {
+      console.log('Cannot undo: no history available')
     }
   }, [historyIndex, history, setNodes, setEdges])
 
   // Redo functionality
   const redo = useCallback(() => {
+    console.log('Redo called. Current historyIndex:', historyIndex, 'History length:', history.length)
     // Check if there are states ahead to redo
     if (historyIndex < history.length - 1) {
       isUndoing.current = true
-      const nextState = history[historyIndex + 1]
-      setNodes(JSON.parse(JSON.stringify(nextState.nodes)))
-      setEdges(JSON.parse(JSON.stringify(nextState.edges)))
-      setHistoryIndex((prev) => prev + 1)
+      const nextIndex = historyIndex + 1
+      const nextState = history[nextIndex]
+      console.log('Redoing to index:', nextIndex, 'Nodes:', nextState?.nodes?.length, 'Edges:', nextState?.edges?.length)
       
-      // Reset the flag after state updates
-      setTimeout(() => {
-        isUndoing.current = false
-      }, 50)
+      if (nextState) {
+        setNodes(JSON.parse(JSON.stringify(nextState.nodes)))
+        setEdges(JSON.parse(JSON.stringify(nextState.edges)))
+        setHistoryIndex(nextIndex)
+        
+        // Reset the flag after state updates
+        setTimeout(() => {
+          isUndoing.current = false
+          console.log('Redo complete. New historyIndex:', nextIndex)
+        }, 50)
+      }
+    } else {
+      console.log('Cannot redo: at end of history')
     }
   }, [historyIndex, history, setNodes, setEdges])
 
@@ -394,16 +408,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      const key = event.key.toLowerCase()
+      const isZ = key === 'z'
+      
+      if (!isZ) return
+
       // Check for Cmd+Shift+Z (Mac) or Ctrl+Shift+Z (Windows/Linux) - REDO
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'z') {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey) {
+        console.log('Redo triggered. historyIndex:', historyIndex, 'history.length:', history.length)
         // Only works with node history (no redo for AI/TidyUp snapshots)
         if (historyIndex < history.length - 1) {
           event.preventDefault()
+          console.log('Redoing to state at index:', historyIndex + 2)
           redo()
+        } else {
+          console.log('Cannot redo: no forward states available')
         }
       }
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO
-      else if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
+      else if ((event.metaKey || event.ctrlKey) && !event.shiftKey) {
         // Try AI/TidyUp undo first (takes priority)
         if (undoSnapshot) {
           event.preventDefault()
