@@ -29,7 +29,7 @@ import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
 import { EditNodeModal, type NodeFormData } from './EditNodeModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
-import type { UserRole, Project, LawFirm, ThirdParty } from '../lib/supabase'
+import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
@@ -57,6 +57,7 @@ interface UserJourneyCreatorProps {
   projectId?: string // Optional - if provided, will auto-select that project
   journeyId?: string // Optional - if provided, will load that journey for editing
   thirdParties?: ThirdParty[]
+  platforms?: Platform[]
 }
 
 // Keyboard zoom handler component
@@ -86,13 +87,14 @@ function KeyboardZoomHandler() {
   return null
 }
 
-export function UserJourneyCreator({ userRoles = [], projectId, journeyId, thirdParties: initialThirdParties }: UserJourneyCreatorProps) {
+export function UserJourneyCreator({ userRoles = [], projectId, journeyId, thirdParties: initialThirdParties, platforms: initialPlatforms }: UserJourneyCreatorProps) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const reactFlowInstanceRef = useRef<any>(null)
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
+  const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [journeyLayout, setJourneyLayout] = useState<'vertical' | 'horizontal'>('vertical')
@@ -2518,6 +2520,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         {...props} 
         showHandles={true}
         thirdParties={thirdParties}
+        platforms={platforms}
         onEdit={() => configureNode(props.id)}
       />
     ),
@@ -2526,6 +2529,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         {...props} 
         showHandles={true}
         thirdParties={thirdParties}
+        platforms={platforms}
         onEdit={() => configureNode(props.id)}
       />
     ),
@@ -2534,6 +2538,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         {...props} 
         showHandles={true}
         thirdParties={thirdParties}
+        platforms={platforms}
         onEdit={() => configureNode(props.id)}
       />
     ),
@@ -2542,6 +2547,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         {...props} 
         showHandles={true}
         thirdParties={thirdParties}
+        platforms={platforms}
         onEdit={() => configureNode(props.id)}
       />
     ),
@@ -2550,6 +2556,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         {...props} 
         showHandles={false}
         thirdParties={thirdParties}
+        platforms={platforms}
         onEdit={() => configureNode(props.id)}
       />
     ),
@@ -2559,7 +2566,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureRegion(props.id)}
       />
     ),
-  }), [configureNode, thirdParties, configureRegion])
+  }), [configureNode, thirdParties, platforms, configureRegion])
 
   if (loading) {
     return (

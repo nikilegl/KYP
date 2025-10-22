@@ -412,7 +412,7 @@ export function MainContentRenderer({
       )
     case 'user-journey-creator':
       return (
-        <UserJourneyCreator userRoles={userRoles} />
+        <UserJourneyCreator userRoles={userRoles} platforms={platforms} />
       )
     case 'law-firms':
       return (

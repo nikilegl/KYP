@@ -1,7 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import { Edit } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
-import type { UserRole, ThirdParty } from '../../../lib/supabase'
+import type { UserRole, ThirdParty, Platform } from '../../../lib/supabase'
 import { convertEmojis } from '../../../utils/emojiConverter'
 
 export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end' | 'label'
@@ -34,10 +34,11 @@ interface UserJourneyNodeProps {
   selected?: boolean
   showHandles?: boolean
   thirdParties?: ThirdParty[]
+  platforms?: Platform[]
   onEdit?: () => void
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], onEdit }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit }: UserJourneyNodeProps) {
   const nodeData = data as UserJourneyNodeData
   const {
     label = '',
@@ -92,15 +93,18 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
   // Generate unique gradient ID for Legl logo
   const gradientId = `legl-gradient-${id}`
 
-  // Platform-specific border color
+  // Platform-specific border color - use color from database platform
   const getBorderColor = () => {
-    if (variant === 'End client') {
-      return '#4A70FA'
-    } else if (variant === 'Legl') {
-      return '#01B88E'
-    } else {
+    // If variant is Custom, use the default color
+    if (variant === 'Custom' || !variant) {
       return '#5A6698'
     }
+    
+    // Look up platform in database by variant name
+    const platform = platforms.find(p => p.name === variant)
+    
+    // Use platform color if found, otherwise fallback to default
+    return platform?.colour || '#5A6698'
   }
 
   const borderColor = getBorderColor()
