@@ -289,25 +289,20 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
   // Table columns configuration
   const columns: Column<UserJourneyWithProject>[] = [
-    // Only show Epic column if not filtering by project
-    ...(!projectId ? [{
-      key: 'project',
-      header: 'Epic',
-      sortable: true,
-      width: '200px',
-      render: (journey: UserJourneyWithProject) => (
-        <span className="font-medium text-gray-900">
-          {convertEmojis(journey.project?.name || (journey.project_id ? 'Unknown Epic' : '-'))}
-        </span>
-      )
-    }] : []),
     {
       key: 'name',
       header: 'User Journey Name',
       sortable: true,
-      width: '300px',
+      width: '400px',
       render: (journey) => (
-        <div className="font-medium text-gray-900 break-words whitespace-normal">{convertEmojis(journey.name)}</div>
+        <div className="break-words whitespace-normal">
+          {!projectId && journey.project?.name && (
+            <div className="text-xs text-gray-500 mb-1">
+              {convertEmojis(journey.project.name)}
+            </div>
+          )}
+          <div className="font-medium text-gray-900">{convertEmojis(journey.name)}</div>
+        </div>
       )
     },
     {
@@ -411,9 +406,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   }
 
   return (
-    <div className={projectId ? "flex-1 flex flex-col space-y-6 overflow-auto" : "flex-1 flex flex-col space-y-6 p-6 overflow-auto"}>
+    <div className={projectId ? "flex-1 flex flex-col overflow-auto" : "flex-1 flex flex-col p-6 overflow-auto"}>
       {/* Header */}
-      <div className="flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">User Journeys</h2>
           <p className="text-gray-600">Visual flow diagrams showing user interactions and processes</p>
@@ -430,7 +425,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   
 
       {/* Filters */}
-      <div className="flex items-center gap-4 flex-shrink-0">
+      <div className="flex items-center gap-4 mb-6 flex-shrink-0">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
@@ -458,16 +453,16 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       </div>
 
       {/* User Journeys Table */}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex-shrink-0">
         <DataTable
           data={filteredUserJourneys}
           getItemId={(journey) => journey.id}
           columns={columns}
+          sortableFields={['name', 'created_at', 'updated_at']}
           onRowClick={(journey) => navigate(`/user-journey-creator?id=${journey.id}`)}
           selectable={true}
           selectedItems={selectedJourneys}
           onSelectionChange={setSelectedJourneys}
-          className="min-w-0"
         />
       </div>
 
