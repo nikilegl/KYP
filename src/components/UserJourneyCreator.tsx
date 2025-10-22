@@ -3293,7 +3293,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             >
               {importTranscriptLoading ? (
                 <>
-                  <Sparkles size={16} className="animate-pulse" />
+                  <Sparkles size={16} className="animate-pulse mr-2" />
                   Converting...
                 </>
               ) : (

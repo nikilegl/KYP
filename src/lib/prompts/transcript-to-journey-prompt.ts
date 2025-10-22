@@ -13,7 +13,7 @@ export const generateTranscriptToJourneyPrompt = (userRoleNames: string[]): stri
     ? userRoleNames.map(name => `"${name}"`).join(', ')
     : '"End Client", "Admin", "Developer"' // Fallback if no roles
   
-  return `You are analyzing a meeting transcript about a user journey. Extract the following information and return it as valid JSON:
+  return `You are analyzing a meeting transcript that may contain ONE OR MORE separate user journeys. Extract the following information and return it as valid JSON:
 
 YOUR ONLY JOB: Extract content and connections. Do NOT calculate positions.
 
@@ -24,6 +24,21 @@ CRITICAL RULES - CONTENT EXTRACTION ONLY:
 - Do NOT calculate or output any position fields (x, y, width, height)
 - Do NOT try to replicate layout or spacing - that is handled by a separate system
 - Focus on accuracy of content and connections
+
+DETECTING MULTIPLE JOURNEYS (CRITICAL):
+- A transcript may describe MULTIPLE SEPARATE user journeys that should NOT be connected to each other
+- Common patterns indicating separate journeys:
+  * "Current process" vs "Future process" / "New process with Legl"
+  * "What we do now" vs "What it will be using Legl"
+  * Different process types: "Pay process", "KYC process" (onboarding individuals), "KYB process" (onboarding businesses)
+  * "Before" vs "After" comparisons
+  * Different workflows for different scenarios
+- When you detect separate journeys:
+  * Create nodes for ALL journeys in the same nodes array
+  * Only create edges WITHIN each journey - NEVER between different journeys
+  * Each journey should have its own start node and end node
+  * Use clear, distinct labels to differentiate journeys (e.g., "Current: User logs in" vs "Future: User logs in")
+  * Add a prefix to node labels if helpful (e.g., "Current Process:", "With Legl:", "KYC:", "KYB:", "Payment:")
 
 Extract:
 
@@ -56,42 +71,36 @@ Extract:
    - name: Title of the journey (infer from transcript context)
    - description: Brief summary of the overall flow
 
-Return format:
+Return format (SINGLE JOURNEY):
 {
-  "name": "Journey Name",
-  "description": "Journey description",
+  "name": "Payment Journey",
+  "description": "User payment process",
   "nodes": [
     {
       "id": "node-1",
       "type": "start",
       "data": {
-        "label": "Node description",
+        "label": "User initiates payment",
         "type": "start",
         "userRole": "End Client",
         "variant": "End client",
         "thirdPartyName": "",
-        "bulletPoints": ["item 1", "item 2"],
+        "bulletPoints": ["Click pay button"],
         "notifications": [],
         "customProperties": {}
       }
     },
     {
       "id": "node-2",
-      "type": "process",
+      "type": "end",
       "data": {
-        "label": "Process payment",
-        "type": "process",
+        "label": "Payment complete",
+        "type": "end",
         "userRole": "End Client",
         "variant": "Third party",
         "thirdPartyName": "Stripe",
-        "bulletPoints": ["Enter card details", "Confirm payment"],
-        "notifications": [
-          {
-            "id": "notif-1",
-            "type": "pain-point",
-            "message": "Users often struggle with payment form"
-          }
-        ],
+        "bulletPoints": ["Receive confirmation"],
+        "notifications": [],
         "customProperties": {}
       }
     }
@@ -102,19 +111,112 @@ Return format:
       "source": "node-1",
       "target": "node-2",
       "label": "",
-      "data": {
-        "label": ""
-      }
+      "data": { "label": "" }
     }
   ]
 }
 
+Return format (MULTIPLE SEPARATE JOURNEYS - Current vs Future):
+{
+  "name": "Onboarding - Current vs Future with Legl",
+  "description": "Comparison of current manual process and future automated process",
+  "nodes": [
+    {
+      "id": "node-1",
+      "type": "start",
+      "data": {
+        "label": "Current: Client submits documents via email",
+        "type": "start",
+        "userRole": "End Client",
+        "variant": "End client",
+        "thirdPartyName": "",
+        "bulletPoints": ["Email documents", "Wait for response"],
+        "notifications": [
+          { "id": "notif-1", "type": "pain-point", "message": "Slow and error-prone" }
+        ],
+        "customProperties": {}
+      }
+    },
+    {
+      "id": "node-2",
+      "type": "end",
+      "data": {
+        "label": "Current: Manual review complete",
+        "type": "end",
+        "userRole": "Admin",
+        "variant": "CMS",
+        "thirdPartyName": "",
+        "bulletPoints": ["Download attachments", "Manual data entry", "Send confirmation"],
+        "notifications": [],
+        "customProperties": {}
+      }
+    },
+    {
+      "id": "node-3",
+      "type": "start",
+      "data": {
+        "label": "Future: Client uploads to Legl portal",
+        "type": "start",
+        "userRole": "End Client",
+        "variant": "Legl",
+        "thirdPartyName": "",
+        "bulletPoints": ["Drag and drop documents", "Instant validation"],
+        "notifications": [
+          { "id": "notif-2", "type": "positive", "message": "Much faster and more secure" }
+        ],
+        "customProperties": {}
+      }
+    },
+    {
+      "id": "node-4",
+      "type": "end",
+      "data": {
+        "label": "Future: Automated review with Legl",
+        "type": "end",
+        "userRole": "Admin",
+        "variant": "Legl",
+        "thirdPartyName": "",
+        "bulletPoints": ["Auto-extract data", "AI verification", "Auto-send confirmation"],
+        "notifications": [],
+        "customProperties": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1-2",
+      "source": "node-1",
+      "target": "node-2",
+      "label": "",
+      "data": { "label": "" }
+    },
+    {
+      "id": "edge-3-4",
+      "source": "node-3",
+      "target": "node-4",
+      "label": "",
+      "data": { "label": "" }
+    }
+  ]
+}
+
+NOTE: In the second example, there are TWO separate journeys (Current and Future). 
+- Nodes 1-2 form the "Current" journey (connected by edge-1-2)
+- Nodes 3-4 form the "Future" journey (connected by edge-3-4)
+- NO edge connects node-2 to node-3 because they are separate journeys
+
 Guidelines:
 - CRITICAL: All node properties (label, type, userRole, variant, thirdPartyName, bulletPoints, notifications, customProperties) MUST be inside the "data" object
 - DO NOT include position fields - layout is calculated separately
-- Analyze the transcript to identify distinct steps in the user journey
+- Analyze the transcript to identify distinct steps in the user journey OR multiple separate journeys
 - Identify clear start and end points from the conversation flow
 - Carefully detect connections between steps to create accurate edges
+- MULTIPLE JOURNEYS: If the transcript discusses multiple separate processes (e.g., current vs future, KYC vs KYB vs Pay), create separate unconnected node groups:
+  * Example: If discussing "current onboarding" and "future onboarding with Legl", create two separate flows with no edges between them
+  * Example: If discussing "KYC for individuals" and "KYB for businesses", create two separate flows
+  * Use label prefixes to clearly differentiate (e.g., "Current:", "Future:", "KYC:", "KYB:", "Payment:")
+- Each separate journey should have its own "start" node and "end" node
+- Nodes within the same journey should be connected with edges; nodes from different journeys should NEVER connect to each other
 
 USER ROLE DETECTION (CRITICAL):
 - Pay close attention to who is performing each action in the transcript
@@ -143,7 +245,13 @@ NOTIFICATIONS:
 - Types: "pain-point" (problems, issues), "warning" (cautions, risks), "info" (notes, context), "positive" (successes, improvements)
 - Each notification needs: id (unique), type (from above), message (the actual text)
 
-FINAL REMINDER: Focus on accurate content extraction and connection detection. Do NOT include any position information. Return ONLY the JSON object, no other text.`
+FINAL REMINDERS:
+1. Focus on accurate content extraction and connection detection
+2. DO NOT include any position information
+3. CRITICAL: If transcript contains multiple separate journeys (current vs future, KYC vs KYB vs Pay, etc.), create separate unconnected node groups
+4. Listen for key phrases: "current process", "what it will be using Legl", "KYC", "KYB", "payment process", "onboarding individuals", "onboarding businesses"
+5. Each separate journey needs its own start and end nodes with NO edges connecting different journeys
+6. Return ONLY the JSON object, no other text`
 }
 
 // Legacy export for backward compatibility (uses first 3 default roles)
