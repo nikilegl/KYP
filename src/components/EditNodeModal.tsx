@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Node } from '@xyflow/react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
-import { SegmentedControl } from './DesignSystem/components/SegmentedControl'
 import type { Notification } from './DesignSystem/components/UserJourneyNode'
 import type { UserRole, ThirdParty, Platform } from '../lib/supabase'
 import { Plus, Trash2, GripVertical } from 'lucide-react'
@@ -47,13 +46,15 @@ interface SortableBulletPointProps {
   id: string
   bullet: string
   index: number
+  totalCount: number
   onUpdate: (index: number, text: string) => void
   onRemove: (index: number) => void
+  onInsert: (index: number) => void
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, index: number, bullet: string) => void
   inputRef: (el: HTMLInputElement | null) => void
 }
 
-function SortableBulletPoint({ id, bullet, index, onUpdate, onRemove, onKeyDown, inputRef }: SortableBulletPointProps) {
+function SortableBulletPoint({ id, bullet, index, totalCount, onUpdate, onRemove, onInsert, onKeyDown, inputRef }: SortableBulletPointProps) {
   const {
     attributes,
     listeners,
@@ -69,27 +70,33 @@ function SortableBulletPoint({ id, bullet, index, onUpdate, onRemove, onKeyDown,
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const showDragHandle = totalCount > 1
+
   return (
-    <div ref={setNodeRef} style={style} className="flex items-start gap-2 group">
-      <button
-        type="button"
-        className="p-1.5 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing mt-1.5"
-        {...attributes}
-        {...listeners}
-        title="Drag to reorder"
-      >
-        <GripVertical size={16} />
-      </button>
-      <span className="text-gray-500 mt-2.5 text-l">•</span>
-      <input
-        ref={inputRef}
-        type="text"
-        value={bullet}
-        onChange={(e) => onUpdate(index, e.target.value)}
-        onKeyDown={(e) => onKeyDown(e, index, bullet)}
-        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-        placeholder="Enter bullet point text"
-      />
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 group">
+      <div className="flex-1 relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">•</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={bullet}
+          onChange={(e) => onUpdate(index, e.target.value)}
+          onKeyDown={(e) => onKeyDown(e, index, bullet)}
+          className="w-full pl-6 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          placeholder="Enter bullet point text"
+        />
+      </div>
+      {showDragHandle && (
+        <button
+          type="button"
+          className="p-2 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing rounded transition-colors"
+          {...attributes}
+          {...listeners}
+          title="Drag to reorder"
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onRemove(index)}
@@ -97,6 +104,95 @@ function SortableBulletPoint({ id, bullet, index, onUpdate, onRemove, onKeyDown,
         title="Remove bullet point"
       >
         <Trash2 size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onInsert(index)}
+        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+        title="Add bullet point below"
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  )
+}
+
+// Sortable Notification Component
+interface SortableNotificationProps {
+  notification: Notification
+  index: number
+  totalCount: number
+  colors: { bg: string; border: string; text: string; name: string }
+  onUpdate: (id: string, field: 'type' | 'message', value: string) => void
+  onRemove: (id: string) => void
+  onInsert: (index: number) => void
+}
+
+function SortableNotification({ notification, index, totalCount, colors, onUpdate, onRemove, onInsert }: SortableNotificationProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: notification.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  const showDragHandle = totalCount > 1
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 group">
+      <div className={`flex-1 p-3 rounded-lg border ${colors.border} ${colors.bg}`}>
+        <select
+          value={notification.type}
+          onChange={(e) => onUpdate(notification.id, 'type', e.target.value)}
+          className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+        >
+          <option value="pain-point">🔴 Pain Point</option>
+          <option value="warning">⚠️ Warning</option>
+          <option value="info">ℹ️ Info</option>
+          <option value="positive">✅ Positive</option>
+        </select>
+        <input
+          type="text"
+          value={notification.message}
+          onChange={(e) => onUpdate(notification.id, 'message', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          placeholder="Enter notification message"
+        />
+      </div>
+      {showDragHandle && (
+        <button
+          type="button"
+          className="p-2 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing rounded transition-colors"
+          {...attributes}
+          {...listeners}
+          title="Drag to reorder"
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onRemove(notification.id)}
+        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+        title="Remove notification"
+      >
+        <Trash2 size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onInsert(index)}
+        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+        title="Add notification below"
+      >
+        <Plus size={14} />
       </button>
     </div>
   )
@@ -176,6 +272,11 @@ export function EditNodeModal({
       
       setBulletPointsWithIds(bulletPointsWithNewIds)
       
+      const existingNotifications = (node.data?.notifications as Notification[]) || []
+      const notificationsWithDefault = existingNotifications.length > 0 
+        ? existingNotifications 
+        : [{ id: `notif-${Date.now()}`, type: 'info' as const, message: '' }]
+      
       setFormData({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
@@ -184,12 +285,12 @@ export function EditNodeModal({
         customPlatformName: (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
-        notifications: (node.data?.notifications as Notification[]) || [],
+        notifications: notificationsWithDefault,
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
         swimLane: (node as any).parentId || null
       })
     } else if (isAddingNewNode && isOpen) {
-      // Reset form for new node
+      // Reset form for new node with one empty notification by default
       setBulletPointsWithIds([{ id: `bp-${Date.now()}`, text: '' }])
       
       setFormData({
@@ -200,7 +301,7 @@ export function EditNodeModal({
         customPlatformName: '',
         userRole: null,
         bulletPoints: [''],
-        notifications: [],
+        notifications: [{ id: `notif-${Date.now()}`, type: 'info' as const, message: '' }],
         customProperties: {},
         swimLane: null
       })
@@ -228,6 +329,15 @@ export function EditNodeModal({
 
   const removeBulletPoint = useCallback((index: number) => {
     setBulletPointsWithIds(prev => prev.filter((_, i) => i !== index))
+  }, [])
+
+  const insertBulletPoint = useCallback((index: number) => {
+    const newBulletPoint = { id: `bp-${Date.now()}`, text: '' }
+    setBulletPointsWithIds(prev => [
+      ...prev.slice(0, index + 1),
+      newBulletPoint,
+      ...prev.slice(index + 1)
+    ])
   }, [])
 
   const handleBulletPointKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number, value: string) => {
@@ -272,8 +382,24 @@ export function EditNodeModal({
     }))
   }, [])
 
+  const insertNotification = useCallback((index: number) => {
+    const newNotification: Notification = {
+      id: `notif-${Date.now()}`,
+      type: 'info',
+      message: ''
+    }
+    setFormData(prev => ({
+      ...prev,
+      notifications: [
+        ...prev.notifications.slice(0, index + 1),
+        newNotification,
+        ...prev.notifications.slice(index + 1)
+      ]
+    }))
+  }, [])
+
   // Drag and drop handler for bullet points
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
+  const handleBulletDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
 
     if (over && active.id !== over.id) {
@@ -282,6 +408,24 @@ export function EditNodeModal({
         const newIndex = items.findIndex((item) => item.id === over.id)
         
         return arrayMove(items, oldIndex, newIndex)
+      })
+    }
+  }, [])
+
+  // Drag and drop handler for notifications
+  const handleNotificationDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setFormData(prev => {
+        const notifications = [...prev.notifications]
+        const oldIndex = notifications.findIndex((item) => item.id === active.id)
+        const newIndex = notifications.findIndex((item) => item.id === over.id)
+        
+        return {
+          ...prev,
+          notifications: arrayMove(notifications, oldIndex, newIndex)
+        }
       })
     }
   }, [])
@@ -348,12 +492,10 @@ export function EditNodeModal({
         </div>
       }
     >
-      <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+      <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
         {/* Label */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Label
-          </label>
+        
           <input
             ref={labelInputRef}
             type="text"
@@ -363,72 +505,6 @@ export function EditNodeModal({
             placeholder="Enter node label"
           />
         </div>
-
-        {/* User Role */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            User Role
-          </label>
-          <select
-            value={formData.userRole?.id || ''}
-            onChange={(e) => {
-              const role = userRoles.find(r => r.id === e.target.value)
-              setFormData(prev => ({ ...prev, userRole: role || null }))
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">Select a role...</option>
-            {userRoles.map(role => (
-              <option key={role.id} value={role.id}>
-                {role.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Platform/Variant */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Platform
-          </label>
-          <select
-            value={formData.variant}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              variant: e.target.value as NodeFormData['variant']
-            }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">None</option>
-            {/* Database platforms */}
-            {platforms.map(platform => (
-              <option key={platform.id} value={platform.name}>
-                {platform.name}
-              </option>
-            ))}
-            {/* Custom option */}
-            <option value="Custom">Custom</option>
-          </select>
-        </div>
-
-        {/* Custom Platform Name (conditionally shown) */}
-        {formData.variant === 'Custom' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Custom Platform Name
-            </label>
-            <input
-              type="text"
-              value={formData.customPlatformName}
-              onChange={(e) => setFormData(prev => ({ ...prev, customPlatformName: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Stripe, Mailchimp, Twilio..."
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Enter a custom platform name. If it matches a known third party, we'll show its logo.
-            </p>
-          </div>
-        )}
 
         {/* Swim Lane (Region) - only for horizontal layouts */}
         {journeyLayout === 'horizontal' && availableRegions.length > 0 && (
@@ -453,13 +529,11 @@ export function EditNodeModal({
 
         {/* Bullet Points with Drag and Drop */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Bullet Points
-          </label>
+    
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+            onDragEnd={handleBulletDragEnd}
           >
             <SortableContext
               items={bulletPointsWithIds.map(bp => bp.id)}
@@ -472,8 +546,10 @@ export function EditNodeModal({
                     id={bulletPoint.id}
                     bullet={bulletPoint.text}
                     index={index}
+                    totalCount={bulletPointsWithIds.length}
                     onUpdate={updateBulletPoint}
                     onRemove={removeBulletPoint}
+                    onInsert={insertBulletPoint}
                     onKeyDown={handleBulletPointKeyDown}
                     inputRef={(el) => bulletInputRefs.current[index] = el}
                   />
@@ -481,85 +557,180 @@ export function EditNodeModal({
               </div>
             </SortableContext>
           </DndContext>
-          <Button
-            variant="outline"
-            size="small"
-            onClick={addBulletPoint}
-            className="w-full mt-2"
-          >
-            <Plus size={16} className="mr-2" />
-            Add Bullet Point
-          </Button>
+         
         </div>
 
         {/* Notifications */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Notifications
-          </label>
-          <div className="space-y-3">
-            {formData.notifications.map((notification) => {
-              const colors = getNotificationColor(notification.type)
-              return (
-                <div
-                  key={notification.id}
-                  className={`p-3 rounded-lg border ${colors.border} ${colors.bg}`}
-                >
-                  <div className="flex items-start gap-2 mb-2">
-                    <select
-                      value={notification.type}
-                      onChange={(e) => updateNotification(notification.id, 'type', e.target.value)}
-                      className={`flex-1 px-2 py-1 text-xs border rounded ${colors.border} ${colors.text} bg-white`}
-                    >
-                      <option value="pain-point">🔴 Pain Point</option>
-                      <option value="warning">⚠️ Warning</option>
-                      <option value="info">ℹ️ Info</option>
-                      <option value="positive">✅ Positive</option>
-                    </select>
-                    <button
-                      onClick={() => removeNotification(notification.id)}
-                      className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={notification.message}
-                    onChange={(e) => updateNotification(notification.id, 'message', e.target.value)}
-                    className={`w-full px-2 py-1 text-sm border rounded ${colors.border} ${colors.text} bg-white`}
-                    placeholder="Enter notification message"
-                  />
-                </div>
-              )
-            })}
-            <Button
-              variant="outline"
-              size="small"
-              onClick={addNotification}
-              className="w-full"
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleNotificationDragEnd}
+          >
+            <SortableContext
+              items={formData.notifications.map(notif => notif.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <Plus size={16} className="mr-2" />
-              Add Notification
-            </Button>
+              <div className="space-y-2">
+                {formData.notifications.map((notification, index) => (
+                  <SortableNotification
+                    key={notification.id}
+                    notification={notification}
+                    index={index}
+                    totalCount={formData.notifications.length}
+                    colors={getNotificationColor(notification.type)}
+                    onUpdate={updateNotification}
+                    onRemove={removeNotification}
+                    onInsert={insertNotification}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+         
+        </div>
+
+        {/* User Role and Platform - Side by side */}
+        <div className="grid grid-cols-2 gap-4 grid grid-cols-2 gap-4 border-t py-4 border-b">
+          {/* User Role */}
+          <div>
+          
+            <select
+              value={formData.userRole?.id || ''}
+              onChange={(e) => {
+                const role = userRoles.find(r => r.id === e.target.value)
+                setFormData(prev => ({ ...prev, userRole: role || null }))
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select a role...</option>
+              {userRoles.map(role => (
+                <option key={role.id} value={role.id}>
+                  {role.icon ? `${role.icon} ${role.name}` : role.name}
+                </option>
+              ))}
+            </select>
+            
+          </div>
+
+        
+          {/* Platform/Variant */}
+          <div>
+            
+            <select
+              value={formData.variant}
+              onChange={(e) => setFormData(prev => ({ 
+                ...prev, 
+                variant: e.target.value as NodeFormData['variant']
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select a platform...</option>
+              {/* Database platforms */}
+              {platforms.map(platform => (
+                <option key={platform.id} value={platform.name}>
+                  {platform.name}
+                </option>
+              ))}
+              {/* Custom option */}
+              <option value="Custom">Custom</option>
+            </select>
           </div>
         </div>
+
+        {/* Custom Platform Name (conditionally shown) */}
+        {formData.variant === 'Custom' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Custom Platform Name
+            </label>
+            <input
+              type="text"
+              value={formData.customPlatformName}
+              onChange={(e) => setFormData(prev => ({ ...prev, customPlatformName: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g., Stripe, Mailchimp, Twilio..."
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Enter a custom platform name. If it matches a known third party, we'll show its logo.
+            </p>
+          </div>
+        )}
 
         {/* Node Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Node Type
           </label>
-          <SegmentedControl
-            options={[
-              { value: 'start', label: 'Start' },
-              { value: 'process', label: 'Middle' },
-              { value: 'end', label: 'End' },
-              { value: 'label', label: 'Label' }
-            ]}
-            value={formData.type}
-            onChange={(value) => setFormData(prev => ({ ...prev, type: value as NodeFormData['type'] }))}
-          />
+          <div className="grid grid-cols-4 gap-3">
+            {/* Start Node */}
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, type: 'start' }))}
+              className={`relative p-4 pb-6 pt-4 border-2 rounded-lg transition-all ${
+                formData.type === 'start'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-2"></div>
+                <span className="font-medium">Start</span>
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
+              </div>
+            </button>
+
+            {/* Middle Node */}
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, type: 'process' }))}
+              className={`relative p-4 pb-6 pt-6 border-2 rounded-lg transition-all ${
+                formData.type === 'process'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
+                <span className="font-medium">Middle</span>
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
+              </div>
+            </button>
+
+            {/* End Node */}
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, type: 'end' }))}
+              className={`relative p-4 pb-4 pt-6 border-2 rounded-lg transition-all ${
+                formData.type === 'end'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
+                <span className="font-medium">End</span>
+                <div className="h-2"></div>
+              </div>
+            </button>
+
+            {/* Label Node */}
+            <button
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, type: 'label' }))}
+              className={`relative p-4 border-2 rounded-lg transition-all ${
+                formData.type === 'label'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-2"></div>
+                <span className="font-medium">Label</span>
+                <div className="h-2"></div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
