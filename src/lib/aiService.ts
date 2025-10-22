@@ -343,78 +343,101 @@ export const convertTranscriptToJourney = async (
  * Edits an existing user journey using natural language instructions via OpenAI
  * @param currentJourney - The current journey JSON (with nodes and edges)
  * @param instruction - Natural language instruction (e.g., "Replace Amicus with ThirdFort")
+ * @param onProgress - Optional callback for progress updates
  * @returns Promise with the updated journey JSON
  */
 export const editJourneyWithAI = async (
   currentJourney: any,
-  instruction: string
+  instruction: string,
+  onProgress?: (message: string) => void
 ): Promise<any> => {
   try {
-    console.log('Calling AI to edit journey with instruction:', instruction)
+    console.log('Editing journey with AI (background processing)...')
+    console.log('Instruction:', instruction)
+    console.log('Current nodes:', currentJourney.nodes?.length || 0)
     
-    // Create an AbortController for timeout
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 45000) // 45 second timeout
+    // Get current user
+    if (!supabase) {
+      throw new Error('Database not configured')
+    }
     
-    const response = await fetch('/.netlify/functions/edit-journey', {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('User not authenticated')
+    }
+
+    // Trigger background function (fire and forget - Netlify returns 202 immediately)
+    onProgress?.('Starting AI processing...')
+    
+    // Don't wait for this to complete - it will run in background for up to 15 minutes
+    fetch('/.netlify/functions/edit-journey-background', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         currentJourney,
         instruction,
+        userId: user.id
       }),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId))
+    }).catch(err => {
+      console.error('Failed to trigger background function:', err)
+    })
 
-    console.log('Response status:', response.status, response.statusText)
-
-    // Get the response text first
-    const responseText = await response.text()
-    console.log('Response text length:', responseText.length)
-
-    if (!response.ok) {
-      // Try to parse as JSON for error details
-      let errorMessage = 'Failed to edit journey'
-      try {
-        const errorData = JSON.parse(responseText)
-        errorMessage = errorData.error || errorData.message || errorMessage
-      } catch (parseError) {
-        errorMessage = responseText || `HTTP ${response.status}: ${response.statusText}`
+    // Poll database directly for job completion
+    const startTime = Date.now()
+    const maxWaitTime = 15 * 60 * 1000 // 15 minutes
+    const pollInterval = 5000 // 5 seconds
+    
+    // Wait a moment for job to be created
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    while (true) {
+      const elapsed = Date.now() - startTime
+      
+      if (elapsed > maxWaitTime) {
+        throw new Error('Processing timeout after 15 minutes')
       }
-      throw new Error(errorMessage)
+
+      const elapsedSeconds = Math.floor(elapsed / 1000)
+      onProgress?.(`Processing... ${elapsedSeconds}s elapsed`)
+      
+      // Query latest job for this user of type 'edit-journey'
+      const { data: jobs, error: queryError } = await supabase
+        .from('ai_processing_jobs')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('job_type', 'edit-journey')
+        .order('created_at', { ascending: false })
+        .limit(1)
+      
+      if (queryError) {
+        console.error('Error querying job:', queryError)
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        continue
+      }
+      
+      const job = jobs?.[0]
+      if (!job) {
+        // Job not created yet, keep waiting
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        continue
+      }
+      
+      if (job.status === 'completed') {
+        console.log('✓ Journey editing successful!')
+        console.log('Nodes in result:', job.result_data?.nodes?.length || 0)
+        return job.result_data
+      }
+      
+      if (job.status === 'failed') {
+        throw new Error(job.error_message || 'Processing failed')
+      }
+      
+      // Still processing, wait and poll again
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
     }
-
-    // Parse the successful response
-    let result
-    try {
-      result = JSON.parse(responseText)
-    } catch (parseError) {
-      console.error('Failed to parse response as JSON:', responseText)
-      throw new Error('Invalid response from server. Expected JSON but got: ' + responseText.substring(0, 100))
-    }
-
-    if (!result.journey) {
-      console.error('Response missing journey data:', result)
-      throw new Error('Server response is missing journey data')
-    }
-
-    // Log diagnostic information
-    console.log('✓ Journey edited successfully!')
-    console.log('Nodes in result:', result.journey.nodes?.length || 0)
-    console.log('Token usage:', result.usage)
-    console.log('Finish reason:', result.finishReason)
-
-    return result.journey
+    
   } catch (error) {
     console.error('Error editing journey with AI:', error)
-    
-    // Handle specific error types
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request timed out. Try a simpler instruction or edit fewer items at once.')
-    }
-    
     throw error
   }
 }
