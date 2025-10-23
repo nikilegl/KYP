@@ -148,6 +148,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [showShareModal, setShowShareModal] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   
+  // Track last saved state to detect unsaved changes
+  const lastSavedState = useRef<{
+    nodes: Node[]
+    edges: Edge[]
+    journeyName: string
+    journeyDescription: string
+    journeyLayout: 'vertical' | 'horizontal'
+    journeyStatus: 'draft' | 'published'
+    selectedProjectId: string
+    selectedLawFirmIds: string[]
+  } | null>(null)
+  
   // Undo state - stores snapshot before Tidy Up or AI Edit
   const [undoSnapshot, setUndoSnapshot] = useState<{
     nodes: Node[]
@@ -179,6 +191,60 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const snapToGrid = useCallback((value: number): number => {
     return Math.round(value / 8) * 8
   }, [])
+
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    if (!lastSavedState.current) {
+      // If there's no saved state yet, consider it unsaved if there are nodes or non-default values
+      return nodes.length > 0 || 
+             journeyName !== 'User Journey 01' || 
+             journeyDescription.trim() !== '' ||
+             edges.length > 0
+    }
+
+    // Deep comparison of nodes (compare relevant properties)
+    const nodesChanged = JSON.stringify(nodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      data: n.data,
+      parentId: n.parentId,
+      style: n.style
+    }))) !== JSON.stringify(lastSavedState.current.nodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      data: n.data,
+      parentId: n.parentId,
+      style: n.style
+    })))
+
+    // Deep comparison of edges
+    const edgesChanged = JSON.stringify(edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label: e.label,
+      type: e.type
+    }))) !== JSON.stringify(lastSavedState.current.edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label: e.label,
+      type: e.type
+    })))
+
+    // Check other journey properties
+    const nameChanged = journeyName !== lastSavedState.current.journeyName
+    const descriptionChanged = journeyDescription !== lastSavedState.current.journeyDescription
+    const layoutChanged = journeyLayout !== lastSavedState.current.journeyLayout
+    const statusChanged = journeyStatus !== lastSavedState.current.journeyStatus
+    const projectChanged = selectedProjectId !== lastSavedState.current.selectedProjectId
+    const lawFirmsChanged = JSON.stringify(selectedLawFirmIds.sort()) !== JSON.stringify(lastSavedState.current.selectedLawFirmIds.sort())
+
+    return nodesChanged || edgesChanged || nameChanged || descriptionChanged || 
+           layoutChanged || statusChanged || projectChanged || lawFirmsChanged
+  }, [nodes, edges, journeyName, journeyDescription, journeyLayout, journeyStatus, selectedProjectId, selectedLawFirmIds])
 
   // Undo handler for Tidy Up and AI Edit operations
   const handleUndo = useCallback(() => {
@@ -291,6 +357,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }))
           setNodes(nodesWithSelection)
           setEdges(journey.flow_data.edges)
+          
+          // Store the initial saved state
+          lastSavedState.current = {
+            nodes: JSON.parse(JSON.stringify(nodesWithSelection)),
+            edges: JSON.parse(JSON.stringify(journey.flow_data.edges)),
+            journeyName: journey.name,
+            journeyDescription: journey.description || '',
+            journeyLayout: journey.layout || 'vertical',
+            journeyStatus: journey.status || 'draft',
+            selectedProjectId: journey.project_id || '',
+            selectedLawFirmIds: lawFirmIds
+          }
         }
       } else {
         // New journey - set up defaults
@@ -742,6 +820,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
           
           console.log('Journey updated successfully:', updated)
+          
+          // Update the saved state reference
+          lastSavedState.current = {
+            nodes: JSON.parse(JSON.stringify(sortedNodes)),
+            edges: JSON.parse(JSON.stringify(edges)),
+            journeyName,
+            journeyDescription,
+            journeyLayout,
+            journeyStatus,
+            selectedProjectId,
+            selectedLawFirmIds: [...selectedLawFirmIds]
+          }
+          
           setJustSaved(true)
           setTimeout(() => setJustSaved(false), 3000)
         }
@@ -761,6 +852,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           
           console.log('Journey created successfully:', created)
           setCurrentJourneyId(created.id)
+          
+          // Update the saved state reference
+          lastSavedState.current = {
+            nodes: JSON.parse(JSON.stringify(sortedNodes)),
+            edges: JSON.parse(JSON.stringify(edges)),
+            journeyName,
+            journeyDescription,
+            journeyLayout,
+            journeyStatus,
+            selectedProjectId,
+            selectedLawFirmIds: [...selectedLawFirmIds]
+          }
+          
           setJustSaved(true)
           setTimeout(() => setJustSaved(false), 3000)
         }
@@ -2737,7 +2841,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               }
             }}
             className="flex items-center gap-2 whitespace-nowrap"
-            disabled={saving || justSaved}
+            disabled={saving || justSaved || !hasUnsavedChanges}
           >
             {justSaved ? (
               <>
