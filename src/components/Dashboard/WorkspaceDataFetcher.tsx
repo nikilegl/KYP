@@ -400,6 +400,18 @@ export function WorkspaceDataFetcher({
           console.log('🔵 WorkspaceDataFetcher: Law firm not found, navigating to /')
           navigate('/')
         }
+      } else if (pathname.startsWith('/user-journey/')) {
+        console.log('🔵 WorkspaceDataFetcher: Processing user-journey route with shortId:', shortId)
+        // Set view to user-journey-creator to render the creator component
+        setCurrentView('user-journey-creator')
+        onViewChange('user-journey-creator')
+        setSelectedProject(null)
+        setSelectedStakeholder(null)
+        setSelectedNote(null)
+        setSelectedUserStory(null)
+        setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
+        return
       }
     }
 

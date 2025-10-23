@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useParams, useLocation } from 'react-router-dom'
 import {
   ReactFlow,
   MiniMap,
@@ -32,7 +32,7 @@ import { EditJourneyModal } from './EditJourneyModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
-import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
+import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -90,6 +90,8 @@ function KeyboardZoomHandler() {
 
 export function UserJourneyCreator({ userRoles = [], projectId, journeyId, thirdParties: initialThirdParties, platforms: initialPlatforms }: UserJourneyCreatorProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const params = useParams()
   const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -247,35 +249,46 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       }
       
-      // Check if there's an ID in the URL query params
+      // Check if there's an ID in the URL query params or path
       const urlJourneyId = searchParams.get('id')
       const urlProjectId = searchParams.get('projectId')
-      const loadJourneyId = urlJourneyId || journeyId
+      const shortIdParam = params.shortId ? parseInt(params.shortId) : null
       
-      if (loadJourneyId) {
+      let journey = null
+      
+      // If we have a shortId in the path (e.g., /user-journey/123), use that
+      if (shortIdParam && location.pathname.startsWith('/user-journey/')) {
+        journey = await getUserJourneyByShortId(shortIdParam)
+      } 
+      // Otherwise check for full ID in query params or props
+      else {
+        const loadJourneyId = urlJourneyId || journeyId
+        if (loadJourneyId) {
+          journey = await getUserJourneyById(loadJourneyId)
+        }
+      }
+      
+      if (journey) {
         // Load existing journey
-        const journey = await getUserJourneyById(loadJourneyId)
-        if (journey) {
-          setCurrentJourneyId(journey.id)
-          setJourneyName(journey.name)
-          setJourneyDescription(journey.description || '')
-          setJourneyLayout(journey.layout || 'vertical')
-          setJourneyStatus(journey.status || 'draft')
-          setSelectedProjectId(journey.project_id || '')
-          
-          // Load associated law firms
-          const lawFirmIds = await getUserJourneyLawFirms(journey.id)
-          setSelectedLawFirmIds(lawFirmIds)
-          
-          if (journey.flow_data) {
-            // Ensure nodes are selectable
-            const nodesWithSelection = journey.flow_data.nodes.map(node => ({
-              ...node,
-              selectable: true
-            }))
-            setNodes(nodesWithSelection)
-            setEdges(journey.flow_data.edges)
-          }
+        setCurrentJourneyId(journey.id)
+        setJourneyName(journey.name)
+        setJourneyDescription(journey.description || '')
+        setJourneyLayout(journey.layout || 'vertical')
+        setJourneyStatus(journey.status || 'draft')
+        setSelectedProjectId(journey.project_id || '')
+        
+        // Load associated law firms
+        const lawFirmIds = await getUserJourneyLawFirms(journey.id)
+        setSelectedLawFirmIds(lawFirmIds)
+        
+        if (journey.flow_data) {
+          // Ensure nodes are selectable
+          const nodesWithSelection = journey.flow_data.nodes.map(node => ({
+            ...node,
+            selectable: true
+          }))
+          setNodes(nodesWithSelection)
+          setEdges(journey.flow_data.edges)
         }
       } else {
         // New journey - set up defaults
