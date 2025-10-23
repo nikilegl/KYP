@@ -574,7 +574,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           getItemId={(journey) => journey.id}
           columns={columns}
           sortableFields={['name', 'status', 'nodes_count', 'law_firms_text', 'created_at', 'updated_at']}
-          onRowClick={(journey) => navigate(`/user-journey-creator?id=${journey.id}`)}
+          onRowClick={(journey) => navigate(`/user-journey/${journey.short_id}`)}
           selectable={true}
           selectedItems={selectedJourneys}
           onSelectionChange={setSelectedJourneys}

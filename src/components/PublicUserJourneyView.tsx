@@ -1,0 +1,236 @@
+import React, { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
+import {
+  ReactFlow,
+  Controls,
+  Background,
+  BackgroundVariant,
+  NodeTypes,
+  EdgeTypes,
+  useNodesState,
+  useEdgesState,
+  Node,
+  Edge,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
+import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
+import { CustomEdge } from './DesignSystem/components/CustomEdge'
+import { getUserJourneyByShortId } from '../lib/database'
+import type { ThirdParty, Platform } from '../lib/supabase'
+import { getPlatforms } from '../lib/database'
+import { getThirdParties } from '../lib/database/services/thirdPartyService'
+import { convertEmojis } from '../utils/emojiConverter'
+
+// Initial empty arrays with proper types
+const initialNodes: Node[] = []
+const initialEdges: Edge[] = []
+
+export function PublicUserJourneyView() {
+  const { shortId } = useParams<{ shortId: string }>()
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [journeyName, setJourneyName] = useState('')
+  const [journeyDescription, setJourneyDescription] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>([])
+  const [platforms, setPlatforms] = useState<Platform[]>([])
+
+  useEffect(() => {
+    const loadJourney = async () => {
+      try {
+        if (!shortId) {
+          setError('No journey ID provided')
+          setLoading(false)
+          return
+        }
+
+        const journeyShortId = parseInt(shortId)
+        const journey = await getUserJourneyByShortId(journeyShortId)
+
+        if (!journey) {
+          setError('Journey not found')
+          setLoading(false)
+          return
+        }
+
+        // Check if journey is published (only published journeys can be viewed publicly)
+        if (journey.status !== 'published') {
+          setError('This journey is not publicly available')
+          setLoading(false)
+          return
+        }
+
+        setJourneyName(journey.name)
+        setJourneyDescription(journey.description || '')
+
+        if (journey.flow_data) {
+          // Set nodes as non-selectable and non-draggable for public view
+          const publicNodes = journey.flow_data.nodes.map(node => ({
+            ...node,
+            selectable: false,
+            draggable: false,
+          }))
+          setNodes(publicNodes)
+          setEdges(journey.flow_data.edges)
+        }
+
+        // Load platforms and third parties for node rendering
+        const platformsData = await getPlatforms()
+        setPlatforms(platformsData)
+
+        // Try to load third parties (may fail without auth, but that's ok)
+        try {
+          const thirdPartiesData = await getThirdParties('')
+          setThirdParties(thirdPartiesData)
+        } catch (error) {
+          console.log('Could not load third parties (expected for public view)')
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error('Error loading public journey:', error)
+        setError('Failed to load journey')
+        setLoading(false)
+      }
+    }
+
+    loadJourney()
+  }, [shortId, setNodes, setEdges])
+
+  // Define node types for read-only view
+  const nodeTypes: NodeTypes = React.useMemo(() => ({
+    start: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        thirdParties={thirdParties}
+        platforms={platforms}
+        onEdit={undefined} // No editing in public view
+      />
+    ),
+    process: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        thirdParties={thirdParties}
+        platforms={platforms}
+        onEdit={undefined}
+      />
+    ),
+    decision: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        thirdParties={thirdParties}
+        platforms={platforms}
+        onEdit={undefined}
+      />
+    ),
+    end: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={true}
+        thirdParties={thirdParties}
+        platforms={platforms}
+        onEdit={undefined}
+      />
+    ),
+    label: (props: any) => (
+      <UserJourneyNode 
+        {...props} 
+        showHandles={false}
+        thirdParties={thirdParties}
+        platforms={platforms}
+        onEdit={undefined}
+      />
+    ),
+    highlightRegion: (props: any) => (
+      <HighlightRegionNode
+        {...props}
+        onEdit={undefined}
+      />
+    ),
+  }), [thirdParties, platforms])
+
+  // Define edge types for read-only view
+  const edgeTypes: EdgeTypes = React.useMemo(() => ({
+    default: (props: any) => (
+      <CustomEdge
+        {...props}
+        data={{
+          ...props.data,
+          onLabelClick: undefined, // No label editing in public view
+        }}
+      />
+    ),
+  }), [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="text-gray-600">Loading journey...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Journey Not Available</h1>
+          <p className="text-gray-600">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-screen w-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+        <h1 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h1>
+        {journeyDescription && (
+          <p className="text-sm text-gray-600 mt-1">{convertEmojis(journeyDescription)}</p>
+        )}
+      </div>
+
+      {/* Journey Canvas */}
+      <div className="flex-1 relative">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          minZoom={0.1}
+          maxZoom={4}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          selectNodesOnDrag={false}
+          panOnDrag={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          panOnScroll={false}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+
+      {/* Footer watermark */}
+      <div className="bg-white border-t border-gray-200 px-6 py-2 text-center text-xs text-gray-500 flex-shrink-0">
+        View only • Powered by KYP
+      </div>
+    </div>
+  )
+}
+

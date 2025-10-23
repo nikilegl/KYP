@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useParams, useLocation } from 'react-router-dom'
 import {
   ReactFlow,
   MiniMap,
@@ -23,7 +23,7 @@ import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, MoreVertical } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, MoreVertical, Share2, Copy as CopyIcon } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
@@ -32,7 +32,7 @@ import { EditJourneyModal } from './EditJourneyModal'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
-import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById } from '../lib/database'
+import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -90,6 +90,8 @@ function KeyboardZoomHandler() {
 
 export function UserJourneyCreator({ userRoles = [], projectId, journeyId, thirdParties: initialThirdParties, platforms: initialPlatforms }: UserJourneyCreatorProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const params = useParams()
   const [searchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -143,6 +145,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     top_4: false
   })
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
   
   // Undo state - stores snapshot before Tidy Up or AI Edit
   const [undoSnapshot, setUndoSnapshot] = useState<{
@@ -247,35 +251,46 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       }
       
-      // Check if there's an ID in the URL query params
+      // Check if there's an ID in the URL query params or path
       const urlJourneyId = searchParams.get('id')
       const urlProjectId = searchParams.get('projectId')
-      const loadJourneyId = urlJourneyId || journeyId
+      const shortIdParam = params.shortId ? parseInt(params.shortId) : null
       
-      if (loadJourneyId) {
+      let journey = null
+      
+      // If we have a shortId in the path (e.g., /user-journey/123), use that
+      if (shortIdParam && location.pathname.startsWith('/user-journey/')) {
+        journey = await getUserJourneyByShortId(shortIdParam)
+      } 
+      // Otherwise check for full ID in query params or props
+      else {
+        const loadJourneyId = urlJourneyId || journeyId
+        if (loadJourneyId) {
+          journey = await getUserJourneyById(loadJourneyId)
+        }
+      }
+      
+      if (journey) {
         // Load existing journey
-        const journey = await getUserJourneyById(loadJourneyId)
-        if (journey) {
-          setCurrentJourneyId(journey.id)
-          setJourneyName(journey.name)
-          setJourneyDescription(journey.description || '')
-          setJourneyLayout(journey.layout || 'vertical')
-          setJourneyStatus(journey.status || 'draft')
-          setSelectedProjectId(journey.project_id || '')
-          
-          // Load associated law firms
-          const lawFirmIds = await getUserJourneyLawFirms(journey.id)
-          setSelectedLawFirmIds(lawFirmIds)
-          
-          if (journey.flow_data) {
-            // Ensure nodes are selectable
-            const nodesWithSelection = journey.flow_data.nodes.map(node => ({
-              ...node,
-              selectable: true
-            }))
-            setNodes(nodesWithSelection)
-            setEdges(journey.flow_data.edges)
-          }
+        setCurrentJourneyId(journey.id)
+        setJourneyName(journey.name)
+        setJourneyDescription(journey.description || '')
+        setJourneyLayout(journey.layout || 'vertical')
+        setJourneyStatus(journey.status || 'draft')
+        setSelectedProjectId(journey.project_id || '')
+        
+        // Load associated law firms
+        const lawFirmIds = await getUserJourneyLawFirms(journey.id)
+        setSelectedLawFirmIds(lawFirmIds)
+        
+        if (journey.flow_data) {
+          // Ensure nodes are selectable
+          const nodesWithSelection = journey.flow_data.nodes.map(node => ({
+            ...node,
+            selectable: true
+          }))
+          setNodes(nodesWithSelection)
+          setEdges(journey.flow_data.edges)
         }
       } else {
         // New journey - set up defaults
@@ -2737,6 +2752,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             )}
           </Button>
 
+          {/* Share Button - only show if journey is saved and published */}
+          {currentJourneyId && journeyStatus === 'published' && (
+            <Button
+              variant="outline"
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-2 whitespace-nowrap"
+            >
+              <Share2 size={16} />
+              Share
+            </Button>
+          )}
+
             {/* More Options Menu */}
             <div className="relative" title="More options">
             <Button
@@ -3500,6 +3527,82 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setShowAddLawFirmModal(false)
         }}
       />
+
+      {/* Share Modal */}
+      {showShareModal && currentJourneyId && (
+        <Modal
+          isOpen={showShareModal}
+          onClose={() => {
+            setShowShareModal(false)
+            setCopySuccess(false)
+          }}
+          title="Share User Journey"
+          size="md"
+          footerContent={
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowShareModal(false)
+                  setCopySuccess(false)
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6 space-y-4">
+            <div>
+              <p className="text-sm text-gray-600 mb-4">
+                Anyone with this link can view this journey (no login required).
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}/public/user-journey/${nodes.length > 0 ? (nodes[0] as any).data?.journeyShortId || currentJourneyId : currentJourneyId}`}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm font-mono"
+                  onClick={(e) => e.currentTarget.select()}
+                />
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      // Get the journey to find its short_id
+                      const journey = await getUserJourneyById(currentJourneyId)
+                      const shareUrl = `${window.location.origin}/public/user-journey/${journey?.short_id}`
+                      await navigator.clipboard.writeText(shareUrl)
+                      setCopySuccess(true)
+                      setTimeout(() => setCopySuccess(false), 2000)
+                    } catch (error) {
+                      console.error('Failed to copy:', error)
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  {copySuccess ? (
+                    <>
+                      <Check size={16} />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <CopyIcon size={16} />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Only published journeys can be shared publicly. This journey is currently published.
+              </p>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

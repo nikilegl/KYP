@@ -123,6 +123,40 @@ export const getUserJourneyById = async (journeyId: string): Promise<UserJourney
   }
 }
 
+export const getUserJourneyByShortId = async (shortId: number): Promise<UserJourney | null> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      const allJourneys = Object.keys(localStorage)
+        .filter(key => key.startsWith('kyp_user_journeys_'))
+        .flatMap(key => {
+          try {
+            return JSON.parse(localStorage.getItem(key) || '[]')
+          } catch {
+            return []
+          }
+        })
+      return allJourneys.find((j: UserJourney) => j.short_id === shortId) || null
+    } catch {
+      return null
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_journeys')
+      .select('*')
+      .eq('short_id', shortId)
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error fetching user journey by short ID:', error)
+    return null
+  }
+}
+
 export const createUserJourney = async (
   name: string,
   description: string = '',
