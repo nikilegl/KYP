@@ -45,6 +45,8 @@ const AppWithProviders = () => {
         redirect_uri: window.location.origin,
         audience: auth0Config.authorizationParams.audience || '',
       }}
+      cacheLocation="localstorage"
+      useRefreshTokens={true}
       skipRedirectCallback={!isAuth0Configured}
     >
       {routes}
