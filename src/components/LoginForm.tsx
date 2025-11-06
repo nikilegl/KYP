@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
-import { LogIn, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { isSupabaseConfigured } from '../lib/supabase'
-import { isAuth0Configured } from '../lib/auth0'
 
 export function LoginForm() {
   const [email, setEmail] = useState('niki@legl.com')
@@ -431,8 +430,8 @@ export function LoginForm() {
             )}
           </div>
 
-          {/* Google Sign In Button (when Auth0 is configured) */}
-          {isAuth0Configured && (
+          {/* Google Sign In Button (when Supabase is configured) */}
+          {isSupabaseConfigured && (
             <div className="mb-6">
               {/* Only show restriction notice if there's an email domain restriction error */}
               {error && (error.includes('restricted') || error.includes('@legl.com')) && (
@@ -452,6 +451,8 @@ export function LoginForm() {
                     setError(error.message)
                     setLoading(false)
                   }
+                  // Note: Loading will remain true during redirect
+                  // The redirect will happen automatically
                 }}
                 disabled={loading}
                 className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -576,7 +577,7 @@ export function LoginForm() {
           <div className="mt-6 text-center">
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={toggleMode}
               className="text-blue-600 hover:text-blue-700 text-sm font-medium"
             >
               {isSignUp 
