@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured, forceSignOut, SupabaseAuthError } from '../lib/supabase'
+import { isAuth0Configured } from '../lib/auth0'
+import { useAuth0Safe } from './useAuth0Safe'
 import type { User } from '@supabase/supabase-js'
 import type { Workspace } from '../lib/supabase'
 
@@ -114,12 +116,76 @@ const addUserToLeglWorkspace = async (userId: string, userEmail: string): Promis
   }
 }
 
+// Check if email is allowed (must be @legl.com)
+const isEmailAllowed = (email: string | null | undefined): boolean => {
+  if (!email) return false
+  return email.toLowerCase().endsWith('@legl.com')
+}
+
+// Convert Auth0 user to Supabase-compatible User type
+const convertAuth0UserToSupabaseUser = (auth0User: any): User | null => {
+  if (!auth0User) return null
+  
+  // Check email domain restriction
+  const email = auth0User.email || ''
+  if (!isEmailAllowed(email)) {
+    console.warn('Access denied: Email must be @legl.com')
+    return null
+  }
+  
+  return {
+    id: auth0User.sub || auth0User.user_id || '',
+    email: email,
+    created_at: auth0User.created_at || new Date().toISOString(),
+    updated_at: auth0User.updated_at || new Date().toISOString(),
+    aud: 'authenticated',
+    role: 'authenticated',
+    app_metadata: auth0User.app_metadata || {},
+    user_metadata: auth0User.user_metadata || {}
+  }
+}
+
 export function useAuth() {
+  // Safely get Auth0 hook (returns null if not configured or provider not available)
+  const auth0 = useAuth0Safe()
+  
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasInitialized, setHasInitialized] = useState(false)
 
+  // Handle Auth0 authentication
   useEffect(() => {
+    if (isAuth0Configured && auth0) {
+      const auth0User = convertAuth0UserToSupabaseUser(auth0.user)
+      
+      // If user doesn't have allowed email domain, sign them out
+      if (auth0.user && !isEmailAllowed(auth0.user.email)) {
+        console.warn('User email domain not allowed, signing out')
+        auth0.logout({
+          logoutParams: {
+            returnTo: window.location.origin,
+          },
+        })
+        setUser(null)
+        setLoading(false)
+        setHasInitialized(true)
+        return
+      }
+      
+      setUser(auth0User)
+      setLoading(auth0.isLoading)
+      setHasInitialized(true)
+      return
+    }
+  }, [auth0?.user, auth0?.isLoading, isAuth0Configured, auth0])
+
+  // Handle Supabase/local authentication (fallback)
+  useEffect(() => {
+    // Skip if Auth0 is configured (handled above)
+    if (isAuth0Configured) {
+      return
+    }
+
     // Prevent re-initialization if we've already initialized
     if (hasInitialized) {
       return
@@ -179,9 +245,19 @@ export function useAuth() {
     }
 
     initAuth()
-  }, [hasInitialized])
+  }, [hasInitialized, isAuth0Configured])
 
   const signIn = async (email: string, password: string) => {
+    // Auth0 doesn't support email/password sign in directly - use Google login instead
+    if (isAuth0Configured && auth0) {
+      return { error: { message: 'Please use Google Sign In for authentication' } }
+    }
+
+    // Check email domain restriction
+    if (!isEmailAllowed(email)) {
+      return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -191,6 +267,12 @@ export function useAuth() {
         
         if (error) {
           return { error: { message: error.message } }
+        }
+        
+        // Double-check email domain after successful sign in
+        if (data.user && !isEmailAllowed(data.user.email)) {
+          await supabase.auth.signOut()
+          return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
         }
         
         // Add user to Legl workspace after successful sign in
@@ -219,7 +301,29 @@ export function useAuth() {
     }
   }
 
+  const signInWithGoogle = async () => {
+    if (isAuth0Configured && auth0) {
+      try {
+        await auth0.loginWithRedirect({
+          authorizationParams: {
+            connection: 'google-oauth2',
+          },
+        })
+        return { error: null }
+      } catch (error: any) {
+        console.error('Auth0 Google sign in error:', error)
+        return { error: { message: error.message || 'Failed to sign in with Google. Please try again.' } }
+      }
+    }
+    return { error: { message: 'Auth0 is not configured' } }
+  }
+
   const signUp = async (email: string, password: string) => {
+    // Check email domain restriction
+    if (!isEmailAllowed(email)) {
+      return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase.auth.signUp({
@@ -278,6 +382,22 @@ export function useAuth() {
 
   const signOut = async () => {
     console.log('🔵 useAuth: signOut called')
+    
+    if (isAuth0Configured && auth0) {
+      console.log('🔵 useAuth: Using Auth0 signOut')
+      try {
+        await auth0.logout({
+          logoutParams: {
+            returnTo: window.location.origin,
+          },
+        })
+        return { error: null }
+      } catch (error) {
+        console.error('Auth0 sign out error:', error)
+        return { error: { message: 'Failed to sign out. Please try again.' } }
+      }
+    }
+    
     if (isSupabaseConfigured && supabase) {
       console.log('🔵 useAuth: Using Supabase signOut')
       // Use forceSignOut to aggressively clear session without server call
@@ -350,6 +470,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
+    signInWithGoogle,
     sendPasswordResetEmail,
     updateUserPassword
   }
