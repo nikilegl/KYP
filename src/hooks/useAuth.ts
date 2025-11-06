@@ -280,6 +280,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasInitialized, setHasInitialized] = useState(false)
+  const [supabaseInitialized, setSupabaseInitialized] = useState(false)
 
   // Handle Auth0 authentication
   useEffect(() => {
@@ -351,15 +352,24 @@ export function useAuth() {
     }
   }, [auth0?.user, auth0?.isLoading, isAuth0Configured, auth0])
 
-  // Handle Supabase/local authentication (fallback)
+  // Handle Supabase/local authentication (fallback or when Auth0 user not present)
   useEffect(() => {
-    // Skip if Auth0 is configured (handled above)
+    // If Auth0 is configured and has a user, skip Supabase auth (Auth0 takes precedence)
+    // But if Auth0 is still loading, wait for it to finish
     if (isAuth0Configured) {
-      return
+      if (auth0?.isLoading) {
+        // Still loading, wait
+        return
+      }
+      if (auth0?.user) {
+        // Auth0 has a user, skip Supabase
+        return
+      }
+      // Auth0 is configured but no user - allow Supabase auth
     }
 
-    // Prevent re-initialization if we've already initialized
-    if (hasInitialized) {
+    // Prevent re-initialization if Supabase auth has already been initialized
+    if (supabaseInitialized) {
       return
     }
 
@@ -369,18 +379,24 @@ export function useAuth() {
           // Get initial session
           const { data: { session } } = await supabase.auth.getSession()
           if (session?.user) {
+            console.log('🔵 useAuth: Found Supabase session:', session.user.email)
             setUser(session.user)
           }
 
           // Listen for auth changes
           const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (event, session) => {
+              console.log('🔵 useAuth: Supabase auth state changed:', event, session?.user?.email)
+              // Always update user state from Supabase
+              // The Auth0 effect will override if Auth0 has a user (Auth0 takes precedence)
               setUser(session?.user ?? null)
+              setLoading(false)
             }
           )
 
           setLoading(false)
           setHasInitialized(true)
+          setSupabaseInitialized(true)
           return () => subscription.unsubscribe()
         } catch (error) {
           if (error instanceof SupabaseAuthError) {
@@ -391,6 +407,7 @@ export function useAuth() {
           setUser(null)
           setLoading(false)
           setHasInitialized(true)
+          setSupabaseInitialized(true)
         }
       } else {
         initLocalAuth()
@@ -414,21 +431,20 @@ export function useAuth() {
       }
       setLoading(false)
       setHasInitialized(true)
+      setSupabaseInitialized(true)
     }
 
     initAuth()
-  }, [hasInitialized, isAuth0Configured])
+  }, [supabaseInitialized, isAuth0Configured, auth0?.user, auth0?.isLoading])
 
   const signIn = async (email: string, password: string) => {
-    // Auth0 doesn't support email/password sign in directly - use Google login instead
-    if (isAuth0Configured && auth0) {
-      return { error: { message: 'Please use Google Sign In for authentication' } }
-    }
-
     // Check email domain restriction
     if (!isEmailAllowed(email)) {
       return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
     }
+
+    // If Auth0 is configured, still allow Supabase email/password login
+    // Auth0 is optional - users can choose Google or email/password
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -555,7 +571,11 @@ export function useAuth() {
   const signOut = async () => {
     console.log('🔵 useAuth: signOut called')
     
-    if (isAuth0Configured && auth0) {
+    // Check which authentication method the user is using
+    // If Auth0 has a user, sign out from Auth0
+    // Otherwise, sign out from Supabase/local
+    
+    if (isAuth0Configured && auth0?.user) {
       console.log('🔵 useAuth: Using Auth0 signOut')
       try {
         await auth0.logout({
@@ -563,18 +583,32 @@ export function useAuth() {
             returnTo: window.location.origin,
           },
         })
+        setUser(null)
+        setLoading(false)
         return { error: null }
       } catch (error) {
         console.error('Auth0 sign out error:', error)
-        return { error: { message: 'Failed to sign out. Please try again.' } }
+        // Fall through to clear local state even if Auth0 logout fails
+        setUser(null)
+        setLoading(false)
+        return { error: null }
       }
     }
     
+    // Sign out from Supabase if configured
     if (isSupabaseConfigured && supabase) {
       console.log('🔵 useAuth: Using Supabase signOut')
-      // Use forceSignOut to aggressively clear session without server call
+      try {
+        // Sign out from Supabase
+        await supabase.auth.signOut()
+      } catch (error) {
+        console.error('Supabase signOut error:', error)
+      }
+      // Use forceSignOut to aggressively clear session
       await forceSignOut()
       setUser(null)
+      setSupabaseInitialized(false)
+      setLoading(false)
       console.log('🔵 useAuth: Supabase user set to null')
       return { error: null }
     } else {
@@ -586,6 +620,8 @@ export function useAuth() {
       // Then set user to null and reset initialization flag
       setUser(null)
       setHasInitialized(false)
+      setSupabaseInitialized(false)
+      setLoading(false)
       console.log('🔵 useAuth: Local user set to null and hasInitialized reset')
       
       return { error: null }
