@@ -42,35 +42,104 @@ const storeUsers = (users: Array<{email: string, password: string}>) => {
   }
 }
 
-// Add user to Legl workspace (imported from database.ts logic)
-const addUserToLeglWorkspace = async (userId: string, userEmail: string): Promise<void> => {
+// Add user to Legl workspace (works for both Supabase and Auth0 users)
+const addUserToLeglWorkspace = async (userId: string, userEmail: string, isAuth0User: boolean = false): Promise<void> => {
   if (isSupabaseConfigured && supabase) {
     try {
-      // First, ensure 'Legl' workspace exists
-      let { data: leglWorkspace, error: selectError } = await supabase
-        .from('workspaces')
-        .select('*')
-        .eq('name', 'Legl')
+      // First, check if user already exists in any workspace by email
+      // This helps us find the correct workspace they should belong to
+      const { data: existingUserMembership } = await supabase
+        .from('workspace_users')
+        .select('workspace_id, workspace:workspaces(id, name)')
+        .eq('user_email', userEmail)
+        .eq('status', 'active')
+        .limit(1)
         .maybeSingle()
       
-      if (selectError && selectError.code !== 'PGRST116') {
-        console.error('Error finding Legl workspace:', selectError)
-        return
+      let leglWorkspace = null
+      
+      // If user already exists in a workspace, use that workspace
+      if (existingUserMembership?.workspace_id) {
+        const workspaceData = existingUserMembership.workspace as any
+        // Check if it's the Legl workspace
+        if (workspaceData?.name === 'Legl') {
+          leglWorkspace = workspaceData
+        } else {
+          // User is in a different workspace - we'll still add them to Legl
+          // but we found their existing workspace
+          console.log('User exists in workspace:', workspaceData?.name)
+        }
       }
       
+      // If we didn't find the user's workspace, or it's not Legl, find/create Legl workspace
       if (!leglWorkspace) {
-        // Create Legl workspace if it doesn't exist
-        const { data: newWorkspace, error: insertError } = await supabase
+        // Find the existing 'Legl' workspace
+        // Use .order() and .limit() to get the first one if multiple exist
+        let { data: leglWorkspaces, error: selectError } = await supabase
           .from('workspaces')
-          .insert([{ name: 'Legl', created_by: userId }])
-          .select()
-          .maybeSingle()
+          .select('*')
+          .eq('name', 'Legl')
+          .order('created_at', { ascending: true })
+          .limit(1)
         
-        if (insertError) {
-          console.error('Error creating Legl workspace:', insertError)
-          return
+        if (selectError && selectError.code !== 'PGRST116') {
+          console.error('Error finding Legl workspace:', selectError)
+          // If RLS is blocking, try to get all workspaces and filter client-side
+          // This is a fallback for Auth0 users who might not pass RLS
+          const { data: allWorkspaces } = await supabase
+            .from('workspaces')
+            .select('*')
+          
+          if (allWorkspaces) {
+            leglWorkspaces = allWorkspaces.filter((w: any) => w.name === 'Legl')
+          }
         }
-        leglWorkspace = newWorkspace
+        
+        leglWorkspace = leglWorkspaces && leglWorkspaces.length > 0 ? leglWorkspaces[0] : null
+        
+        if (!leglWorkspace) {
+          // Only create if we're sure it doesn't exist
+          // Check one more time with a broader query
+          const { data: checkWorkspace } = await supabase
+            .from('workspaces')
+            .select('id, name')
+            .eq('name', 'Legl')
+            .limit(1)
+            .maybeSingle()
+          
+          if (!checkWorkspace) {
+            // Create Legl workspace if it truly doesn't exist
+            // For Auth0 users, created_by will be null (which is fine)
+            const { data: newWorkspace, error: insertError } = await supabase
+              .from('workspaces')
+              .insert([{ name: 'Legl', created_by: isAuth0User ? null : userId }])
+              .select()
+              .maybeSingle()
+            
+            if (insertError) {
+              console.error('Error creating Legl workspace:', insertError)
+              // If insert fails due to RLS, the workspace might already exist
+              // Try to find it again
+              const { data: retryWorkspace } = await supabase
+                .from('workspaces')
+                .select('*')
+                .eq('name', 'Legl')
+                .limit(1)
+                .maybeSingle()
+              
+              if (retryWorkspace) {
+                leglWorkspace = retryWorkspace
+              } else {
+                console.error('Unable to create or find Legl workspace')
+                return
+              }
+            } else {
+              leglWorkspace = newWorkspace
+            }
+          } else {
+            leglWorkspace = checkWorkspace
+          }
+        }
       }
       
       if (!leglWorkspace) {
@@ -78,37 +147,86 @@ const addUserToLeglWorkspace = async (userId: string, userEmail: string): Promis
         return
       }
       
-      // Check if user is already in workspace
-      const { data: existingMembership } = await supabase
-        .from('workspace_users')
-        .select('id')
-        .eq('workspace_id', leglWorkspace.id)
-        .eq('user_id', userId)
-        .single()
+      // For Auth0 users, look up by email instead of user_id
+      // For Supabase users, we can use either email or user_id
+      let existingMembership
+      
+      if (isAuth0User) {
+        // Auth0 users: lookup by email only
+        const { data } = await supabase
+          .from('workspace_users')
+          .select('id, user_id, status')
+          .eq('workspace_id', leglWorkspace.id)
+          .eq('user_email', userEmail)
+          .maybeSingle()
+        existingMembership = data
+      } else {
+        // Supabase users: lookup by user_id first, then email as fallback
+        const { data } = await supabase
+          .from('workspace_users')
+          .select('id, user_id, status')
+          .eq('workspace_id', leglWorkspace.id)
+          .eq('user_id', userId)
+          .maybeSingle()
+        existingMembership = data
+        
+        // If not found by user_id, try email
+        if (!existingMembership) {
+          const { data: emailData } = await supabase
+            .from('workspace_users')
+            .select('id, user_id, status')
+            .eq('workspace_id', leglWorkspace.id)
+            .eq('user_email', userEmail)
+            .maybeSingle()
+          existingMembership = emailData
+        }
+      }
       
       if (!existingMembership) {
         // Add user to workspace
-        await supabase
+        const insertData: any = {
+          workspace_id: leglWorkspace.id,
+          user_email: userEmail,
+          role: 'member',
+          status: 'active'
+        }
+        
+        // Only add user_id if it's a Supabase user (not Auth0)
+        if (!isAuth0User) {
+          insertData.user_id = userId
+        }
+        
+        const { error: insertError } = await supabase
           .from('workspace_users')
-          .insert([{
-            workspace_id: leglWorkspace.id,
-            user_id: userId,
-            user_email: userEmail,
-            role: 'member',
-            status: 'active'
-          }])
+          .insert([insertData])
+        
+        if (insertError) {
+          console.error('Error adding user to workspace:', insertError)
+        } else {
+          console.log('Successfully added user to Legl workspace:', userEmail)
+        }
       } else {
-        // Update existing pending membership to active
-        await supabase
+        // Update existing membership to active and set user_id if needed
+        const updateData: any = {
+          status: 'active',
+          updated_at: new Date().toISOString()
+        }
+        
+        // Update user_id if it's a Supabase user and not already set
+        if (!isAuth0User && !existingMembership.user_id) {
+          updateData.user_id = userId
+        }
+        
+        const { error: updateError } = await supabase
           .from('workspace_users')
-          .update({ 
-            user_id: userId, 
-            status: 'active',
-            updated_at: new Date().toISOString()
-          })
-          .eq('workspace_id', leglWorkspace.id)
-          .eq('user_email', userEmail)
-          .eq('status', 'pending')
+          .update(updateData)
+          .eq('id', existingMembership.id)
+        
+        if (updateError) {
+          console.error('Error updating workspace user:', updateError)
+        } else {
+          console.log('Successfully updated workspace user:', userEmail)
+        }
       }
     } catch (error) {
       console.error('Error adding user to Legl workspace:', error)
@@ -155,11 +273,9 @@ export function useAuth() {
 
   // Handle Auth0 authentication
   useEffect(() => {
-    if (isAuth0Configured && auth0) {
-      const auth0User = convertAuth0UserToSupabaseUser(auth0.user)
-      
+    if (isAuth0Configured && auth0 && auth0.user && !auth0.isLoading) {
       // If user doesn't have allowed email domain, sign them out
-      if (auth0.user && !isEmailAllowed(auth0.user.email)) {
+      if (!isEmailAllowed(auth0.user.email)) {
         console.warn('User email domain not allowed, signing out')
         auth0.logout({
           logoutParams: {
@@ -172,10 +288,23 @@ export function useAuth() {
         return
       }
       
+      const auth0User = convertAuth0UserToSupabaseUser(auth0.user)
+      
+      // Add Auth0 user to Legl workspace
+      if (auth0User && auth0.user.email) {
+        addUserToLeglWorkspace(auth0User.id, auth0.user.email, true)
+          .catch(error => {
+            console.error('Failed to add Auth0 user to workspace:', error)
+          })
+      }
+      
       setUser(auth0User)
-      setLoading(auth0.isLoading)
+      setLoading(false)
       setHasInitialized(true)
       return
+    } else if (isAuth0Configured && auth0) {
+      // Still loading
+      setLoading(auth0.isLoading)
     }
   }, [auth0?.user, auth0?.isLoading, isAuth0Configured, auth0])
 
