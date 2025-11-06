@@ -283,7 +283,18 @@ export function useAuth() {
 
   // Handle Auth0 authentication
   useEffect(() => {
-    if (isAuth0Configured && auth0 && auth0.user && !auth0.isLoading) {
+    if (!isAuth0Configured || !auth0) {
+      return
+    }
+
+    // Wait for Auth0 to finish loading (checking session from localStorage)
+    if (auth0.isLoading) {
+      setLoading(true)
+      return
+    }
+
+    // Auth0 has finished loading - check if user exists
+    if (auth0.user) {
       // If user doesn't have allowed email domain, sign them out
       if (!isEmailAllowed(auth0.user.email)) {
         console.warn('User email domain not allowed, signing out')
@@ -332,10 +343,11 @@ export function useAuth() {
       setUser(auth0User)
       setLoading(false)
       setHasInitialized(true)
-      return
-    } else if (isAuth0Configured && auth0) {
-      // Still loading
-      setLoading(auth0.isLoading)
+    } else {
+      // No user - user is logged out
+      setUser(null)
+      setLoading(false)
+      setHasInitialized(true)
     }
   }, [auth0?.user, auth0?.isLoading, isAuth0Configured, auth0])
 
