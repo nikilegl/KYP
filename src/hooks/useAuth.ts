@@ -44,8 +44,11 @@ const storeUsers = (users: Array<{email: string, password: string}>) => {
 
 // Add user to Legl workspace (works for both Supabase and Auth0 users)
 const addUserToLeglWorkspace = async (userId: string, userEmail: string, isAuth0User: boolean = false): Promise<void> => {
+  console.log('🔵 addUserToLeglWorkspace: Called with', { userId, userEmail, isAuth0User })
+  
   if (isSupabaseConfigured && supabase) {
     try {
+      console.log('🔵 addUserToLeglWorkspace: Supabase is configured, proceeding...')
       // First, check if user already exists in any workspace by email
       // This helps us find the correct workspace they should belong to
       const { data: existingUserMembership } = await supabase
@@ -196,14 +199,21 @@ const addUserToLeglWorkspace = async (userId: string, userEmail: string, isAuth0
           insertData.user_id = userId
         }
         
-        const { error: insertError } = await supabase
+        console.log('🔵 addUserToLeglWorkspace: Inserting user with data:', insertData)
+        const { data: insertResult, error: insertError } = await supabase
           .from('workspace_users')
           .insert([insertData])
+          .select()
         
         if (insertError) {
-          console.error('Error adding user to workspace:', insertError)
+          console.error('❌ addUserToLeglWorkspace: Error adding user to workspace:', insertError)
+          console.error('❌ Error code:', insertError.code)
+          console.error('❌ Error message:', insertError.message)
+          console.error('❌ Error details:', insertError.details)
+          console.error('❌ Error hint:', insertError.hint)
         } else {
-          console.log('Successfully added user to Legl workspace:', userEmail)
+          console.log('✅ addUserToLeglWorkspace: Successfully added user to Legl workspace:', userEmail)
+          console.log('✅ Insert result:', insertResult)
         }
       } else {
         // Update existing membership to active and set user_id if needed
@@ -290,11 +300,32 @@ export function useAuth() {
       
       const auth0User = convertAuth0UserToSupabaseUser(auth0.user)
       
-      // Add Auth0 user to Legl workspace
-      if (auth0User && auth0.user.email) {
-        addUserToLeglWorkspace(auth0User.id, auth0.user.email, true)
+      // Add Auth0 user to Legl workspace using Edge Function (bypasses RLS)
+      if (auth0User && auth0.user.email && isSupabaseConfigured && supabase) {
+        console.log('🔵 useAuth: Adding Auth0 user to workspace via Edge Function:', auth0.user.email)
+        
+        // Use Edge Function to add user (bypasses RLS with service role)
+        supabase.functions.invoke('add-auth0-user', {
+          body: { 
+            email: auth0.user.email, 
+            userId: auth0User.id 
+          }
+        })
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('❌ useAuth: Edge function error:', error)
+              // Fallback to direct method if Edge Function fails
+              console.log('🔵 useAuth: Falling back to direct method...')
+              return addUserToLeglWorkspace(auth0User.id, auth0.user.email, true)
+            } else {
+              console.log('✅ useAuth: Successfully added Auth0 user via Edge Function:', data)
+            }
+          })
           .catch(error => {
-            console.error('Failed to add Auth0 user to workspace:', error)
+            console.error('❌ useAuth: Failed to add Auth0 user:', error)
+            // Fallback to direct method
+            console.log('🔵 useAuth: Falling back to direct method...')
+            return addUserToLeglWorkspace(auth0User.id, auth0.user.email, true)
           })
       }
       
