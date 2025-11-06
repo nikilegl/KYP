@@ -194,10 +194,13 @@ export function useAuth() {
     }
 
     try {
+      // Use current origin (works for both localhost and production)
+      const redirectUrl = `${window.location.origin}${window.location.pathname}`
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}`,
+          redirectTo: redirectUrl,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
