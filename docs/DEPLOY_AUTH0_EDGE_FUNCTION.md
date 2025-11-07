@@ -53,3 +53,4 @@ After deploying, test it:
 - Verify the migration `20250101000000_support_auth0_users.sql` has been run
 - Check `workspace_users` table to see if user was added
 
+

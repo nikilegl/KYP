@@ -74,3 +74,4 @@ After deploying:
 4. Try viewing user journeys
 5. Check browser console for errors
 
+
