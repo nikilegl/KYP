@@ -97,7 +97,7 @@ export function WorkspaceDataFetcher({
   const { user } = useAuth()
   
   // Local state for current view - managed based on URL
-  const [currentView, setCurrentView] = useState('projects')
+  const [currentView, setCurrentView] = useState('user-journeys')
   
   // Selection states
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -158,6 +158,19 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/') {
+        setCurrentView('user-journeys')
+        onViewChange('user-journeys')
+        setSelectedProject(null)
+        setSelectedStakeholder(null)
+        setSelectedNote(null)
+        setSelectedUserStory(null)
+        setSelectedDesignForProject(null)
+        setSelectedLawFirm(null)
+        return
+      }
+
+      if (pathname === '/projects') {
+        console.log('🔵 WorkspaceDataFetcher: Processing projects path')
         setCurrentView('projects')
         onViewChange('projects')
         setSelectedProject(null)
