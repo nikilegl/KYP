@@ -12,13 +12,15 @@ interface DashboardProps {
 export function Dashboard({ routeParams, pathname }: DashboardProps) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [currentDashboardView, setCurrentDashboardView] = useState('projects')
+  const [currentDashboardView, setCurrentDashboardView] = useState('user-journeys')
 
   // Update currentDashboardView based on pathname
   useEffect(() => {
     console.log('🔵 Dashboard: pathname changed to:', pathname)
     
     if (pathname === '/') {
+      setCurrentDashboardView('user-journeys')
+    } else if (pathname === '/projects') {
       setCurrentDashboardView('projects')
     } else if (pathname === '/user-journeys') {
       setCurrentDashboardView('user-journeys')
@@ -58,11 +60,11 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
 
   const handleTopLevelNavigation = (viewId: string) => {
     switch (viewId) {
-      case 'projects':
+      case 'user-journeys':
         navigate('/')
         break
-      case 'user-journeys':
-        navigate('/user-journeys')
+      case 'projects':
+        navigate('/projects')
         break
       case 'law-firms':
         navigate('/law-firms')

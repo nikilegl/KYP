@@ -14,6 +14,7 @@ root.render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/projects" element={<App />} />
         <Route path="/reset-password" element={<ResetPasswordForm />} />
         <Route path="/public/user-journey/:shortId" element={<PublicUserJourneyView />} />
         <Route path="/project/:shortId" element={<App />} />
