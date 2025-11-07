@@ -41,3 +41,4 @@ WHERE workspace_id = 'c3550308-68a7-46e3-b7e5-745452ae2cd6';
 
 -- Expected: Should show at least 1 active user (you)
 
+
