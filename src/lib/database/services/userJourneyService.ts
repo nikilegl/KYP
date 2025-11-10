@@ -143,13 +143,23 @@ export const getUserJourneyByShortId = async (shortId: number): Promise<UserJour
   }
 
   try {
+    // This query should work for anonymous users if RLS policy allows it
+    // The policy should allow anonymous users to read published journeys
     const { data, error } = await supabase
       .from('user_journeys')
       .select('*')
       .eq('short_id', shortId)
+      .eq('status', 'published') // Only fetch published journeys for public access
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Error fetching user journey by short ID:', error)
+      // If it's a 406 or 401 error, it might be an RLS issue
+      if (error.code === 'PGRST301' || error.code === '42501' || error.message?.includes('permission denied')) {
+        console.error('RLS policy may be blocking anonymous access. Make sure the migration to allow public read is applied.')
+      }
+      throw error
+    }
     return data
   } catch (error) {
     console.error('Error fetching user journey by short ID:', error)
