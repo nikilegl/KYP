@@ -328,6 +328,17 @@ export function EditNodeModal({
     }
   }, [node, isOpen, isAddingNewNode])
 
+  // Define handleSave early so it can be used in useEffect
+  const handleSave = useCallback(() => {
+    // Convert bulletPointsWithIds back to string array
+    const bulletPointsAsStrings = bulletPointsWithIds.map(bp => bp.text)
+    
+    onSave({
+      ...formData,
+      bulletPoints: bulletPointsAsStrings
+    })
+  }, [formData, bulletPointsWithIds, onSave])
+
   // Auto-focus the label input when modal opens
   useEffect(() => {
     if (isOpen && labelInputRef.current) {
@@ -337,6 +348,30 @@ export function EditNodeModal({
       }, 100)
     }
   }, [isOpen])
+
+  // Handle global Enter key press to trigger Save (when not in bullet point input)
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        // Check if the active element is a bullet point input
+        const activeElement = document.activeElement
+        const isBulletPointInput = bulletInputRefs.current.some(ref => ref === activeElement)
+        
+        // If not in a bullet point input, trigger Save
+        if (!isBulletPointInput) {
+          e.preventDefault()
+          handleSave()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown)
+    }
+  }, [isOpen, handleSave])
 
   // Bullet point handlers
   const addBulletPoint = useCallback(() => {
@@ -364,6 +399,22 @@ export function EditNodeModal({
     if (e.key === 'Tab' && !e.shiftKey && value.trim()) {
       e.preventDefault()
       setBulletPointsWithIds(prev => [...prev, { id: `bp-${Date.now()}`, text: '' }])
+      setTimeout(() => {
+        const newIndex = index + 1
+        if (bulletInputRefs.current[newIndex]) {
+          bulletInputRefs.current[newIndex]?.focus()
+        }
+      }, 0)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      // Add new bullet point below current one
+      const newBulletPoint = { id: `bp-${Date.now()}`, text: '' }
+      setBulletPointsWithIds(prev => [
+        ...prev.slice(0, index + 1),
+        newBulletPoint,
+        ...prev.slice(index + 1)
+      ])
+      // Focus on the new bullet point
       setTimeout(() => {
         const newIndex = index + 1
         if (bulletInputRefs.current[newIndex]) {
@@ -449,16 +500,6 @@ export function EditNodeModal({
       })
     }
   }, [])
-
-  const handleSave = () => {
-    // Convert bulletPointsWithIds back to string array
-    const bulletPointsAsStrings = bulletPointsWithIds.map(bp => bp.text)
-    
-    onSave({
-      ...formData,
-      bulletPoints: bulletPointsAsStrings
-    })
-  }
 
   const getNotificationColor = (type: Notification['type']) => {
     switch (type) {

@@ -235,23 +235,25 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
       )}
 
       {/* Notifications - Full width */}
-      {notifications && notifications.length > 0 && (
+      {notifications && notifications.filter(n => n.message && n.message.trim()).length > 0 && (
         <div className={`space-y-1.5 ${bulletPoints.filter(b => b && b.trim()).length > 0 ? 'mt-2' : 'mt-2'}`}>
-          {notifications.map((notification) => {
-            const style = getNotificationStyle(notification.type)
-            return (
-              <div
-                key={notification.id}
-                className={`
-                  ${style.bg} ${style.border} ${style.text}
-                  border rounded px-2 py-1.5
-                  text-xs
-                `}
-              >
-                <span>{convertEmojis(notification.message)}</span>
-              </div>
-            )
-          })}
+          {notifications
+            .filter(n => n.message && n.message.trim())
+            .map((notification) => {
+              const style = getNotificationStyle(notification.type)
+              return (
+                <div
+                  key={notification.id}
+                  className={`
+                    ${style.bg} ${style.border} ${style.text}
+                    border rounded px-2 py-1.5
+                    text-xs
+                  `}
+                >
+                  <span>{convertEmojis(notification.message)}</span>
+                </div>
+              )
+            })}
         </div>
       )}
 
