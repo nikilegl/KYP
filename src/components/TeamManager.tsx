@@ -283,7 +283,7 @@ export function TeamManager({
                 disabled={creatingUser}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
               >
-                {creatingUser && <Loader2 size={16} className="animate-spin" />}
+                {creatingUser && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
                 Send Invitation
               </button>
               <button
@@ -405,7 +405,7 @@ export function TeamManager({
                       disabled={savingEdit}
                       className="flex items-center gap-1 px-2 py-1 text-sm text-green-600 hover:bg-green-50 rounded transition-all disabled:opacity-50"
                     >
-                      {savingEdit ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      {savingEdit ? <div className="w-3.5 h-3.5 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div> : <Check size={14} />}
                       {savingEdit ? 'Saving...' : 'Save'}
                     </button>
                     <button

@@ -204,7 +204,7 @@ export function NoteLinkedDesigns({
             <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="w-8 h-8 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
                 </div>
               ) : allDesigns.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No designs available in this project.</p>

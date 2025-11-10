@@ -1,5 +1,6 @@
 import React from 'react'
 import { LucideIcon } from 'lucide-react'
+import { LoadingSpinner } from './LoadingSpinner'
 
 export interface ButtonProps {
   children: React.ReactNode
@@ -89,7 +90,7 @@ export function Button({
     if (loading) {
       return (
         <>
-          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+          <LoadingSpinner size="sm" color="white" className="mr-2" />
           Loading...
         </>
       )

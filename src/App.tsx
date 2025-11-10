@@ -3,6 +3,7 @@ import { useParams, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { LoginForm } from './components/LoginForm'
 import { Dashboard } from './components/Dashboard'
+import { LoadingState } from './components/DesignSystem/components/LoadingSpinner'
 
 function App() {
   const { user, loading } = useAuth()
@@ -64,10 +65,7 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="text-gray-600">Loading KYP Platform...</span>
-        </div>
+        <LoadingState message="Loading KYP Platform..." />
       </div>
     )
   }

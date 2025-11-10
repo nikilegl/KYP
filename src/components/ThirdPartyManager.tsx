@@ -194,7 +194,10 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="text-center py-12 text-gray-500">Loading third parties...</div>
+        <div className="text-center py-12">
+          <div className="w-8 h-8 border-2 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500">Loading third parties...</p>
+        </div>
       </div>
     )
   }

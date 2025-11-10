@@ -23,6 +23,7 @@ import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, MoreVertical, Share2, Copy as CopyIcon } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
@@ -2959,8 +2960,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     return (
       <div className="flex-1 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading journey...</p>
+          <LoadingState message="Loading journey..." size="lg" />
         </div>
       </div>
     )

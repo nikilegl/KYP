@@ -16,6 +16,7 @@ import '@xyflow/react/dist/style.css'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import { getUserJourneyByShortId } from '../lib/database'
 import type { ThirdParty, Platform } from '../lib/supabase'
 import { getPlatforms } from '../lib/database'
@@ -171,10 +172,7 @@ export function PublicUserJourneyView() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="text-gray-600">Loading journey...</span>
-        </div>
+        <LoadingState message="Loading journey..." />
       </div>
     )
   }
