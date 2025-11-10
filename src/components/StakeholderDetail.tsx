@@ -230,7 +230,7 @@ export function StakeholderDetail({
             
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="w-8 h-8 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : researchNotes.length > 0 ? (
               <div className="space-y-3">

@@ -143,7 +143,7 @@ export function ImportJourneyImageModal({
           >
             {analyzing ? (
               <>
-                <Loader2 size={16} className="mr-2 animate-spin" />
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                 {progressMessage || 'Analyzing...'}
               </>
             ) : (

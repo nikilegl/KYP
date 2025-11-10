@@ -4,6 +4,7 @@ import { Plus, Search, Edit, Trash2, Copy } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { EditJourneyModal } from './EditJourneyModal'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
@@ -513,8 +514,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     return (
       <div className="flex-1 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading user journeys...</p>
+          <LoadingState message="Loading user journeys..." size="lg" />
         </div>
       </div>
     )
