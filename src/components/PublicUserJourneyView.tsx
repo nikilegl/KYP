@@ -47,7 +47,8 @@ export function PublicUserJourneyView() {
         }
 
         const journeyShortId = parseInt(shortId)
-        const journey = await getUserJourneyByShortId(journeyShortId)
+        // Pass onlyPublished: true to only fetch published journeys for public access
+        const journey = await getUserJourneyByShortId(journeyShortId, true)
 
         if (!journey) {
           setError('Journey not found')

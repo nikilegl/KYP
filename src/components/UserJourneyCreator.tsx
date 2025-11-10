@@ -209,17 +209,115 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [])
 
   // Update all nodes when layout changes
+  const prevLayoutRef = useRef(journeyLayout)
   useEffect(() => {
-    setNodes((nds) =>
-      nds.map((node) => ({
+    console.log('🔄 Layout changed to:', journeyLayout)
+    setNodes((nds) => {
+      const updated = nds.map((node) => ({
         ...node,
         data: {
           ...node.data,
           journeyLayout
         }
       }))
-    )
+      console.log('✅ Updated nodes with new layout:', updated.map(n => ({ id: n.id, layout: n.data.journeyLayout })))
+      return updated
+    })
   }, [journeyLayout, setNodes])
+
+  // Update edges when layout changes to map handle IDs
+  // This runs AFTER nodes have been updated and re-rendered
+  useEffect(() => {
+    // Only update if layout actually changed
+    if (prevLayoutRef.current === journeyLayout) {
+      return
+    }
+    
+    const oldLayout = prevLayoutRef.current
+    const newLayout = journeyLayout
+    
+    console.log('🔗 Scheduling edge update for layout change:', oldLayout, '->', newLayout)
+    
+    // Use setTimeout to ensure nodes have re-rendered with new handles first
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Now recreating edges after nodes have re-rendered')
+      
+      // RECREATE edges with new IDs instead of just updating properties
+      // This is necessary because React Flow embeds handle IDs in auto-generated edge IDs
+      setEdges((currentEdges) => {
+        console.log('📊 Current edges before update:', currentEdges.map(e => ({ 
+          id: e.id, 
+          source: e.source, 
+          sourceHandle: e.sourceHandle,
+          target: e.target,
+          targetHandle: e.targetHandle 
+        })))
+        
+        const recreated = currentEdges.map((edge) => {
+          let newSourceHandle = edge.sourceHandle
+          let newTargetHandle = edge.targetHandle
+          
+          // Map source handles
+          if (edge.sourceHandle) {
+            if (oldLayout === 'vertical' && newLayout === 'horizontal') {
+              // Vertical -> Horizontal: bottom -> right, top -> left
+              if (edge.sourceHandle === 'bottom') newSourceHandle = 'right'
+              else if (edge.sourceHandle === 'top') newSourceHandle = 'left'
+            } else if (oldLayout === 'horizontal' && newLayout === 'vertical') {
+              // Horizontal -> Vertical: right -> bottom, left -> top
+              if (edge.sourceHandle === 'right') newSourceHandle = 'bottom'
+              else if (edge.sourceHandle === 'left') newSourceHandle = 'top'
+            }
+          }
+          
+          // Map target handles
+          if (edge.targetHandle) {
+            if (oldLayout === 'vertical' && newLayout === 'horizontal') {
+              // Vertical -> Horizontal: top -> left, bottom -> right
+              if (edge.targetHandle === 'top') newTargetHandle = 'left'
+              else if (edge.targetHandle === 'bottom') newTargetHandle = 'right'
+            } else if (oldLayout === 'horizontal' && newLayout === 'vertical') {
+              // Horizontal -> Vertical: left -> top, right -> bottom
+              if (edge.targetHandle === 'left') newTargetHandle = 'top'
+              else if (edge.targetHandle === 'right') newTargetHandle = 'bottom'
+            }
+          }
+          
+          if (edge.sourceHandle !== newSourceHandle || edge.targetHandle !== newTargetHandle) {
+            console.log(`  📝 Edge ${edge.id}: ${edge.sourceHandle} -> ${newSourceHandle}, ${edge.targetHandle} -> ${newTargetHandle}`)
+          }
+          
+          // Create a new edge with updated handles and a new ID
+          // This forces React Flow to recognize the new handle IDs
+          const newEdge = {
+            ...edge,
+            id: `xy-edge__${edge.source}${newSourceHandle}-${edge.target}${newTargetHandle}`,
+            sourceHandle: newSourceHandle,
+            targetHandle: newTargetHandle
+          }
+          
+          console.log(`  🔄 Recreated edge: old ID="${edge.id}" -> new ID="${newEdge.id}"`)
+          
+          return newEdge
+        })
+        
+        console.log('✅ Recreated edges with new IDs:', recreated.map(e => ({ 
+          id: e.id, 
+          source: e.source, 
+          sourceHandle: e.sourceHandle,
+          target: e.target,
+          targetHandle: e.targetHandle 
+        })))
+        
+        return recreated
+      })
+    }, 500) // Delay to let nodes re-render and handles re-register with React Flow
+    
+    // Update ref for next time
+    prevLayoutRef.current = journeyLayout
+    
+    return () => clearTimeout(timeoutId)
+  }, [journeyLayout, setEdges])
 
   const loadData = async () => {
     try {
@@ -660,17 +758,107 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [copySelectedNodes, pasteNodes, nodes, edges])
 
+  // Track if we're currently dragging a connection
+  const [isConnecting, setIsConnecting] = useState(false)
+
+  // Handle connection start (when user starts dragging from a handle)
+  const onConnectStart = useCallback((_event: any, params: any) => {
+    setIsConnecting(true)
+    console.log('🎯 Connection START - User dragging from handle:', {
+      nodeId: params.nodeId,
+      handleId: params.handleId,
+      handleType: params.handleType,
+      currentLayout: journeyLayout
+    })
+    
+    // Check if the handle exists on the node
+    const node = nodes.find(n => n.id === params.nodeId)
+    if (node) {
+      console.log('  📍 Source node data:', {
+        id: node.id,
+        type: node.data?.type,
+        journeyLayout: node.data?.journeyLayout
+      })
+    }
+  }, [journeyLayout, nodes])
+
+  // Handle connection end (when user releases the drag)
+  const onConnectEnd = useCallback((_event: any) => {
+    setIsConnecting(false)
+    console.log('🛑 Connection END - User released drag')
+  }, [])
+
+  // Monitor cursor state changes by checking document classes
+  useEffect(() => {
+    if (!isConnecting) return
+
+    const checkCursor = () => {
+      const reactFlowElement = document.querySelector('.react-flow')
+      if (reactFlowElement) {
+        const computedStyle = window.getComputedStyle(reactFlowElement)
+        const cursor = computedStyle.cursor
+        
+        if (cursor === 'crosshair') {
+          console.log('➕ CROSSHAIR CURSOR - hovering over valid target')
+        } else if (cursor === 'grabbing' || cursor === 'grab') {
+          console.log('👆 GRAB CURSOR - dragging')
+        } else {
+          console.log('🖱️ Cursor:', cursor)
+        }
+      }
+    }
+
+    // Check cursor state periodically while connecting
+    const intervalId = setInterval(checkCursor, 100)
+    
+    return () => clearInterval(intervalId)
+  }, [isConnecting])
+
   // Handle new connections
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, data: {} }, eds)),
+    (params: Connection) => {
+      console.log('✅ Connection SUCCESS:', {
+        source: params.source,
+        sourceHandle: params.sourceHandle,
+        target: params.target,
+        targetHandle: params.targetHandle
+      })
+      setEdges((eds) => addEdge({ ...params, data: {} }, eds))
+    },
     [setEdges]
   )
 
   // Validate connections (optional - can be enhanced with more logic)
   const isValidConnection = useCallback((connection: Edge | Connection) => {
-    // Basic validation - you can add more sophisticated logic here
-    return connection.source !== connection.target
-  }, [])
+    console.log('🔍 Validating connection:', {
+      source: connection.source,
+      sourceHandle: connection.sourceHandle,
+      target: connection.target,
+      targetHandle: connection.targetHandle
+    })
+    
+    // Check if source and target nodes exist
+    const sourceNode = nodes.find(n => n.id === connection.source)
+    const targetNode = nodes.find(n => n.id === connection.target)
+    
+    if (!sourceNode || !targetNode) {
+      console.log('  ❌ Validation FAILED: Node not found', {
+        sourceFound: !!sourceNode,
+        targetFound: !!targetNode
+      })
+      return false
+    }
+    
+    console.log('  ℹ️ Node info:', {
+      source: { id: sourceNode.id, type: sourceNode.data?.type, layout: sourceNode.data?.journeyLayout },
+      target: { id: targetNode.id, type: targetNode.data?.type, layout: targetNode.data?.journeyLayout }
+    })
+    
+    // Basic validation - can't connect to self
+    const isValid = connection.source !== connection.target
+    console.log(`  ${isValid ? '✅' : '❌'} Validation result: ${isValid}`)
+    return isValid
+  }, [nodes])
 
   // Smart add node - opens modal to configure node before adding
   const smartAddNode = useCallback(() => {
@@ -1781,8 +1969,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       return
     }
 
-    // BFS to assign horizontal positions
+    // BFS to assign horizontal positions and track parent-child relationships
     const horizontalOrder = new Map<string, number>()
+    const parentMap = new Map<string, string>() // Track which node is the parent of each child
     const visited = new Set<string>()
     const queue: string[] = [...startNodes]
 
@@ -1809,6 +1998,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // If child already has a position (convergence), use the max
           if (existingPosition === undefined || newPosition > existingPosition) {
             horizontalOrder.set(childId, newPosition)
+            parentMap.set(childId, nodeId) // Track parent
           }
           
           queue.push(childId)
@@ -1816,16 +2006,61 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
     }
 
-    // Convert horizontal order to actual x positions
+    // Assign Y positions: center child groups around their parent's Y position
+    const yPositions = new Map<string, number>()
+    const CHILD_VERTICAL_SPACING = 160 // Spacing between siblings in the same child group
+    let currentYOffset = 300 // Start further down to allow room for spreading
+
+    // First pass: assign Y to start nodes
+    startNodes.forEach((nodeId, index) => {
+      yPositions.set(nodeId, currentYOffset + (index * 200))
+    })
+
+    // Second pass: assign Y to all other nodes based on their parent
+    // Child groups are centered around the parent's Y position
+    const assignYPositions = (nodeId: string) => {
+      const children = adjacencyMap.get(nodeId) || []
+      if (children.length === 0) return
+      
+      const parentY = yPositions.get(nodeId) || 100
+      
+      // Calculate positions for children centered around parent's Y
+      if (children.length === 1) {
+        // Single child: align exactly with parent
+        yPositions.set(children[0], parentY)
+      } else {
+        // Multiple children: center the group around parent's Y
+        const totalHeight = (children.length - 1) * CHILD_VERTICAL_SPACING
+        const startY = parentY - (totalHeight / 2)
+        
+        children.forEach((childId, index) => {
+          if (!yPositions.has(childId)) {
+            const childY = startY + (index * CHILD_VERTICAL_SPACING)
+            yPositions.set(childId, childY)
+          }
+        })
+      }
+      
+      // Recursively assign Y to each child's children
+      children.forEach(childId => {
+        assignYPositions(childId)
+      })
+    }
+
+    // Start from each start node
+    startNodes.forEach(nodeId => assignYPositions(nodeId))
+
+    // Convert horizontal order to actual x,y positions
     const updatedNodes = regularNodes.map(node => {
       const position = horizontalOrder.get(node.id) || 0
       const xPosition = 100 + (position * (NODE_WIDTH + HORIZONTAL_SPACING))
+      const yPosition = yPositions.get(node.id) || 100
       
       return {
         ...node,
         position: {
           x: xPosition,
-          y: node.position.y // Keep existing y position
+          y: yPosition
         }
       }
     })
@@ -2820,6 +3055,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
           onNodeDragStart={onNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           onInit={(instance) => {

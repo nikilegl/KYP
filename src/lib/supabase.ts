@@ -14,6 +14,13 @@ export class SupabaseAuthError extends Error {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+console.log('🔍 Supabase Configuration Check:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  url: supabaseUrl,
+  keyLength: supabaseAnonKey?.length
+})
+
 export const isSupabaseConfigured = !!(
   supabaseUrl && 
   supabaseAnonKey && 
@@ -21,6 +28,8 @@ export const isSupabaseConfigured = !!(
   supabaseAnonKey !== 'your-anon-key' &&
   supabaseUrl.includes('supabase.co')
 )
+
+console.log('✅ isSupabaseConfigured:', isSupabaseConfigured)
 
 // Force sign out function for handling authentication errors
 export const forceSignOut = async () => {
@@ -83,6 +92,12 @@ export const supabase = isSupabaseConfigured
       }
     })
   : null
+
+if (supabase) {
+  console.log('✅ Supabase client created successfully')
+} else {
+  console.warn('⚠️ Supabase client is NULL - configuration failed')
+}
 
 
 // Database types
