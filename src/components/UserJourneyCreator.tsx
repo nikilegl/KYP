@@ -1584,6 +1584,30 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [nodes])
 
+  // Keyboard shortcut for editing selected node (Enter key)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only trigger on Enter key without modifiers
+      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        // Don't trigger if user is typing in an input field
+        const target = event.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return
+        }
+        
+        // Check if exactly one node is selected (don't open if multiple selected)
+        const selectedNodes = nodes.filter(node => node.selected && node.type !== 'highlightRegion')
+        if (selectedNodes.length === 1) {
+          event.preventDefault()
+          configureNode(selectedNodes[0].id)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [nodes, configureNode])
+
   // Save node configuration
   const saveNodeConfiguration = useCallback(async (formData: NodeFormData) => {
     if (isAddingNewNode) {
@@ -1979,9 +2003,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const NODE_WIDTH = 320
     const REGION_PADDING = 40 // 40px gap between region boundary and nodes inside
 
-    // Separate regions from regular nodes
+    // Separate regions, label nodes, and regular nodes
     const regions = nodes.filter(n => n.type === 'highlightRegion')
-    const regularNodes = nodes.filter(n => n.type !== 'highlightRegion')
+    const labelNodes = nodes.filter(n => n.data?.type === 'label')
+    const regularNodes = nodes.filter(n => n.type !== 'highlightRegion' && n.data?.type !== 'label')
 
     if (regularNodes.length === 0) return
 
@@ -2107,9 +2132,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     })
 
     // Adjust nodes inside regions to have proper padding
-    const finalNodes = [...regions, ...updatedNodes].map(node => {
+    // Include label nodes unchanged (they don't get tidied)
+    const finalNodes = [...regions, ...labelNodes, ...updatedNodes].map(node => {
       // Skip if it's a region itself
       if (node.type === 'highlightRegion') {
+        return node
+      }
+      
+      // Skip if it's a label node (keep it unchanged)
+      if (node.data?.type === 'label') {
         return node
       }
 
@@ -2207,6 +2238,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const NODE_WIDTH = 320 // Width of nodes
       const DEFAULT_NODE_HEIGHT = 120 // Fallback height
 
+      // Separate label nodes from regular nodes (label nodes don't get tidied)
+      const labelNodes = nodes.filter(n => n.data?.type === 'label')
+      const regularNodes = nodes.filter(n => n.data?.type !== 'label')
+
       // Get actual rendered heights from DOM
       const getNodeHeight = (nodeId: string): number => {
         const nodeElement = document.querySelector(`[data-id="${nodeId}"]`)
@@ -2230,12 +2265,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       return typeof label === 'string' && label.trim() !== ''
     }
 
-    // Build adjacency map for graph traversal
+    // Build adjacency map for graph traversal (only for regular nodes)
     const adjacencyMap = new Map<string, string[]>()
     const incomingEdges = new Map<string, number>()
     const parentMap = new Map<string, string[]>() // Track parents for each node
 
-    nodes.forEach(node => {
+    regularNodes.forEach(node => {
       adjacencyMap.set(node.id, [])
       incomingEdges.set(node.id, 0)
       parentMap.set(node.id, [])
@@ -2368,7 +2403,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const nodeChildCount = new Map<string, number>()
     const nodeLayout = new Map<string, string>() // Store layout classification
     
-    nodes.forEach(node => {
+    regularNodes.forEach(node => {
       const parents = parentMap.get(node.id) || []
       const children = adjacencyMap.get(node.id) || []
       nodeParentCount.set(node.id, parents.length)
@@ -2376,7 +2411,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     })
     
     // Classify nodes by layout type
-    nodes.forEach(node => {
+    regularNodes.forEach(node => {
       const parentCount = nodeParentCount.get(node.id) || 0
       const childCount = nodeChildCount.get(node.id) || 0
       
@@ -2737,8 +2772,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       cumulativeY += maxHeightAtLevel + VERTICAL_GAP + extraGap
     }
 
-    // Apply calculated positions to nodes
-    const updatedNodes = nodes.map(node => {
+    // Apply calculated positions to regular nodes (not label nodes)
+    const tidiedRegularNodes = regularNodes.map(node => {
       const yPosition = yPositionsByNode.get(node.id) ?? 100
       const layout = nodeLayout.get(node.id) || 'Simple node'
 
@@ -2771,6 +2806,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       }
     })
+    
+    // Combine tidied regular nodes with unchanged label nodes
+    const updatedNodes = [...labelNodes, ...tidiedRegularNodes]
     
     // Log layout classifications and final positions for debugging
     console.log('=== Node Layout Classifications & Final Positions ===')
