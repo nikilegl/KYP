@@ -112,47 +112,38 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
 
   const borderColor = getBorderColor()
 
-  // Handle positioning for different node types and layout orientation
-  const getHandlePositions = () => {
+  // Get ALL possible handle positions (render all, but only show relevant ones)
+  const getAllHandlePositions = () => {
     const isHorizontal = journeyLayout === 'horizontal'
     
-    // For horizontal layout, use Left/Right instead of Top/Bottom
-    const sourcePos = isHorizontal ? Position.Right : Position.Bottom
-    const targetPos = isHorizontal ? Position.Left : Position.Top
-    const sourceId = isHorizontal ? 'right' : 'bottom'
-    const targetId = isHorizontal ? 'left' : 'top'
+    console.log(`🔧 Node ${id} (${type}): layout=${journeyLayout}`)
     
     switch (type) {
       case 'start':
         return [
-          { type: 'source', position: sourcePos, id: sourceId }
+          { type: 'source', position: Position.Bottom, id: 'bottom', visible: !isHorizontal },
+          { type: 'source', position: Position.Right, id: 'right', visible: isHorizontal }
         ]
       case 'process':
         return [
-          { type: 'target', position: targetPos, id: targetId },
-          { type: 'source', position: sourcePos, id: sourceId }
+          { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
+          { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal },
+          { type: 'source', position: Position.Bottom, id: 'bottom', visible: !isHorizontal },
+          { type: 'source', position: Position.Right, id: 'right', visible: isHorizontal }
         ]
       case 'decision':
-        // For decision nodes, keep the branch behavior
-        if (isHorizontal) {
-          return [
-            { type: 'target', position: Position.Left, id: 'left' },
-            { type: 'source', position: Position.Right, id: 'right' },
-            { type: 'source', position: Position.Bottom, id: 'bottom' }
-          ]
-        } else {
-          return [
-            { type: 'target', position: Position.Top, id: 'top' },
-            { type: 'source', position: Position.Right, id: 'right' },
-            { type: 'source', position: Position.Bottom, id: 'bottom' }
-          ]
-        }
+        return [
+          { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
+          { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal },
+          { type: 'source', position: Position.Right, id: 'right', visible: true },
+          { type: 'source', position: Position.Bottom, id: 'bottom', visible: true }
+        ]
       case 'end':
         return [
-          { type: 'target', position: targetPos, id: targetId }
+          { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
+          { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal }
         ]
       case 'label':
-        // Label nodes have no connectors - they're for adding context only
         return []
       default:
         return []
@@ -183,20 +174,32 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         onEdit?.()
       }}
     >
-      {/* Connection Handles - only show when in React Flow context and not a label node */}
-      {showHandles && type !== 'label' && getHandlePositions().map((handle) => (
+      {/* Connection Handles - render all handles but only show relevant ones for current layout */}
+      {showHandles && type !== 'label' && getAllHandlePositions().map((handle) => (
         <Handle
           key={handle.id}
           type={handle.type as 'source' | 'target'}
           position={handle.position}
           id={handle.id}
-          isConnectable={true}
+          isConnectable={handle.visible}
+          onMouseEnter={() => {
+            if (handle.visible) {
+              console.log(`🎯 MOUSE ENTER handle: ${handle.id} on node ${id} (${type}), layout=${journeyLayout}`)
+            }
+          }}
+          onMouseLeave={() => {
+            if (handle.visible) {
+              console.log(`👋 MOUSE LEAVE handle: ${handle.id} on node ${id}`)
+            }
+          }}
           style={{
             width: '16px',
             height: '16px',
             background: '#9ca3af',
             border: '2px solid white',
-            zIndex: 10
+            zIndex: 10,
+            opacity: handle.visible ? 1 : 0,
+            pointerEvents: handle.visible ? 'all' : 'none'
           }}
         />
       ))}
