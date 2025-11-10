@@ -13,6 +13,7 @@ import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/
 import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
+import * as emoji from 'node-emoji'
 
 interface WorkspaceUserInfo {
   id: string
@@ -196,8 +197,28 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
   // Filter user journeys based on search term and project
   const filteredUserJourneys = userJourneys.filter(journey => {
-    const matchesSearch = journey.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (journey.description && journey.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    if (!searchTerm) {
+      // No search term, just apply project filter
+      if (projectId) {
+        return journey.project_id === projectId
+      }
+      const matchesProject = projectFilter === 'all' || 
+                            (projectFilter === 'none' && !journey.project_id) ||
+                            journey.project_id === projectFilter
+      return matchesProject
+    }
+    
+    // Convert search term emojis (e.g., :gear: becomes ⚙️)
+    const searchWithEmojis = emoji.emojify(searchTerm)
+    const searchLower = searchWithEmojis.toLowerCase()
+    
+    // Search in name and description
+    // Journey names/descriptions may already have emojis, so this will match both
+    // - Typing "gear" will match "Settings" 
+    // - Typing ":gear:" will become "⚙️" and match "⚙️ Settings"
+    // - Typing "⚙" or "⚙️" will also match "⚙️ Settings"
+    const matchesSearch = journey.name.toLowerCase().includes(searchLower) ||
+                         (journey.description && journey.description.toLowerCase().includes(searchLower))
     
     // If projectId prop is provided, only show journeys for that project
     if (projectId) {
@@ -545,7 +566,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
-            placeholder="Search user journeys..."
+            placeholder="Search user journeys (supports emojis: :gear:)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

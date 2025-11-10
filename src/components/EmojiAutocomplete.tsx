@@ -59,13 +59,6 @@ export function EmojiAutocomplete({
     const textBeforeCursor = newValue.slice(0, cursorPos)
     const lastColonIndex = textBeforeCursor.lastIndexOf(':')
     
-    console.log('🔍 Emoji search debug:', { 
-      newValue, 
-      cursorPos, 
-      lastColonIndex,
-      textBeforeCursor 
-    })
-    
     if (lastColonIndex !== -1) {
       // Check if there's a space or start of string before the colon
       const charBeforeColon = lastColonIndex > 0 ? textBeforeCursor[lastColonIndex - 1] : ' '
@@ -73,16 +66,11 @@ export function EmojiAutocomplete({
       if (charBeforeColon === ' ' || lastColonIndex === 0) {
         const query = textBeforeCursor.slice(lastColonIndex + 1)
         
-        console.log('🔍 Query:', query)
-        
         // Only show picker if query doesn't contain spaces (valid emoji shortcode)
         if (!query.includes(' ') && !query.includes(':')) {
           setSearchQuery(query)
           setColonPosition(lastColonIndex)
           const matches = searchEmojis(query)
-          
-          console.log('🎯 Matches found:', matches.length, matches)
-          
           setEmojiMatches(matches)
           setShowPicker(matches.length > 0)
           setSelectedIndex(0)
