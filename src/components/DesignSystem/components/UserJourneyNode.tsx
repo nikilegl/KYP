@@ -260,11 +260,13 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         </div>
       )}
 
-      {/* User Role Tag and Platform Label - Hidden for label nodes */}
-      {type !== 'label' && (userRole || variant) && (
+      {/* User Role Tag and Platform Label */}
+      {/* Show for all nodes if either userRole or variant is present */}
+      {/* For label nodes, only show platform (hide user role) */}
+      {(userRole || variant) && (
         <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
           <div>
-            {userRole && (
+            {type !== 'label' && userRole && (
               <UserRoleTag
                 userRole={userRole}
                 size="sm"
