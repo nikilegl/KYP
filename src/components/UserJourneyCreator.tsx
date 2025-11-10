@@ -867,6 +867,29 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setShowConfigModal(true)
   }, [])
 
+  // Keyboard shortcut for adding a node ('+' key)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if '+' or '=' key is pressed ('+' is usually Shift + '=')
+      // Allow either the plus character or the equals key
+      const isPlusKey = event.key === '+' || (event.key === '=' && event.shiftKey)
+      
+      if (isPlusKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        // Don't trigger if user is typing in an input field
+        const target = event.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return
+        }
+        
+        event.preventDefault()
+        smartAddNode()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [smartAddNode])
+
   // Sort nodes to ensure parents come before children (required by React Flow)
   const sortNodesForSaving = useCallback((nodesToSort: Node[]): Node[] => {
     const sorted: Node[] = []
