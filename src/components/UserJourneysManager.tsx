@@ -429,7 +429,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             </div>
             {journey.createdByUser && (
               <div className="font-medium text-gray-900">
-                {journey.createdByUser.full_name || journey.createdByUser.email}
+                {journey.createdByUser.full_name || 'Unknown User'}
               </div>
             )}
           </div>
@@ -461,7 +461,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             </div>
             {journey.updatedByUser && (
               <div className="font-medium text-gray-900">
-                {journey.updatedByUser.full_name || journey.updatedByUser.email}
+                {journey.updatedByUser.full_name || 'Unknown User'}
               </div>
             )}
           </div>
