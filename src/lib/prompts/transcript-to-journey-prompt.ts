@@ -36,9 +36,10 @@ DETECTING MULTIPLE JOURNEYS (CRITICAL):
 - When you detect separate journeys:
   * Create nodes for ALL journeys in the same nodes array
   * Only create edges WITHIN each journey - NEVER between different journeys
-  * Each journey should have its own start node and end node
-  * Use clear, distinct labels to differentiate journeys (e.g., "Current: User logs in" vs "Future: User logs in")
-  * Add a prefix to node labels if helpful (e.g., "Current Process:", "With Legl:", "KYC:", "KYB:", "Payment:")
+  * Each journey should START WITH A LABEL NODE that describes the journey (e.g., "Current Client Onboarding", "Future Pay Process with Legl")
+  * After the label node, add a start node, followed by process nodes, and end with an end node
+  * The label node is NOT connected to any other nodes (it has no edges)
+  * Do NOT add prefixes to individual node labels - the label node at the start of the journey provides the context
 
 Extract:
 
@@ -122,10 +123,24 @@ Return format (MULTIPLE SEPARATE JOURNEYS - Current vs Future):
   "description": "Comparison of current manual process and future automated process",
   "nodes": [
     {
+      "id": "label-1",
+      "type": "label",
+      "data": {
+        "label": "Current Client Onboarding",
+        "type": "label",
+        "userRole": null,
+        "variant": "",
+        "thirdPartyName": "",
+        "bulletPoints": [],
+        "notifications": [],
+        "customProperties": {}
+      }
+    },
+    {
       "id": "node-1",
       "type": "start",
       "data": {
-        "label": "Current: Client submits documents via email",
+        "label": "Client submits documents via email",
         "type": "start",
         "userRole": "End Client",
         "variant": "End client",
@@ -141,7 +156,7 @@ Return format (MULTIPLE SEPARATE JOURNEYS - Current vs Future):
       "id": "node-2",
       "type": "end",
       "data": {
-        "label": "Current: Manual review complete",
+        "label": "Manual review complete",
         "type": "end",
         "userRole": "Admin",
         "variant": "CMS",
@@ -152,10 +167,24 @@ Return format (MULTIPLE SEPARATE JOURNEYS - Current vs Future):
       }
     },
     {
+      "id": "label-2",
+      "type": "label",
+      "data": {
+        "label": "Future Client Onboarding with Legl",
+        "type": "label",
+        "userRole": null,
+        "variant": "",
+        "thirdPartyName": "",
+        "bulletPoints": [],
+        "notifications": [],
+        "customProperties": {}
+      }
+    },
+    {
       "id": "node-3",
       "type": "start",
       "data": {
-        "label": "Future: Client uploads to Legl portal",
+        "label": "Client uploads to Legl portal",
         "type": "start",
         "userRole": "End Client",
         "variant": "Legl",
@@ -171,7 +200,7 @@ Return format (MULTIPLE SEPARATE JOURNEYS - Current vs Future):
       "id": "node-4",
       "type": "end",
       "data": {
-        "label": "Future: Automated review with Legl",
+        "label": "Automated review with Legl",
         "type": "end",
         "userRole": "Admin",
         "variant": "Legl",
@@ -201,8 +230,11 @@ Return format (MULTIPLE SEPARATE JOURNEYS - Current vs Future):
 }
 
 NOTE: In the second example, there are TWO separate journeys (Current and Future). 
-- Nodes 1-2 form the "Current" journey (connected by edge-1-2)
-- Nodes 3-4 form the "Future" journey (connected by edge-3-4)
+- Label node "label-1" describes the first journey: "Current Client Onboarding"
+- Nodes 1-2 form the actual "Current" journey (connected by edge-1-2)
+- Label node "label-2" describes the second journey: "Future Client Onboarding with Legl"
+- Nodes 3-4 form the actual "Future" journey (connected by edge-3-4)
+- Label nodes have NO edges connecting to other nodes
 - NO edge connects node-2 to node-3 because they are separate journeys
 
 Guidelines:
@@ -214,9 +246,12 @@ Guidelines:
 - MULTIPLE JOURNEYS: If the transcript discusses multiple separate processes (e.g., current vs future, KYC vs KYB vs Pay), create separate unconnected node groups:
   * Example: If discussing "current onboarding" and "future onboarding with Legl", create two separate flows with no edges between them
   * Example: If discussing "KYC for individuals" and "KYB for businesses", create two separate flows
-  * Use label prefixes to clearly differentiate (e.g., "Current:", "Future:", "KYC:", "KYB:", "Payment:")
-- Each separate journey should have its own "start" node and "end" node
+  * IMPORTANT: Start each journey with a label node that describes the journey (e.g., "Current Client Onboarding", "Future Pay with Legl", "KYC Individual Verification")
+  * The label node provides context for the journey and is NOT connected to any other nodes
+  * Do NOT add prefixes to the actual process node labels - the label node at the start provides the context
+- Each separate journey should have its own label node (if multiple journeys), "start" node, and "end" node
 - Nodes within the same journey should be connected with edges; nodes from different journeys should NEVER connect to each other
+- Label nodes are standalone and have NO edges
 
 USER ROLE DETECTION (CRITICAL):
 - Pay close attention to who is performing each action in the transcript
@@ -250,8 +285,10 @@ FINAL REMINDERS:
 2. DO NOT include any position information
 3. CRITICAL: If transcript contains multiple separate journeys (current vs future, KYC vs KYB vs Pay, etc.), create separate unconnected node groups
 4. Listen for key phrases: "current process", "what it will be using Legl", "KYC", "KYB", "payment process", "onboarding individuals", "onboarding businesses"
-5. Each separate journey needs its own start and end nodes with NO edges connecting different journeys
-6. Return ONLY the JSON object, no other text`
+5. Each separate journey needs its own label node (describing the journey), start node, and end node with NO edges connecting different journeys
+6. IMPORTANT: Use label nodes to describe journeys, NOT prefixes in node labels (e.g., create a label node "Current Pay" rather than prefixing all nodes with "Current:")
+7. Label nodes are type "label" and have NO edges
+8. Return ONLY the JSON object, no other text`
 }
 
 // Legacy export for backward compatibility (uses first 3 default roles)
