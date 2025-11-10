@@ -132,12 +132,12 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           { type: 'source', position: Position.Right, id: 'right', visible: isHorizontal }
         ]
       case 'decision':
-        return [
+          return [
           { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
           { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal },
           { type: 'source', position: Position.Right, id: 'right', visible: true },
           { type: 'source', position: Position.Bottom, id: 'bottom', visible: true }
-        ]
+          ]
       case 'end':
         return [
           { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
@@ -243,20 +243,20 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           {notifications
             .filter(n => n.message && n.message.trim())
             .map((notification) => {
-              const style = getNotificationStyle(notification.type)
-              return (
-                <div
-                  key={notification.id}
-                  className={`
-                    ${style.bg} ${style.border} ${style.text}
-                    border rounded px-2 py-1.5
-                    text-xs
-                  `}
-                >
-                  <span>{convertEmojis(notification.message)}</span>
-                </div>
-              )
-            })}
+            const style = getNotificationStyle(notification.type)
+            return (
+              <div
+                key={notification.id}
+                className={`
+                  ${style.bg} ${style.border} ${style.text}
+                  border rounded px-2 py-1.5
+                  text-xs
+                `}
+              >
+                <span>{convertEmojis(notification.message)}</span>
+              </div>
+            )
+          })}
         </div>
       )}
 

@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173, // Always use port 5173
-    strictPort: true, // Fail if port is already in use
+    port: 5173, // Preferred port
+    strictPort: false, // Automatically use next available port if 5173 is busy
   },
   resolve: {
     dedupe: [

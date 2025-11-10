@@ -36,6 +36,7 @@ import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, 
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
+import { getPlatforms } from '../lib/database/services/platformService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
@@ -102,6 +103,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [journeyDescription, setJourneyDescription] = useState('')
   const [journeyLayout, setJourneyLayout] = useState<'vertical' | 'horizontal'>('vertical')
   const [journeyStatus, setJourneyStatus] = useState<'draft' | 'published'>('draft')
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -347,6 +349,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             }
           }
         }
+      }
+      
+      // Load all platforms if not provided
+      if (!initialPlatforms || initialPlatforms.length === 0) {
+        const platformsData = await getPlatforms()
+        setPlatforms(platformsData)
       }
       
       // Check if there's an ID in the URL query params or path
@@ -867,6 +875,37 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setShowConfigModal(true)
   }, [])
 
+  // Keyboard shortcut for adding a node ('+' key)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if '+' or '=' key is pressed ('+' is usually Shift + '=')
+      // Allow either the plus character or the equals key
+      const isPlusKey = event.key === '+' || (event.key === '=' && event.shiftKey)
+      
+      if (isPlusKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        // Don't trigger if user is typing in an input field
+        const target = event.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return
+        }
+        
+        event.preventDefault()
+        smartAddNode()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [smartAddNode])
+
+  // Track unsaved changes when nodes or edges are modified
+  useEffect(() => {
+    // Don't mark as unsaved if we're just loading the journey
+    if (currentJourneyId && nodes.length > 0) {
+      setHasUnsavedChanges(true)
+    }
+  }, [nodes, edges, currentJourneyId])
+
   // Sort nodes to ensure parents come before children (required by React Flow)
   const sortNodesForSaving = useCallback((nodesToSort: Node[]): Node[] => {
     const sorted: Node[] = []
@@ -931,6 +970,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           
           console.log('Journey updated successfully:', updated)
           setJustSaved(true)
+          setHasUnsavedChanges(false) // Clear unsaved changes flag
           setTimeout(() => setJustSaved(false), 3000)
         }
       } else {
@@ -950,6 +990,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           console.log('Journey created successfully:', created)
           setCurrentJourneyId(created.id)
           setJustSaved(true)
+          setHasUnsavedChanges(false) // Clear unsaved changes flag
           setTimeout(() => setJustSaved(false), 3000)
         }
       }
@@ -2890,7 +2931,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   return (
     <div className="flex-1 flex flex-col p-6 overflow-hidden">
       {/* Header */}
-      <div className="space-y-4 mb-6">
+      <div className="space-y-3 mb-6">
+        {/* Row 1: Back button and Unsaved changes */}
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
@@ -2900,21 +2942,33 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <ArrowLeft size={16} />
             Back to User Journeys
           </Button>
+          
+          {/* Unsaved changes indicator */}
+          {hasUnsavedChanges && (
+            <div className="text-sm text-gray-500 font-medium">
+              Unsaved changes
+            </div>
+          )}
         </div>
-        <div className="flex items-start justify-between gap-4">
+        
+        {/* Row 2: Title/Epic section and Action buttons */}
+        <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
-            {/* Status Badge and Epic on same row */}
-            <div className="flex items-center gap-3 mb-3">
+            {/* Epic on first line if present */}
             {selectedProjectId && (
-                <div className="flex items-center gap-2">
-                  <FolderOpen size={14} className="text-gray-400" />
-                  <p className="text-sm text-gray-500">
-                    {convertEmojis(projects.find(p => p.id === selectedProjectId)?.name || 'Unknown')}
-                  </p>
-                </div>
-              )}
-
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+              <div className="flex items-center gap-2 mb-1">
+                <FolderOpen size={14} className="text-gray-400" />
+                <p className="text-sm text-gray-500">
+                  {convertEmojis(projects.find(p => p.id === selectedProjectId)?.name || 'Unknown')}
+                </p>
+              </div>
+            )}
+            
+            {/* Title and Status Badge on same row */}
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
+              
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 journeyStatus === 'published' 
                   ? 'bg-green-100 text-green-800' 
                   : 'bg-gray-100 text-gray-800'
@@ -2922,12 +2976,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 {journeyStatus === 'published' ? 'Published' : 'Draft'}
               </span>
               
-             
-            </div>
-            
-            <div className="flex items-center gap-3 mb-1">
-              
-              <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
               <button
                 onClick={() => setShowNameEditModal(true)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -2937,10 +2985,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               </button>
             </div>
             {journeyDescription && (
-              <p className="text-gray-600">{convertEmojis(journeyDescription)}</p>
+              <p className="text-gray-600 mt-1">{convertEmojis(journeyDescription)}</p>
             )}
-            
           </div>
+          
+          {/* Action buttons */}
           <div className="flex items-center gap-3 flex-shrink-0">
             
           <Button
@@ -3154,6 +3203,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             label: (n.data as any).label || 'Untitled Region'
           }))}
         journeyLayout={journeyLayout}
+        existingNodes={nodes}
         onSave={saveNodeConfiguration}
         onDelete={configuringNode ? () => {
           // Delete the node directly (confirmation handled in modal)
