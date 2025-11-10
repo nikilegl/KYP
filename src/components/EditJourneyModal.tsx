@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import { Plus } from 'lucide-react'
@@ -55,6 +55,30 @@ export function EditJourneyModal({
     lawFirmSearchQuery.trim() === '' ||
     firm.name.toLowerCase().includes(lawFirmSearchQuery.toLowerCase())
   )
+
+  // Handle Enter key to trigger Save Details
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only trigger if Enter is pressed and journey name is not empty
+      if (event.key === 'Enter' && journeyName.trim() && !saveDisabled) {
+        // Don't trigger if user is typing in a textarea (they might want to add a newline)
+        const target = event.target as HTMLElement
+        if (target.tagName === 'TEXTAREA') {
+          return
+        }
+        
+        event.preventDefault()
+        onSave()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, journeyName, saveDisabled, onSave])
 
   return (
     <Modal
