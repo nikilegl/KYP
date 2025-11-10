@@ -36,6 +36,7 @@ import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, 
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
+import { getPlatforms } from '../lib/database/services/platformService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
@@ -348,6 +349,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             }
           }
         }
+      }
+      
+      // Load all platforms if not provided
+      if (!initialPlatforms || initialPlatforms.length === 0) {
+        const platformsData = await getPlatforms()
+        setPlatforms(platformsData)
       }
       
       // Check if there's an ID in the URL query params or path
