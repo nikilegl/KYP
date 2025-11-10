@@ -1,348 +1,12 @@
 /**
  * Emoji converter utility
  * Converts emoji shortcodes like :smile: to actual Unicode emojis 😊
+ * 
+ * This version uses the node-emoji library which has ALL emojis (3000+)
+ * automatically mapped and maintained.
  */
 
-// Common emoji shortcodes mapped to Unicode characters
-const emojiMap: Record<string, string> = {
-  // Smileys & Emotion
-  ':smile:': '😊',
-  ':grin:': '😁',
-  ':joy:': '😂',
-  ':laughing:': '😆',
-  ':wink:': '😉',
-  ':blush:': '😊',
-  ':heart_eyes:': '😍',
-  ':kissing_heart:': '😘',
-  ':relaxed:': '☺️',
-  ':satisfied:': '😆',
-  ':grinning:': '😀',
-  ':innocent:': '😇',
-  ':smiling_face_with_3_hearts:': '🥰',
-  ':star_struck:': '🤩',
-  ':partying_face:': '🥳',
-  ':thinking:': '🤔',
-  ':neutral_face:': '😐',
-  ':expressionless:': '😑',
-  ':no_mouth:': '😶',
-  ':confused:': '😕',
-  ':worried:': '😟',
-  ':slightly_frowning_face:': '🙁',
-  ':frowning:': '☹️',
-  ':persevere:': '😣',
-  ':disappointed:': '😞',
-  ':sweat:': '😓',
-  ':weary:': '😩',
-  ':tired_face:': '😫',
-  ':cry:': '😢',
-  ':sob:': '😭',
-  ':triumph:': '😤',
-  ':angry:': '😠',
-  ':rage:': '😡',
-  ':exploding_head:': '🤯',
-  ':flushed:': '😳',
-  ':disappointed_relieved:': '😥',
-  ':fearful:': '😨',
-  ':cold_sweat:': '😰',
-  ':scream:': '😱',
-  ':astonished:': '😲',
-  ':pleading_face:': '🥺',
-  
-  // Hand gestures
-  ':thumbsup:': '👍',
-  ':thumbsdown:': '👎',
-  ':+1:': '👍',
-  ':-1:': '👎',
-  ':clap:': '👏',
-  ':pray:': '🙏',
-  ':handshake:': '🤝',
-  ':muscle:': '💪',
-  ':point_right:': '👉',
-  ':point_left:': '👈',
-  ':point_up:': '☝️',
-  ':point_down:': '👇',
-  ':raised_hand:': '✋',
-  ':ok_hand:': '👌',
-  ':wave:': '👋',
-  ':call_me_hand:': '🤙',
-  ':raised_hands:': '🙌',
-  ':palms_up_together:': '🤲',
-  
-  // Money & Business
-  ':moneybag:': '💰',
-  ':money_bag:': '💰',
-  ':dollar:': '💵',
-  ':pound:': '💷',
-  ':euro:': '💶',
-  ':yen:': '💴',
-  ':credit_card:': '💳',
-  ':chart_with_upwards_trend:': '📈',
-  ':chart_with_downwards_trend:': '📉',
-  ':briefcase:': '💼',
-  ':bank:': '🏦',
-  ':gem:': '💎',
-  ':receipt:': '🧾',
-  
-  // Hearts & Symbols
-  ':heart:': '❤️',
-  ':orange_heart:': '🧡',
-  ':yellow_heart:': '💛',
-  ':green_heart:': '💚',
-  ':blue_heart:': '💙',
-  ':purple_heart:': '💜',
-  ':brown_heart:': '🤎',
-  ':black_heart:': '🖤',
-  ':white_heart:': '🤍',
-  ':broken_heart:': '💔',
-  ':two_hearts:': '💕',
-  ':sparkling_heart:': '💖',
-  ':heartbeat:': '💓',
-  ':cupid:': '💘',
-  ':gift_heart:': '💝',
-  ':revolving_hearts:': '💞',
-  ':heart_decoration:': '💟',
-  
-  // Symbols & Marks
-  ':star:': '⭐',
-  ':star2:': '🌟',
-  ':sparkles:': '✨',
-  ':boom:': '💥',
-  ':fire:': '🔥',
-  ':rocket:': '🚀',
-  ':check:': '✅',
-  ':checkmark:': '✅',
-  ':x:': '❌',
-  ':cross_mark:': '❌',
-  ':warning:': '⚠️',
-  ':exclamation:': '❗',
-  ':question:': '❓',
-  ':bangbang:': '‼️',
-  ':interrobang:': '⁉️',
-  ':bulb:': '💡',
-  ':bell:': '🔔',
-  ':no_bell:': '🔕',
-  ':loudspeaker:': '📢',
-  ':mega:': '📣',
-  ':lock:': '🔒',
-  ':unlock:': '🔓',
-  ':key:': '🔑',
-  
-  // Office & Tools
-  ':pencil:': '✏️',
-  ':pencil2:': '✏️',
-  ':pen:': '🖊️',
-  ':memo:': '📝',
-  ':clipboard:': '📋',
-  ':pushpin:': '📌',
-  ':paperclip:': '📎',
-  ':link:': '🔗',
-  ':scissors:': '✂️',
-  ':inbox_tray:': '📥',
-  ':outbox_tray:': '📤',
-  ':package:': '📦',
-  ':mailbox:': '📫',
-  ':email:': '📧',
-  ':envelope:': '✉️',
-  ':calendar:': '📅',
-  ':date:': '📅',
-  ':clock:': '🕐',
-  ':hourglass:': '⌛',
-  ':alarm_clock:': '⏰',
-  
-  // Tech & Devices
-  ':computer:': '💻',
-  ':laptop:': '💻',
-  ':desktop_computer:': '🖥️',
-  ':keyboard:': '⌨️',
-  ':mouse:': '🖱️',
-  ':trackball:': '🖲️',
-  ':printer:': '🖨️',
-  ':phone:': '☎️',
-  ':telephone:': '☎️',
-  ':mobile_phone:': '📱',
-  ':iphone:': '📱',
-  ':calling:': '📲',
-  ':fax:': '📠',
-  ':pager:': '📟',
-  ':battery:': '🔋',
-  ':electric_plug:': '🔌',
-  
-  // Documents & Files
-  ':file_folder:': '📁',
-  ':open_file_folder:': '📂',
-  ':card_index_dividers:': '🗂️',
-  ':page_facing_up:': '📄',
-  ':page_with_curl:': '📃',
-  ':bookmark:': '🔖',
-  ':label:': '🏷️',
-  ':bar_chart:': '📊',
-  ':chart_with_increasing:': '📈',
-  ':chart_with_decreasing:': '📉',
-  ':scroll:': '📜',
-  ':newspaper:': '📰',
-  ':books:': '📚',
-  ':book:': '📖',
-  ':notebook:': '📓',
-  ':ledger:': '📒',
-  
-  // Travel & Places
-  ':house:': '🏠',
-  ':building:': '🏢',
-  ':office:': '🏢',
-  ':hospital:': '🏥',
-  ':school:': '🏫',
-  ':hotel:': '🏨',
-  ':bank:': '🏦',
-  ':department_store:': '🏬',
-  ':factory:': '🏭',
-  ':airplane:': '✈️',
-  ':car:': '🚗',
-  ':taxi:': '🚕',
-  ':bus:': '🚌',
-  ':train:': '🚆',
-  ':bike:': '🚲',
-  ':ship:': '🚢',
-  
-  // Food & Drink
-  ':coffee:': '☕',
-  ':tea:': '🍵',
-  ':beer:': '🍺',
-  ':wine_glass:': '🍷',
-  ':cocktail:': '🍸',
-  ':cake:': '🍰',
-  ':pizza:': '🍕',
-  ':hamburger:': '🍔',
-  ':fries:': '🍟',
-  ':apple:': '🍎',
-  ':bread:': '🍞',
-  ':popcorn:': '🍿',
-  
-  // Nature
-  ':sunny:': '☀️',
-  ':sun:': '☀️',
-  ':cloud:': '☁️',
-  ':umbrella:': '☂️',
-  ':snowflake:': '❄️',
-  ':zap:': '⚡',
-  ':lightning:': '⚡',
-  ':droplet:': '💧',
-  ':ocean:': '🌊',
-  ':rainbow:': '🌈',
-  ':seedling:': '🌱',
-  ':herb:': '🌿',
-  ':four_leaf_clover:': '🍀',
-  ':leaves:': '🍃',
-  ':tree:': '🌳',
-  ':evergreen_tree:': '🌲',
-  ':deciduous_tree:': '🌳',
-  
-  // Animals
-  ':dog:': '🐶',
-  ':cat:': '🐱',
-  ':mouse:': '🐭',
-  ':rabbit:': '🐰',
-  ':fox:': '🦊',
-  ':bear:': '🐻',
-  ':panda:': '🐼',
-  ':koala:': '🐨',
-  ':tiger:': '🐯',
-  ':lion:': '🦁',
-  ':cow:': '🐮',
-  ':pig:': '🐷',
-  ':frog:': '🐸',
-  ':monkey:': '🐵',
-  ':chicken:': '🐔',
-  ':penguin:': '🐧',
-  ':bird:': '🐦',
-  ':fish:': '🐟',
-  ':whale:': '🐳',
-  ':dolphin:': '🐬',
-  ':octopus:': '🐙',
-  ':bug:': '🐛',
-  ':butterfly:': '🦋',
-  ':bee:': '🐝',
-  ':turtle:': '🐢',
-  ':unicorn:': '🦄',
-  
-  // Activities & Sports
-  ':soccer:': '⚽',
-  ':basketball:': '🏀',
-  ':football:': '🏈',
-  ':baseball:': '⚾',
-  ':tennis:': '🎾',
-  ':trophy:': '🏆',
-  ':medal:': '🏅',
-  ':1st_place_medal:': '🥇',
-  ':2nd_place_medal:': '🥈',
-  ':3rd_place_medal:': '🥉',
-  ':dart:': '🎯',
-  ':goal_net:': '🥅',
-  
-  // Music & Entertainment
-  ':musical_note:': '🎵',
-  ':notes:': '🎶',
-  ':microphone:': '🎤',
-  ':headphones:': '🎧',
-  ':radio:': '📻',
-  ':saxophone:': '🎷',
-  ':guitar:': '🎸',
-  ':musical_keyboard:': '🎹',
-  ':trumpet:': '🎺',
-  ':violin:': '🎻',
-  ':drum:': '🥁',
-  ':clapper:': '🎬',
-  ':movie_camera:': '🎥',
-  ':camera:': '📷',
-  ':video_camera:': '📹',
-  ':tv:': '📺',
-  ':art:': '🎨',
-  ':paintbrush:': '🖌️',
-  ':game_die:': '🎲',
-  ':puzzle_piece:': '🧩',
-  
-  // Flags & Countries
-  ':checkered_flag:': '🏁',
-  ':triangular_flag_on_post:': '🚩',
-  ':rainbow_flag:': '🏳️‍🌈',
-  ':pirate_flag:': '🏴‍☠️',
-  ':us:': '🇺🇸',
-  ':uk:': '🇬🇧',
-  ':gb:': '🇬🇧',
-  ':eu:': '🇪🇺',
-  ':fr:': '🇫🇷',
-  ':de:': '🇩🇪',
-  ':it:': '🇮🇹',
-  ':es:': '🇪🇸',
-  ':jp:': '🇯🇵',
-  ':cn:': '🇨🇳',
-  ':kr:': '🇰🇷',
-  ':in:': '🇮🇳',
-  ':au:': '🇦🇺',
-  ':ca:': '🇨🇦',
-  ':br:': '🇧🇷',
-  ':mx:': '🇲🇽',
-  
-  // Miscellaneous
-  ':100:': '💯',
-  ':zzz:': '💤',
-  ':boom:': '💥',
-  ':collision:': '💥',
-  ':speech_balloon:': '💬',
-  ':thought_balloon:': '💭',
-  ':sos:': '🆘',
-  ':new:': '🆕',
-  ':free:': '🆓',
-  ':cool:': '🆒',
-  ':ng:': '🆖',
-  ':ok:': '🆗',
-  ':up:': '🆙',
-  ':vs:': '🆚',
-  ':recycle:': '♻️',
-  ':peace:': '☮️',
-  ':atom:': '⚛️',
-  ':wheel_of_dharma:': '☸️',
-  ':yin_yang:': '☯️',
-}
+import * as emoji from 'node-emoji'
 
 /**
  * Converts emoji shortcodes in text to actual Unicode emojis
@@ -352,20 +16,17 @@ const emojiMap: Record<string, string> = {
  * @example
  * convertEmojis("Hello :smile: world :heart:")
  * // Returns: "Hello 😊 world ❤️"
+ * 
+ * @example
+ * convertEmojis("Settings :gear: Dashboard")
+ * // Returns: "Settings ⚙️ Dashboard"
  */
 export function convertEmojis(text: string | null | undefined): string {
   if (!text) return ''
   
-  // Replace all emoji shortcodes with their Unicode equivalents
-  let converted = text
-  
-  // Use regex to find all :something: patterns
-  const regex = /(:[a-zA-Z0-9_+-]+:)/g
-  converted = converted.replace(regex, (match) => {
-    return emojiMap[match] || match // Return emoji if found, otherwise keep original
-  })
-  
-  return converted
+  // Use node-emoji to replace all emoji shortcodes
+  // This supports 3000+ emojis automatically!
+  return emoji.emojify(text)
 }
 
 /**
@@ -386,3 +47,55 @@ export function extractEmojiShortcodes(text: string | null | undefined): string[
   return text.match(regex) || []
 }
 
+/**
+ * Get the emoji character for a specific shortcode
+ * @param shortcode - The emoji shortcode (with or without colons)
+ * @returns The emoji character or null if not found
+ * 
+ * @example
+ * getEmoji('smile') // Returns: '😊'
+ * getEmoji(':heart:') // Returns: '❤️'
+ * getEmoji(':gear:') // Returns: '⚙️'
+ */
+export function getEmoji(shortcode: string): string | null {
+  // Remove colons if present
+  const cleanCode = shortcode.replace(/:/g, '')
+  const result = emoji.get(cleanCode)
+  
+  // emoji.get returns the shortcode back if not found
+  return result === cleanCode || result === `:${cleanCode}:` ? null : result
+}
+
+/**
+ * Search for emojis by keyword
+ * @param keyword - The search term
+ * @returns Array of matching emoji objects with their shortcodes
+ * 
+ * @example
+ * searchEmojis('heart') // Returns: [{emoji: '❤️', key: 'heart'}, {emoji: '💛', key: 'yellow_heart'}, ...]
+ */
+export function searchEmojis(keyword: string): Array<{emoji: string, key: string}> {
+  if (!keyword) return []
+  
+  const results: Array<{emoji: string, key: string}> = []
+  const searchLower = keyword.toLowerCase()
+  
+  // Search through all emojis
+  Object.entries(emoji.emoji).forEach(([key, value]) => {
+    if (key.includes(searchLower) || value.includes(searchLower)) {
+      results.push({
+        emoji: value,
+        key: key
+      })
+    }
+  })
+  
+  return results
+}
+
+/**
+ * Get a random emoji
+ */
+export function getRandomEmoji(): string {
+  return emoji.random().emoji
+}
