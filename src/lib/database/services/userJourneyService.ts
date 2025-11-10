@@ -123,7 +123,10 @@ export const getUserJourneyById = async (journeyId: string): Promise<UserJourney
   }
 }
 
-export const getUserJourneyByShortId = async (shortId: number): Promise<UserJourney | null> => {
+export const getUserJourneyByShortId = async (
+  shortId: number, 
+  onlyPublished: boolean = false
+): Promise<UserJourney | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
@@ -136,27 +139,35 @@ export const getUserJourneyByShortId = async (shortId: number): Promise<UserJour
             return []
           }
         })
-      return allJourneys.find((j: UserJourney) => j.short_id === shortId) || null
+      const journey = allJourneys.find((j: UserJourney) => j.short_id === shortId)
+      if (journey && onlyPublished && journey.status !== 'published') {
+        return null
+      }
+      return journey || null
     } catch {
       return null
     }
   }
 
   try {
-    // This query should work for anonymous users if RLS policy allows it
-    // The policy should allow anonymous users to read published journeys
-    const { data, error } = await supabase
+    // Build the query
+    let query = supabase
       .from('user_journeys')
       .select('*')
       .eq('short_id', shortId)
-      .eq('status', 'published') // Only fetch published journeys for public access
-      .single()
+    
+    // Only filter by published status if onlyPublished is true (for public access)
+    if (onlyPublished) {
+      query = query.eq('status', 'published')
+    }
+    
+    const { data, error } = await query.single()
 
     if (error) {
       console.error('Error fetching user journey by short ID:', error)
       // If it's a 406 or 401 error, it might be an RLS issue
       if (error.code === 'PGRST301' || error.code === '42501' || error.message?.includes('permission denied')) {
-        console.error('RLS policy may be blocking anonymous access. Make sure the migration to allow public read is applied.')
+        console.error('RLS policy may be blocking access. Make sure RLS policies are configured correctly.')
       }
       throw error
     }

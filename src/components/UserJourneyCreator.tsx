@@ -1969,8 +1969,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       return
     }
 
-    // BFS to assign horizontal positions
+    // BFS to assign horizontal positions and track parent-child relationships
     const horizontalOrder = new Map<string, number>()
+    const parentMap = new Map<string, string>() // Track which node is the parent of each child
     const visited = new Set<string>()
     const queue: string[] = [...startNodes]
 
@@ -1997,6 +1998,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // If child already has a position (convergence), use the max
           if (existingPosition === undefined || newPosition > existingPosition) {
             horizontalOrder.set(childId, newPosition)
+            parentMap.set(childId, nodeId) // Track parent
           }
           
           queue.push(childId)
@@ -2004,16 +2006,61 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
     }
 
-    // Convert horizontal order to actual x positions
+    // Assign Y positions: center child groups around their parent's Y position
+    const yPositions = new Map<string, number>()
+    const CHILD_VERTICAL_SPACING = 160 // Spacing between siblings in the same child group
+    let currentYOffset = 300 // Start further down to allow room for spreading
+
+    // First pass: assign Y to start nodes
+    startNodes.forEach((nodeId, index) => {
+      yPositions.set(nodeId, currentYOffset + (index * 200))
+    })
+
+    // Second pass: assign Y to all other nodes based on their parent
+    // Child groups are centered around the parent's Y position
+    const assignYPositions = (nodeId: string) => {
+      const children = adjacencyMap.get(nodeId) || []
+      if (children.length === 0) return
+      
+      const parentY = yPositions.get(nodeId) || 100
+      
+      // Calculate positions for children centered around parent's Y
+      if (children.length === 1) {
+        // Single child: align exactly with parent
+        yPositions.set(children[0], parentY)
+      } else {
+        // Multiple children: center the group around parent's Y
+        const totalHeight = (children.length - 1) * CHILD_VERTICAL_SPACING
+        const startY = parentY - (totalHeight / 2)
+        
+        children.forEach((childId, index) => {
+          if (!yPositions.has(childId)) {
+            const childY = startY + (index * CHILD_VERTICAL_SPACING)
+            yPositions.set(childId, childY)
+          }
+        })
+      }
+      
+      // Recursively assign Y to each child's children
+      children.forEach(childId => {
+        assignYPositions(childId)
+      })
+    }
+
+    // Start from each start node
+    startNodes.forEach(nodeId => assignYPositions(nodeId))
+
+    // Convert horizontal order to actual x,y positions
     const updatedNodes = regularNodes.map(node => {
       const position = horizontalOrder.get(node.id) || 0
       const xPosition = 100 + (position * (NODE_WIDTH + HORIZONTAL_SPACING))
+      const yPosition = yPositions.get(node.id) || 100
       
       return {
         ...node,
         position: {
           x: xPosition,
-          y: node.position.y // Keep existing y position
+          y: yPosition
         }
       }
     })
