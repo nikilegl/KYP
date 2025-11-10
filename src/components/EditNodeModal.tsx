@@ -19,6 +19,7 @@ interface EditNodeModalProps {
   thirdParties: ThirdParty[] // Kept for future validation/suggestions
   availableRegions: Array<{ id: string; label: string }>
   journeyLayout: 'vertical' | 'horizontal'
+  existingNodes: Node[] // List of existing nodes to determine default node type
   onSave: (formData: NodeFormData) => void
   onDelete?: () => void
 }
@@ -227,6 +228,7 @@ export function EditNodeModal({
   thirdParties: _thirdParties,
   availableRegions,
   journeyLayout,
+  existingNodes,
   onSave,
   onDelete
 }: EditNodeModalProps) {
@@ -313,9 +315,14 @@ export function EditNodeModal({
       // Reset form for new node with one empty notification by default
       setBulletPointsWithIds([{ id: `bp-${Date.now()}`, text: '' }])
       
+      // Filter out highlight regions when checking for existing nodes
+      const regularNodes = existingNodes.filter(n => n.type !== 'highlightRegion')
+      // If there are no nodes yet, default to 'start', otherwise 'process'
+      const defaultType = regularNodes.length === 0 ? 'start' : 'process'
+      
       setFormData({
         label: '',
-        type: 'process',
+        type: defaultType,
         variant: 'Legl',
         thirdPartyName: '',
         customPlatformName: '',
@@ -326,7 +333,7 @@ export function EditNodeModal({
         swimLane: null
       })
     }
-  }, [node, isOpen, isAddingNewNode])
+  }, [node, isOpen, isAddingNewNode, existingNodes])
 
   // Define handleSave early so it can be used in useEffect
   const handleSave = useCallback(() => {

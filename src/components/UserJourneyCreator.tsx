@@ -3154,6 +3154,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             label: (n.data as any).label || 'Untitled Region'
           }))}
         journeyLayout={journeyLayout}
+        existingNodes={nodes}
         onSave={saveNodeConfiguration}
         onDelete={configuringNode ? () => {
           // Delete the node directly (confirmation handled in modal)
