@@ -240,6 +240,7 @@ export interface ProjectStakeholder {
 export interface UserJourney {
   id: string
   project_id: string
+  folder_id?: string | null
   name: string
   layout?: 'vertical' | 'horizontal'
   status?: 'draft' | 'published'

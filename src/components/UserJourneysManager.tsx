@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Edit, Trash2, Copy } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Copy, FolderOpen } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { EditJourneyModal } from './EditJourneyModal'
+import { ManageFoldersModal } from './ManageFoldersModal'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import { getUserJourneyFolders, assignUserJourneysToFolder, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
@@ -23,6 +25,7 @@ interface WorkspaceUserInfo {
 
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
+  folder?: UserJourneyFolder
   lawFirms?: LawFirm[]
   createdByUser?: WorkspaceUserInfo
   updatedByUser?: WorkspaceUserInfo
@@ -38,10 +41,16 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const navigate = useNavigate()
   const [userJourneys, setUserJourneys] = useState<UserJourneyWithProject[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [folders, setFolders] = useState<UserJourneyFolder[]>([])
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [folderFilter, setFolderFilter] = useState<string>('all')
   const [loading, setLoading] = useState(true)
+  const [showManageFoldersModal, setShowManageFoldersModal] = useState(false)
+  const [showAddToFolderModal, setShowAddToFolderModal] = useState(false)
+  const [selectedFolderForAssignment, setSelectedFolderForAssignment] = useState<string>('')
+  const [assigningToFolder, setAssigningToFolder] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [journeyToDelete, setJourneyToDelete] = useState<UserJourneyWithProject | null>(null)
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false)
@@ -119,6 +128,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       const projectsData = await getProjects()
       setProjects(projectsData)
 
+      // Load all folders
+      const foldersData = await getUserJourneyFolders()
+      setFolders(foldersData)
+
       // Load all law firms
       const lawFirmsData = await getLawFirms()
       setLawFirms(lawFirmsData)
@@ -162,11 +175,15 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         }
       }
       
-      // Enrich with project data, law firms, and user information
+      // Enrich with project data, folder data, law firms, and user information
       const journeysWithData: UserJourneyWithProject[] = await Promise.all(
         allJourneys.map(async journey => {
           const project = journey.project_id 
             ? projectsData.find(p => p.id === journey.project_id)
+            : undefined
+          
+          const folder = journey.folder_id 
+            ? foldersData.find(f => f.id === journey.folder_id)
             : undefined
           
           // Get law firm IDs for this journey
@@ -178,6 +195,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           return {
             ...journey,
             project,
+            folder,
             lawFirms,
             createdByUser: journey.created_by ? usersMap.get(journey.created_by) : undefined,
             updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined,
@@ -195,17 +213,26 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }
   }
 
-  // Filter user journeys based on search term and project
+  // Filter user journeys based on search term, project, and folder
   const filteredUserJourneys = userJourneys.filter(journey => {
+    // Apply project filter (if projectId prop is provided, it takes precedence)
+    let matchesProject = true
+    if (projectId) {
+      matchesProject = journey.project_id === projectId
+    } else {
+      matchesProject = projectFilter === 'all' || 
+                      (projectFilter === 'none' && !journey.project_id) ||
+                      journey.project_id === projectFilter
+    }
+    
+    // Apply folder filter
+    const matchesFolder = folderFilter === 'all' || 
+                        (folderFilter === 'none' && !journey.folder_id) ||
+                        journey.folder_id === folderFilter
+    
+    // If no search term, just apply filters
     if (!searchTerm) {
-      // No search term, just apply project filter
-      if (projectId) {
-        return journey.project_id === projectId
-      }
-      const matchesProject = projectFilter === 'all' || 
-                            (projectFilter === 'none' && !journey.project_id) ||
-                            journey.project_id === projectFilter
-      return matchesProject
+      return matchesProject && matchesFolder
     }
     
     // Convert search term emojis (e.g., :gear: becomes ⚙️)
@@ -220,16 +247,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     const matchesSearch = journey.name.toLowerCase().includes(searchLower) ||
                          (journey.description && journey.description.toLowerCase().includes(searchLower))
     
-    // If projectId prop is provided, only show journeys for that project
-    if (projectId) {
-      return matchesSearch && journey.project_id === projectId
-    }
-    
-    // Otherwise use the project filter
-    const matchesProject = projectFilter === 'all' || 
-                          (projectFilter === 'none' && !journey.project_id) ||
-                          journey.project_id === projectFilter
-    return matchesSearch && matchesProject
+    return matchesSearch && matchesProject && matchesFolder
   })
 
   // Handle edit
@@ -364,6 +382,33 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }
   }
 
+  // Handle adding selected journeys to a folder
+  const handleAddToFolderClick = () => {
+    if (selectedJourneys.length === 0) return
+    setSelectedFolderForAssignment('')
+    setShowAddToFolderModal(true)
+  }
+
+  const handleAssignToFolder = async () => {
+    if (selectedJourneys.length === 0) return
+
+    setAssigningToFolder(true)
+    try {
+      // Allow assigning to null to remove from folder
+      const folderId = selectedFolderForAssignment === 'none' ? null : selectedFolderForAssignment
+      await assignUserJourneysToFolder(selectedJourneys, folderId)
+      await loadData()
+      setSelectedJourneys([])
+      setShowAddToFolderModal(false)
+      setSelectedFolderForAssignment('')
+    } catch (error) {
+      console.error('Error assigning journeys to folder:', error)
+      alert('Failed to assign journeys to folder. Please try again.')
+    } finally {
+      setAssigningToFolder(false)
+    }
+  }
+
   // Table columns configuration
   const columns: Column<UserJourneyWithProject>[] = [
     {
@@ -373,9 +418,13 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       width: '400px',
       render: (journey) => (
         <div className="break-words whitespace-normal">
-          {!projectId && journey.project?.name && (
-            <div className="text-xs text-gray-500 mb-1">
-              {convertEmojis(journey.project.name)}
+          {journey.folder && (
+            <div className="text-xs mb-1 flex items-center gap-1">
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: journey.folder.color }}
+              />
+              <span className="text-gray-600">{journey.folder.name}</span>
             </div>
           )}
           <div className="font-medium text-gray-900">{convertEmojis(journey.name)}</div>
@@ -549,13 +598,23 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">User Journeys</h2>
           <p className="text-gray-600">Visual flow diagrams showing user interactions and processes</p>
         </div>
-        <Button
-          onClick={handleCreateUserJourney}
-          className="flex items-center gap-2"
-        >
-          <Plus size={20} />
-          Create User Journey
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowManageFoldersModal(true)}
+            className="flex items-center gap-2"
+          >
+            <FolderOpen size={20} />
+            Edit Folders
+          </Button>
+          <Button
+            onClick={handleCreateUserJourney}
+            className="flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Create User Journey
+          </Button>
+        </div>
       </div>
 
   
@@ -572,6 +631,20 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+        
+        {/* Folder filter */}
+        <select
+          value={folderFilter}
+          onChange={(e) => setFolderFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          <option value="all">All Folders</option>
+          <option value="none">No Folder</option>
+          {folders.map(folder => (
+            <option key={folder.id} value={folder.id}>{folder.name}</option>
+          ))}
+        </select>
+        
         {/* Only show Epic filter if not filtering by project */}
         {!projectId && (
           <select
@@ -588,6 +661,32 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         )}
       </div>
 
+      {/* Bulk Actions - Show when items are selected */}
+      {selectedJourneys.length > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-blue-900 font-medium">
+            {selectedJourneys.length} user journey{selectedJourneys.length > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleAddToFolderClick}
+              className="flex items-center gap-2"
+            >
+              <FolderOpen size={16} />
+              Add to Folder
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedJourneys([])}
+              className="text-sm"
+            >
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* User Journeys Table */}
       <div className="flex-shrink-0">
         <DataTable
@@ -599,6 +698,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           selectable={true}
           selectedItems={selectedJourneys}
           onSelectionChange={setSelectedJourneys}
+          showSelectionBar={false}
         />
       </div>
 
@@ -735,6 +835,72 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           setShowAddLawFirmModal(false)
         }}
       />
+
+      {/* Manage Folders Modal */}
+      <ManageFoldersModal
+        isOpen={showManageFoldersModal}
+        onClose={() => setShowManageFoldersModal(false)}
+        onFoldersChanged={loadData}
+      />
+
+      {/* Add to Folder Modal */}
+      <Modal
+        isOpen={showAddToFolderModal}
+        onClose={() => setShowAddToFolderModal(false)}
+        title="Add to Folder"
+        size="sm"
+        footerContent={
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setShowAddToFolderModal(false)}
+              disabled={assigningToFolder}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAssignToFolder}
+              disabled={!selectedFolderForAssignment || assigningToFolder}
+              loading={assigningToFolder}
+            >
+              Assign to Folder
+            </Button>
+          </div>
+        }
+      >
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-gray-700">
+            Assign <strong>{selectedJourneys.length}</strong> selected user journey{selectedJourneys.length > 1 ? 's' : ''} to a folder:
+          </p>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Folder
+            </label>
+            <select
+              value={selectedFolderForAssignment}
+              onChange={(e) => setSelectedFolderForAssignment(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            >
+              <option value="">Choose a folder...</option>
+              <option value="none">Remove from folder</option>
+              {folders.map(folder => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {folders.length === 0 && (
+            <p className="text-sm text-gray-500 italic">
+              No folders available. Create a folder first using the "Edit Folders" button.
+            </p>
+          )}
+        </div>
+      </Modal>
 
     </div>
   )

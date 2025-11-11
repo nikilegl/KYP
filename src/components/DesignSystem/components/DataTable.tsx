@@ -26,6 +26,7 @@ export interface DataTableProps<T> {
   emptyStateIcon?: React.ComponentType<{ size?: number; className?: string }>
   emptyStateMessage?: string
   bulkActions?: React.ReactNode
+  showSelectionBar?: boolean
   className?: string
   tableLayout?: 'fixed' | 'auto'
 }
@@ -46,6 +47,7 @@ export function DataTable<T>({
   emptyStateIcon: EmptyStateIcon = Users,
   emptyStateMessage = 'No data available',
   bulkActions,
+  showSelectionBar = true,
   className = '',
   tableLayout = 'fixed'
 }: DataTableProps<T>) {
@@ -152,7 +154,7 @@ export function DataTable<T>({
      
       
       {/* Bulk Actions */}
-      {selectable && selectedItems.length > 0 && (
+      {selectable && selectedItems.length > 0 && showSelectionBar && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-blue-900">
