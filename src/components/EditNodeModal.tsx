@@ -9,6 +9,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { getPlatforms } from '../lib/database'
+import { EmojiAutocomplete } from './EmojiAutocomplete'
 
 interface EditNodeModalProps {
   isOpen: boolean
@@ -233,7 +234,6 @@ export function EditNodeModal({
   onDelete
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
-  const labelInputRef = useRef<HTMLInputElement>(null)
   
   // State for platforms from database
   const [platforms, setPlatforms] = useState<Platform[]>([])
@@ -346,15 +346,6 @@ export function EditNodeModal({
     })
   }, [formData, bulletPointsWithIds, onSave])
 
-  // Auto-focus the label input when modal opens
-  useEffect(() => {
-    if (isOpen && labelInputRef.current) {
-      // Small delay to ensure modal is fully rendered
-      setTimeout(() => {
-        labelInputRef.current?.focus()
-      }, 100)
-    }
-  }, [isOpen])
 
   // Handle global Enter key press to trigger Save (when not in bullet point input)
   useEffect(() => {
@@ -362,12 +353,13 @@ export function EditNodeModal({
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        // Check if the active element is a bullet point input
+        // Check if the active element is a bullet point input or emoji autocomplete input
         const activeElement = document.activeElement
         const isBulletPointInput = bulletInputRefs.current.some(ref => ref === activeElement)
+        const isInputField = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
         
-        // If not in a bullet point input, trigger Save
-        if (!isBulletPointInput) {
+        // If not in a bullet point input or emoji autocomplete input, trigger Save
+        if (!isBulletPointInput && !isInputField) {
           e.preventDefault()
           handleSave()
         }
@@ -403,6 +395,34 @@ export function EditNodeModal({
   }, [])
 
   const handleBulletPointKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number, value: string) => {
+    // Handle Command+B or Ctrl+B for bold formatting
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault()
+      const input = e.currentTarget
+      const start = input.selectionStart || 0
+      const end = input.selectionEnd || 0
+      
+      if (start !== end) {
+        // Text is selected, wrap it with **
+        const selectedText = value.substring(start, end)
+        const beforeText = value.substring(0, start)
+        const afterText = value.substring(end)
+        const newValue = `${beforeText}**${selectedText}**${afterText}`
+        
+        updateBulletPoint(index, newValue)
+        
+        // Restore cursor position after the closing **
+        setTimeout(() => {
+          if (bulletInputRefs.current[index]) {
+            const newCursorPos = start + selectedText.length + 4 // **text** = 4 extra chars
+            bulletInputRefs.current[index]?.setSelectionRange(newCursorPos, newCursorPos)
+            bulletInputRefs.current[index]?.focus()
+          }
+        }, 0)
+      }
+      return
+    }
+    
     if (e.key === 'Tab' && !e.shiftKey && value.trim()) {
       e.preventDefault()
       setBulletPointsWithIds(prev => [...prev, { id: `bp-${Date.now()}`, text: '' }])
@@ -429,7 +449,7 @@ export function EditNodeModal({
         }
       }, 0)
     }
-  }, [])
+  }, [updateBulletPoint])
 
   // Notification handlers
   const addNotification = useCallback(() => {
@@ -563,14 +583,15 @@ export function EditNodeModal({
       <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
         {/* Label */}
         <div>
-        
-          <input
-            ref={labelInputRef}
-            type="text"
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Label <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
+          </label>
+          <EmojiAutocomplete
             value={formData.label}
-            onChange={(e) => setFormData(prev => ({ ...prev, label: e.target.value }))}
+            onChange={(value) => setFormData(prev => ({ ...prev, label: value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Enter node label"
+            autoFocus={isOpen && isAddingNewNode}
           />
         </div>
 

@@ -12,6 +12,9 @@ interface EmojiAutocompleteProps {
   className?: string
   placeholder?: string
   autoFocus?: boolean
+  multiline?: boolean
+  rows?: number
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void
 }
 
 export function EmojiAutocomplete({
@@ -19,14 +22,18 @@ export function EmojiAutocomplete({
   onChange,
   className = '',
   placeholder = '',
-  autoFocus = false
+  autoFocus = false,
+  multiline = false,
+  rows = 3,
+  onKeyDown
 }: EmojiAutocompleteProps) {
   const [showPicker, setShowPicker] = useState(false)
   const [emojiMatches, setEmojiMatches] = useState<EmojiMatch[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [colonPosition, setColonPosition] = useState(-1)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [pickerPosition, setPickerPosition] = useState<{ top: number; left: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
 
   // Search for emojis matching the query
@@ -49,7 +56,7 @@ export function EmojiAutocomplete({
   }
 
   // Handle input change and detect `:` trigger
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const newValue = e.target.value
     const cursorPos = e.target.selectionStart || 0
     
@@ -96,42 +103,90 @@ export function EmojiAutocomplete({
     setSearchQuery('')
     setColonPosition(-1)
     
-    // Focus back on input and set cursor after emoji
+    // Focus back on input/textarea and set cursor after emoji
     setTimeout(() => {
       if (inputRef.current) {
         const newCursorPos = beforeColon.length + emojiToInsert.length + 1
         inputRef.current.focus()
-        inputRef.current.setSelectionRange(newCursorPos, newCursorPos)
+        if (inputRef.current instanceof HTMLInputElement || inputRef.current instanceof HTMLTextAreaElement) {
+          inputRef.current.setSelectionRange(newCursorPos, newCursorPos)
+        }
       }
     }, 0)
   }
 
   // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showPicker || emojiMatches.length === 0) return
-    
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault()
-        setSelectedIndex((prev) => (prev + 1) % emojiMatches.length)
-        break
-      case 'ArrowUp':
-        e.preventDefault()
-        setSelectedIndex((prev) => (prev - 1 + emojiMatches.length) % emojiMatches.length)
-        break
-      case 'Enter':
-      case 'Tab':
-        if (emojiMatches[selectedIndex]) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    // Handle emoji picker navigation
+    if (showPicker && emojiMatches.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
           e.preventDefault()
-          insertEmoji(emojiMatches[selectedIndex].emoji)
-        }
-        break
-      case 'Escape':
-        e.preventDefault()
-        setShowPicker(false)
-        break
+          setSelectedIndex((prev) => (prev + 1) % emojiMatches.length)
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          setSelectedIndex((prev) => (prev - 1 + emojiMatches.length) % emojiMatches.length)
+          return
+        case 'Enter':
+          // For textarea, only select emoji if Shift is NOT pressed (Shift+Enter = new line)
+          if (multiline && e.shiftKey) {
+            // Allow Shift+Enter to create new line
+            break
+          }
+          if (emojiMatches[selectedIndex]) {
+            e.preventDefault()
+            insertEmoji(emojiMatches[selectedIndex].emoji)
+            return
+          }
+          break
+        case 'Tab':
+          if (emojiMatches[selectedIndex]) {
+            e.preventDefault()
+            insertEmoji(emojiMatches[selectedIndex].emoji)
+            return
+          }
+          break
+        case 'Escape':
+          e.preventDefault()
+          setShowPicker(false)
+          return
+      }
+    }
+    
+    // Call custom onKeyDown handler if provided
+    if (onKeyDown) {
+      onKeyDown(e)
     }
   }
+
+  // Calculate picker position when it's shown
+  useEffect(() => {
+    const updatePosition = () => {
+      if (showPicker && inputRef.current) {
+        const input = inputRef.current
+        const rect = input.getBoundingClientRect()
+        // For fixed positioning, use viewport coordinates (getBoundingClientRect already gives viewport coords)
+        setPickerPosition({
+          top: rect.bottom + 4, // 4px margin (mt-1)
+          left: rect.left
+        })
+      }
+    }
+
+    if (showPicker) {
+      updatePosition()
+      // Update position on scroll and resize
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    } else {
+      setPickerPosition(null)
+    }
+  }, [showPicker])
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -154,22 +209,38 @@ export function EmojiAutocomplete({
 
   return (
     <div className="relative">
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        className={className}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-      />
+      {multiline ? (
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          value={value}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          className={className}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          rows={rows}
+        />
+      ) : (
+        <input
+          ref={inputRef as React.RefObject<HTMLInputElement>}
+          type="text"
+          value={value}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          className={className}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+        />
+      )}
       
-      {showPicker && emojiMatches.length > 0 && (
+      {showPicker && emojiMatches.length > 0 && pickerPosition && (
         <div
           ref={pickerRef}
-          className="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-64 overflow-y-auto"
-          style={{ top: '100%', left: 0 }}
+          className="fixed z-[100] w-64 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-64 overflow-y-auto"
+          style={{ 
+            top: `${pickerPosition.top}px`, 
+            left: `${pickerPosition.left}px` 
+          }}
         >
           {emojiMatches.map((match, index) => (
             <button
