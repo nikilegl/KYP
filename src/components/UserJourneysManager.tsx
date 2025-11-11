@@ -444,6 +444,11 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         const lawFirmIds = journeyToDuplicate.lawFirms?.map(firm => firm.id) || []
         await setUserJourneyLawFirms(duplicated.id, lawFirmIds)
         
+        // Assign to the same folder as the original journey
+        if (journeyToDuplicate.folder_id) {
+          await assignUserJourneysToFolder([duplicated.id], journeyToDuplicate.folder_id)
+        }
+        
         // Reload data to show the new journey
         await loadData()
         
