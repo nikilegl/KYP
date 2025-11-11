@@ -47,6 +47,7 @@ import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyL
 import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
 import { convertEmojis } from '../utils/emojiConverter'
 import { renderMarkdown } from '../utils/markdownRenderer'
+import { EmojiAutocomplete } from './EmojiAutocomplete'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -3311,23 +3312,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           <div className="p-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Label Text
+                Label Text <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
               </label>
-              <input
-                type="text"
+              <EmojiAutocomplete
                 value={edgeLabel}
-                onChange={(e) => setEdgeLabel(e.target.value)}
+                onChange={setEdgeLabel}
                 placeholder="e.g., 'Yes', 'No', 'Next', 'Cancel'"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={3}
+                multiline={true}
                 autoFocus
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
                     saveEdgeLabel()
                   }
+                  // Shift+Enter creates a new line (default behavior)
                 }}
               />
               <p className="mt-2 text-sm text-gray-500">
-                Add a label to describe this connection or transition
+                Add a label to describe this connection or transition. Press Shift+Enter for a new line.
               </p>
             </div>
           </div>

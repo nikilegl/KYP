@@ -3,6 +3,7 @@ import { Edit } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
 import type { UserRole, ThirdParty, Platform } from '../../../lib/supabase'
 import { convertEmojis } from '../../../utils/emojiConverter'
+import { renderMarkdown } from '../../../utils/markdownRenderer'
 
 export type UserJourneyNodeType = 'start' | 'process' | 'decision' | 'end' | 'label'
 
@@ -231,7 +232,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           {bulletPoints.filter(b => b && b.trim()).map((bullet, index) => (
             <li key={index} className="text-xs text-gray-600 flex items-start gap-1.5">
               <span className="text-gray-400 mt-0.5">•</span>
-              <span className="flex-1">{convertEmojis(bullet)}</span>
+              <span className="flex-1">{renderMarkdown(bullet)}</span>
             </li>
           ))}
         </ul>
