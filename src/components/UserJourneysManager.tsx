@@ -34,8 +34,13 @@ interface UserJourneyWithProject extends UserJourney {
 }
 
 // Combined type for table rows (folders + journeys)
+type FolderWithUserInfo = UserJourneyFolder & { 
+  journey_count: number
+  createdByUser?: WorkspaceUserInfo
+}
+
 type TableItem = 
-  | { type: 'folder', data: UserJourneyFolder & { journey_count: number } }
+  | { type: 'folder', data: FolderWithUserInfo }
   | { type: 'journey', data: UserJourneyWithProject }
 
 interface UserJourneysManagerProps {
@@ -55,6 +60,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [draggedItem, setDraggedItem] = useState<{ type: 'journey' | 'folder', id: string } | null>(null)
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
   const [folderJourneyCounts, setFolderJourneyCounts] = useState<Record<string, number>>({})
+  const [usersMap, setUsersMap] = useState<Map<string, WorkspaceUserInfo>>(new Map())
   const [loading, setLoading] = useState(true)
   const [showAddToFolderModal, setShowAddToFolderModal] = useState(false)
   const [selectedFolderForAssignment, setSelectedFolderForAssignment] = useState<string>('')
@@ -167,11 +173,14 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       // Load all journeys (including those without projects)
       const allJourneys = await getUserJourneys()
       
-      // Get unique user IDs from created_by and updated_by
+      // Get unique user IDs from created_by and updated_by (journeys and folders)
       const userIds = new Set<string>()
       allJourneys.forEach(journey => {
         if (journey.created_by) userIds.add(journey.created_by)
         if (journey.updated_by) userIds.add(journey.updated_by)
+      })
+      foldersData.forEach(folder => {
+        if (folder.created_by) userIds.add(folder.created_by)
       })
       
       console.log('📊 User Journey Tracking Debug:')
@@ -202,6 +211,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           console.log('- Users map size:', usersMap.size)
         }
       }
+      
+      // Store users map in state for use in table
+      setUsersMap(usersMap)
       
       // Enrich with project data, folder data, law firms, and user information
       const journeysWithData: UserJourneyWithProject[] = await Promise.all(
@@ -287,7 +299,11 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         folder.name.toLowerCase().includes(searchLower)
       ).map(folder => ({ 
         type: 'folder' as const, 
-        data: { ...folder, journey_count: folderJourneyCounts[folder.id] || 0 } 
+        data: { 
+          ...folder, 
+          journey_count: folderJourneyCounts[folder.id] || 0,
+          createdByUser: folder.created_by ? usersMap.get(folder.created_by) : undefined
+        } 
       }))
 
       return [...matchingFolders, ...matchingJourneys]
@@ -296,7 +312,11 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     // Normal navigation mode - show current level only
     const folderItems: TableItem[] = currentLevelFolders.map(folder => ({
       type: 'folder',
-      data: { ...folder, journey_count: folderJourneyCounts[folder.id] || 0 }
+      data: { 
+        ...folder, 
+        journey_count: folderJourneyCounts[folder.id] || 0,
+        createdByUser: folder.created_by ? usersMap.get(folder.created_by) : undefined
+      }
     }))
 
     const journeyItems: TableItem[] = currentLevelJourneys.filter(journey => {
@@ -442,11 +462,15 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
   // Navigate to user journey creator
   const handleCreateUserJourney = () => {
+    const params = new URLSearchParams()
     if (projectId) {
-      navigate(`/user-journey-creator?projectId=${projectId}`)
-    } else {
-      navigate('/user-journey-creator')
+      params.set('projectId', projectId)
     }
+    if (currentFolderId) {
+      params.set('folderId', currentFolderId)
+    }
+    const queryString = params.toString()
+    navigate(`/user-journey-creator${queryString ? `?${queryString}` : ''}`)
   }
 
   // Navigate into a folder
@@ -780,6 +804,28 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         return (
           <div className="text-sm text-gray-600">
             {formattedDate}
+          </div>
+        )
+      }
+    },
+    {
+      key: 'created_by',
+      header: 'Created by',
+      sortable: false,
+      width: '180px',
+      render: (item) => {
+        const createdByUser = item.data.createdByUser
+        if (!createdByUser) {
+          return (
+            <div className="text-sm text-gray-400">
+              Unknown User
+            </div>
+          )
+        }
+        
+        return (
+          <div className="text-sm text-gray-600">
+            {createdByUser.full_name || createdByUser.email || 'Unknown User'}
           </div>
         )
       }
