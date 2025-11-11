@@ -28,6 +28,11 @@ export function ImportJourneyImageModal({
   const [progressMessage, setProgressMessage] = useState<string>('')
 
   const processFile = useCallback((file: File) => {
+    // Clear any previous state to ensure fresh processing
+    setError(null)
+    setProgressMessage('')
+    setAnalyzing(false)
+    
     // Validate file type
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
     if (!validTypes.includes(file.type)) {
@@ -42,7 +47,6 @@ export function ImportJourneyImageModal({
     }
 
     setSelectedFile(file)
-    setError(null)
 
     // Create preview
     const reader = new FileReader()
@@ -57,6 +61,24 @@ export function ImportJourneyImageModal({
     if (!file) return
     processFile(file)
   }, [processFile])
+
+  // Reset state when modal opens to ensure fresh start
+  useEffect(() => {
+    if (isOpen) {
+      // Clear all state when modal opens to prevent caching issues
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      setError(null)
+      setAnalyzing(false)
+      setProgressMessage('')
+      
+      // Clear the file input element to prevent browser caching
+      const fileInput = document.getElementById('image-upload') as HTMLInputElement
+      if (fileInput) {
+        fileInput.value = ''
+      }
+    }
+  }, [isOpen])
 
   // Add paste event listener when modal is open and no file is selected
   useEffect(() => {

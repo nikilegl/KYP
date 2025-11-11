@@ -1285,11 +1285,30 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }))
 
       // Combine with existing content (append instead of replace)
+      const wasEmpty = nodes.length === 0
+      const finalJourneyName = wasEmpty 
+        ? (analyzedJourney.name || journeyName)
+        : journeyName
+      
       setNodes([...nodes, ...regionNodes, ...flowNodes])
       setEdges([...edges, ...flowEdges])
 
       // Close the modal
       setShowImportImageModal(false)
+
+      // Autosave the journey after import
+      // Use setTimeout to ensure state updates are complete before saving
+      setTimeout(async () => {
+        // If there's an existing journey ID, we can always save
+        // If it's a new journey, we need a name
+        if (currentJourneyId || finalJourneyName.trim()) {
+          try {
+            await saveJourney()
+          } catch (error) {
+            console.error('Error autosaving after image import:', error)
+          }
+        }
+      }, 100)
 
       // Show success message
       const regionText = regionNodes.length > 0 ? `, ${regionNodes.length} regions` : ''
@@ -1299,7 +1318,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       console.error('Error processing imported journey:', error)
       alert('Error processing the imported journey. Please try again.')
     }
-  }, [nodes, edges, userRoles, thirdParties, setNodes, setEdges, journeyLayout])
+  }, [nodes, edges, userRoles, thirdParties, journeyName, currentJourneyId, saveJourney, setNodes, setEdges, journeyLayout])
 
   // Handle AI import from transcript
   const handleImportFromTranscript = useCallback(async () => {
@@ -1428,6 +1447,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
       
       // Combine with existing content (append instead of replace)
+      const wasEmpty = nodes.length === 0
+      const finalJourneyName = wasEmpty 
+        ? (journeyData.name || 'Imported from Transcript')
+        : journeyName
+      
       setNodes([...nodes, ...importedNodes])
       setEdges([...edges, ...importedEdges])
       
@@ -1437,6 +1461,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setImportTranscriptError(null)
       setImportTranscriptLoading(false)
       setImportTranscriptProgress('')
+
+      // Autosave the journey after import
+      // Use setTimeout to ensure state updates are complete before saving
+      setTimeout(async () => {
+        // If there's an existing journey ID, we can always save
+        // If it's a new journey, we need a name
+        if (currentJourneyId || finalJourneyName.trim()) {
+          try {
+            await saveJourney()
+          } catch (error) {
+            console.error('Error autosaving after transcript import:', error)
+          }
+        }
+      }, 100)
 
       // Show success message
       const actionText = nodes.length > 0 ? 'Added' : 'Successfully imported'
@@ -1451,7 +1489,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setImportTranscriptLoading(false)
       setImportTranscriptProgress('')
     }
-  }, [nodes, edges, importTranscriptText, importTranscriptLayout, userRoles, setNodes, setEdges])
+  }, [nodes, edges, importTranscriptText, importTranscriptLayout, userRoles, journeyName, currentJourneyId, saveJourney, setNodes, setEdges])
 
   // Handle AI-powered journey editing with natural language
   const handleEditWithAI = useCallback(async () => {
