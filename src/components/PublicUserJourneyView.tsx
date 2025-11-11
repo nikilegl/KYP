@@ -22,6 +22,7 @@ import type { ThirdParty, Platform } from '../lib/supabase'
 import { getPlatforms } from '../lib/database'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import { convertEmojis } from '../utils/emojiConverter'
+import { renderMarkdown } from '../utils/markdownRenderer'
 
 // Initial empty arrays with proper types
 const initialNodes: Node[] = []
@@ -195,7 +196,7 @@ export function PublicUserJourneyView() {
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h1>
         {journeyDescription && (
-          <p className="text-sm text-gray-600 mt-1">{convertEmojis(journeyDescription)}</p>
+          <p className="text-sm text-gray-600 mt-1">{renderMarkdown(journeyDescription)}</p>
         )}
       </div>
 

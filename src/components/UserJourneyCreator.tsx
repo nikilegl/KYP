@@ -45,6 +45,7 @@ import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-
 import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyLayoutCalculator'
 import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
 import { convertEmojis } from '../utils/emojiConverter'
+import { renderMarkdown } from '../utils/markdownRenderer'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -3023,7 +3024,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               </button>
             </div>
             {journeyDescription && (
-              <p className="text-gray-600 mt-1">{convertEmojis(journeyDescription)}</p>
+              <p className="text-gray-600 mt-1">{renderMarkdown(journeyDescription)}</p>
             )}
           </div>
           
