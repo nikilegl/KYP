@@ -102,11 +102,14 @@ export async function analyzeJourneyImageWithBackground(
     const base64Image = await fileToBase64(compressedImage)
     const prompt = generateDiagramToJourneyPrompt(userRoleNames)
     
-    // Trigger background function (fire and forget)
+    // Trigger background function and capture job ID
     onProgress?.('Starting AI processing...', 0)
     
-    // Don't wait for this to complete - it will run in background for up to 15 minutes
-    fetch('/.netlify/functions/diagram-to-journey-background', {
+    // Create a unique timestamp to track this specific upload
+    const uploadTimestamp = Date.now()
+    
+    // Call background function and wait for job ID
+    const response = await fetch('/.netlify/functions/diagram-to-journey-background', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -114,12 +117,23 @@ export async function analyzeJourneyImageWithBackground(
         prompt: prompt,
         userId: user.id
       })
-    }).catch(err => {
-      console.error('Failed to trigger background function:', err)
     })
     
-    // Poll database directly for job completion
-    const result = await pollDatabaseForJobCompletion(user.id, 'diagram', onProgress)
+    if (!response.ok) {
+      throw new Error(`Failed to start background processing: ${response.status}`)
+    }
+    
+    const responseData = await response.json()
+    const jobId = responseData.jobId
+    
+    if (!jobId) {
+      throw new Error('No job ID returned from background function')
+    }
+    
+    console.log(`Tracking job ID: ${jobId} for upload at ${uploadTimestamp}`)
+    
+    // Poll database directly for this specific job completion
+    const result = await pollDatabaseForJobCompletion(user.id, 'diagram', jobId, uploadTimestamp, onProgress)
     
     return processJourneyData(result)
     
@@ -135,6 +149,8 @@ export async function analyzeJourneyImageWithBackground(
 async function pollDatabaseForJobCompletion(
   userId: string,
   jobType: 'diagram' | 'transcript',
+  jobId: string,
+  uploadTimestamp: number,
   onProgress?: (message: string, elapsed: number) => void
 ): Promise<any> {
   if (!supabase) {
@@ -157,24 +173,31 @@ async function pollDatabaseForJobCompletion(
 
     const elapsedSeconds = Math.floor(elapsed / 1000)
     
-    // Query latest job for this user of this type
-    const { data: jobs, error } = await supabase
+    // Query the specific job by ID to ensure we're tracking the right one
+    const { data: job, error } = await supabase
       .from('ai_processing_jobs')
       .select('*')
+      .eq('id', jobId)
       .eq('user_id', userId)
       .eq('job_type', jobType)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .single()
 
     if (error) {
+      // If job not found, it might not be created yet - keep waiting
+      if (error.code === 'PGRST116') {
+        if (onProgress) {
+          onProgress(`Initializing... (${elapsedSeconds}s)`, elapsedSeconds)
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        continue
+      }
       console.error('Error querying job:', error)
       await new Promise(resolve => setTimeout(resolve, pollInterval))
       continue
     }
 
-    const job = jobs?.[0]
     if (!job) {
-      // Job not created yet, keep waiting
+      // Job not found yet, keep waiting
       if (onProgress) {
         onProgress(`Initializing... (${elapsedSeconds}s)`, elapsedSeconds)
       }
@@ -182,8 +205,14 @@ async function pollDatabaseForJobCompletion(
       continue
     }
     
+    // Verify this job was created after our upload timestamp (safety check)
+    const jobCreatedAt = new Date(job.created_at).getTime()
+    if (jobCreatedAt < uploadTimestamp - 5000) { // Allow 5 second buffer
+      throw new Error('Job timestamp mismatch - this appears to be a different upload')
+    }
+    
     if (job.status === 'completed') {
-      console.log(`Job completed in ${elapsedSeconds}s`)
+      console.log(`Job ${jobId} completed in ${elapsedSeconds}s`)
       return job.result_data
     }
     
