@@ -65,9 +65,10 @@ export function EditJourneyModal({
     const handleKeyDown = (event: KeyboardEvent) => {
       // Only trigger if Enter is pressed and journey name is not empty
       if (event.key === 'Enter' && journeyName.trim() && !saveDisabled) {
-        // Don't trigger if user is typing in a textarea (they might want to add a newline)
+        // Don't trigger if user is typing in a textarea or input field
+        // (textarea for newlines, input for emoji autocomplete)
         const target = event.target as HTMLElement
-        if (target.tagName === 'TEXTAREA') {
+        if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
           return
         }
         
