@@ -15,6 +15,7 @@ import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
 import * as emoji from 'node-emoji'
+import { EmojiAutocomplete } from './EmojiAutocomplete'
 
 interface WorkspaceUserInfo {
   id: string
@@ -1139,11 +1140,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Folder Name
               </label>
-              <input
-                type="text"
+              <EmojiAutocomplete
                 value={editFolderName}
-                onChange={(e) => setEditFolderName(e.target.value)}
-                placeholder="Enter folder name"
+                onChange={setEditFolderName}
+                placeholder="Enter folder name (type : to search emojis)"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 autoFocus
               />
