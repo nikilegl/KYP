@@ -5,6 +5,7 @@ export interface UserJourneyFolder {
   workspace_id: string
   name: string
   color: string
+  parent_folder_id: string | null
   created_at: string
   updated_at: string
 }
@@ -53,7 +54,8 @@ export async function getUserJourneyFolders(): Promise<UserJourneyFolder[]> {
  */
 export async function createUserJourneyFolder(
   name: string,
-  color: string = '#3B82F6'
+  color: string = '#3B82F6',
+  parentFolderId: string | null = null
 ): Promise<UserJourneyFolder> {
   if (!supabase) {
     throw new Error('Supabase client not initialized')
@@ -82,7 +84,8 @@ export async function createUserJourneyFolder(
     .insert({
       workspace_id: workspaceUser.workspace_id,
       name,
-      color
+      color,
+      parent_folder_id: parentFolderId
     })
     .select()
     .single()
@@ -162,5 +165,49 @@ export async function assignUserJourneysToFolder(
   if (error) {
     throw new Error(`Failed to assign journeys to folder: ${error.message}`)
   }
+}
+
+/**
+ * Move a folder to a different parent folder
+ */
+export async function moveFolderToParent(
+  folderId: string,
+  parentFolderId: string | null
+): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase client not initialized')
+  }
+
+  const { error } = await supabase
+    .from('user_journey_folders')
+    .update({ 
+      parent_folder_id: parentFolderId,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', folderId)
+
+  if (error) {
+    throw new Error(`Failed to move folder: ${error.message}`)
+  }
+}
+
+/**
+ * Count user journeys in a folder (including subfolders)
+ */
+export async function countJourneysInFolder(folderId: string): Promise<number> {
+  if (!supabase) {
+    throw new Error('Supabase client not initialized')
+  }
+
+  const { count, error } = await supabase
+    .from('user_journeys')
+    .select('*', { count: 'exact', head: true })
+    .eq('folder_id', folderId)
+
+  if (error) {
+    throw new Error(`Failed to count journeys: ${error.message}`)
+  }
+
+  return count || 0
 }
 

@@ -29,6 +29,13 @@ export interface DataTableProps<T> {
   showSelectionBar?: boolean
   className?: string
   tableLayout?: 'fixed' | 'auto'
+  // Drag and drop handlers
+  onDragStart?: (item: T) => void
+  onDragOver?: (e: React.DragEvent, item: T) => void
+  onDragLeave?: () => void
+  onDrop?: (e: React.DragEvent, item: T) => void
+  getItemDragType?: (item: T) => 'journey' | 'folder' | null
+  dragOverItemId?: string | null
 }
 
 export function DataTable<T>({
@@ -49,7 +56,13 @@ export function DataTable<T>({
   bulkActions,
   showSelectionBar = true,
   className = '',
-  tableLayout = 'fixed'
+  tableLayout = 'fixed',
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  getItemDragType,
+  dragOverItemId
 }: DataTableProps<T>) {
   const [sortField, setSortField] = useState<keyof T | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -230,13 +243,55 @@ export function DataTable<T>({
               {sortedData.map((item) => {
                 const itemId = getItemId(item)
                 const isSelected = selectedItems.includes(itemId)
+                const dragType = getItemDragType ? getItemDragType(item) : null
+                const isDraggable = dragType !== null
+                const isDragOver = dragOverItemId === itemId
                 
                 return (
-                                    <tr
+                  <tr
                     key={itemId}
-                    className={`transition-colors ${
+                    draggable={isDraggable}
+                    className={`transition-all ${
                       onRowClick ? 'hover:bg-gray-50 cursor-pointer' : ''
+                    } ${
+                      isDraggable ? 'cursor-move' : ''
+                    } ${
+                      isDragOver ? 'bg-blue-100 border-2 border-blue-500 shadow-md' : ''
                     }`}
+                    onDragStart={(e) => {
+                      if (isDraggable && onDragStart) {
+                        onDragStart(item)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      // Allow drag over if this item is a folder (can receive drops)
+                      // This works for both journeys and folders being dragged over folders
+                      if (dragType === 'folder') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        e.dataTransfer.dropEffect = 'move'
+                        if (onDragOver) {
+                          onDragOver(e, item)
+                        }
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (onDragLeave) {
+                        onDragLeave()
+                      }
+                    }}
+                    onDrop={(e) => {
+                      // Allow drop if this item is a folder (can receive drops)
+                      // This works for both journeys and folders being dropped on folders
+                      if (dragType === 'folder') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (onDrop) {
+                          onDrop(e, item)
+                        }
+                      }
+                    }}
                     onClick={(e) => {
                       // Only trigger row click if not clicking on checkbox, buttons, or other interactive elements
                       const target = e.target as HTMLElement
