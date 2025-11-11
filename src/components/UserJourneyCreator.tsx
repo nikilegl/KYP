@@ -24,8 +24,9 @@ import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, MoreVertical, Share2, Copy as CopyIcon } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
+import { OptionsMenu } from './DesignSystem/components/OptionsMenu'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
 import { EditNodeModal, type NodeFormData } from './EditNodeModal'
@@ -134,7 +135,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [showEditWithAIModal, setShowEditWithAIModal] = useState(false)
   const [editInstruction, setEditInstruction] = useState('')
   const [editAIError, setEditAIError] = useState<string | null>(null)
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [editAILoading, setEditAILoading] = useState(false)
   const [editAIProgress, setEditAIProgress] = useState<string>('')
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
@@ -3087,49 +3087,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           )}
 
             {/* More Options Menu */}
-            <div className="relative" title="More options">
-            <Button
-              variant="outline"
-              onClick={() => setShowMoreMenu(!showMoreMenu)}
-              className="flex items-center gap-2 whitespace-nowrap"
-            >
-              <MoreVertical size={16} />
-            </Button>
-            
-            {showMoreMenu && (
-              <>
-                {/* Backdrop to close menu when clicking outside */}
-                <div 
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowMoreMenu(false)}
-                />
-                
-                {/* Dropdown Menu */}
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                  <button
-                    onClick={() => {
-                      exportJourney()
-                      setShowMoreMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
-                  >
-                    <Download size={16} />
-                    <span>Export as JSON</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowImportJsonModal(true)
-                      setShowMoreMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
-                  >
-                    <Upload size={16} />
-                    <span>Import JSON</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+            <OptionsMenu
+              items={[
+                {
+                  label: 'Export as JSON',
+                  icon: Download,
+                  onClick: exportJourney
+                },
+                {
+                  label: 'Import JSON',
+                  icon: Upload,
+                  onClick: () => setShowImportJsonModal(true)
+                }
+              ]}
+            />
           </div>
         </div>
       </div>

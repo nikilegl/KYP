@@ -4,6 +4,7 @@ import type { Node, Edge } from '@xyflow/react'
 export interface UserJourney {
   id: string
   project_id: string | null
+  folder_id?: string | null
   name: string
   description?: string
   layout?: 'vertical' | 'horizontal'
