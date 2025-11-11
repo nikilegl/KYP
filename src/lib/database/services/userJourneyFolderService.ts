@@ -6,6 +6,7 @@ export interface UserJourneyFolder {
   name: string
   color: string
   parent_folder_id: string | null
+  created_by?: string | null
   created_at: string
   updated_at: string
 }
@@ -85,7 +86,8 @@ export async function createUserJourneyFolder(
       workspace_id: workspaceUser.workspace_id,
       name,
       color,
-      parent_folder_id: parentFolderId
+      parent_folder_id: parentFolderId,
+      created_by: user.id
     })
     .select()
     .single()

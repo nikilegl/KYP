@@ -37,6 +37,7 @@ import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import { assignUserJourneysToFolder } from '../lib/database/services/userJourneyFolderService'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import { getPlatforms } from '../lib/database/services/platformService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
@@ -119,6 +120,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [edgeLabel, setEdgeLabel] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId || '')
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
@@ -362,7 +364,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Check if there's an ID in the URL query params or path
       const urlJourneyId = searchParams.get('id')
       const urlProjectId = searchParams.get('projectId')
+      const urlFolderId = searchParams.get('folderId')
       const shortIdParam = params.shortId ? parseInt(params.shortId) : null
+      
+      // Set folder ID from query params if provided
+      if (urlFolderId) {
+        setSelectedFolderId(urlFolderId)
+      }
       
       let journey = null
       
@@ -988,6 +996,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         if (created) {
           // Save law firm associations
           await setUserJourneyLawFirms(created.id, selectedLawFirmIds)
+          
+          // Assign to folder if folderId was provided
+          if (selectedFolderId) {
+            await assignUserJourneysToFolder([created.id], selectedFolderId)
+          }
           
           console.log('Journey created successfully:', created)
           setCurrentJourneyId(created.id)
