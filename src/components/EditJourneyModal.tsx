@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
+import { RichTextDescription } from './DesignSystem/components/RichTextDescription'
 import { Plus } from 'lucide-react'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
 import type { Project, LawFirm } from '../lib/supabase'
@@ -120,12 +121,11 @@ export function EditJourneyModal({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Description
           </label>
-          <textarea
+          <RichTextDescription
             value={journeyDescription}
-            onChange={(e) => onDescriptionChange(e.target.value)}
+            onChange={onDescriptionChange}
+            placeholder="Optional description (use Link button to add hyperlinks)"
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Optional description"
           />
         </div>
 
