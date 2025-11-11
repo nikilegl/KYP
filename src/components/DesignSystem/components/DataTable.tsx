@@ -14,7 +14,8 @@ export interface DataTableProps<T> {
   data: T[]
   columns: Column<T>[]
   sortableFields?: (keyof T)[]
-  onRowClick?: (item: T) => void
+  onRowClick?: (item: T, e?: React.MouseEvent) => void
+  onRowContextMenu?: (e: React.MouseEvent, item: T) => void
   onEdit?: (item: T) => void
   onDelete?: (item: T) => void
   onBulkDelete?: (ids: string[]) => void
@@ -43,6 +44,7 @@ export function DataTable<T>({
   columns,
   sortableFields = [],
   onRowClick,
+  onRowContextMenu,
   onEdit,
   onDelete,
   onBulkDelete,
@@ -299,7 +301,14 @@ export function DataTable<T>({
                           !target.closest('button') && 
                           !target.closest('a') &&
                           !target.closest('[role="button"]')) {
-                        onRowClick?.(item)
+                        onRowClick?.(item, e)
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      if (onRowContextMenu) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onRowContextMenu(e, item)
                       }
                     }}
                   >

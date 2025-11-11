@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Edit, Trash2, Copy, FolderOpen, ChevronRight } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Copy, FolderOpen, ChevronRight, Link as LinkIcon, Move } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
@@ -72,6 +72,12 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [selectedJourneys, setSelectedJourneys] = useState<string[]>([])
   const [showEditModal, setShowEditModal] = useState(false)
   const [journeyToEdit, setJourneyToEdit] = useState<UserJourneyWithProject | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; journey: UserJourneyWithProject } | null>(null)
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [journeyToMove, setJourneyToMove] = useState<UserJourneyWithProject | null>(null)
+  const [selectedMoveFolder, setSelectedMoveFolder] = useState<string>('')
+  const [movingJourney, setMovingJourney] = useState(false)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
@@ -531,6 +537,78 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }
   }
 
+  // Context menu handlers
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+        setContextMenu(null)
+      }
+    }
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [contextMenu])
+
+  const handleContextMenu = (e: React.MouseEvent, journey: UserJourneyWithProject) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      journey
+    })
+  }
+
+  const handleCopyLink = async (journey: UserJourneyWithProject) => {
+    if (journey.status !== 'published') {
+      alert('Only published journeys can be shared via link.')
+      return
+    }
+
+    const url = `${window.location.origin}/user-journey/${journey.short_id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setContextMenu(null)
+      // You could add a toast notification here
+    } catch (error) {
+      console.error('Failed to copy link:', error)
+      alert('Failed to copy link. Please try again.')
+    }
+  }
+
+  const handleMoveClick = (journey: UserJourneyWithProject) => {
+    setJourneyToMove(journey)
+    setSelectedMoveFolder(journey.folder_id || '')
+    setShowMoveModal(true)
+    setContextMenu(null)
+  }
+
+  const handleMoveConfirm = async () => {
+    if (!journeyToMove) return
+
+    try {
+      setMovingJourney(true)
+      await assignUserJourneysToFolder(
+        [journeyToMove.id],
+        selectedMoveFolder || null
+      )
+      await loadData()
+      setShowMoveModal(false)
+      setJourneyToMove(null)
+      setSelectedMoveFolder('')
+    } catch (error) {
+      console.error('Error moving journey:', error)
+      alert('Failed to move journey. Please try again.')
+    } finally {
+      setMovingJourney(false)
+    }
+  }
+
   // Handle adding selected journeys to a folder
   const handleAddToFolderClick = () => {
     if (selectedJourneys.length === 0) return
@@ -904,11 +982,25 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           getItemId={(item) => item.type === 'folder' ? `folder-${item.data.id}` : item.data.id}
           columns={columns}
           sortableFields={['name', 'updated_at']}
-          onRowClick={(item) => {
+          onRowClick={(item, e) => {
+            // Check for option-click (Mac) or Ctrl+click (Windows/Linux)
+            if (e && (e.metaKey || e.altKey || e.ctrlKey)) {
+              if (item.type === 'journey') {
+                handleContextMenu(e as React.MouseEvent, item.data)
+              }
+              return
+            }
+            
             if (item.type === 'folder') {
               handleFolderClick(item.data.id)
             } else {
               navigate(`/user-journey/${item.data.short_id}`)
+            }
+          }}
+          onRowContextMenu={(e, item) => {
+            // Only show context menu for journeys, not folders
+            if (item.type === 'journey') {
+              handleContextMenu(e, item.data)
             }
           }}
           selectable={false}
@@ -1128,6 +1220,94 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                 <li>{folderJourneyCounts[folderToDelete.id] || 0} user journey(s) inside it</li>
                 <li>Any subfolders and their contents</li>
               </ul>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[180px]"
+          style={{
+            left: `${Math.min(contextMenu.x, window.innerWidth - 200)}px`,
+            top: `${Math.min(contextMenu.y, window.innerHeight - 100)}px`,
+          }}
+        >
+          {contextMenu.journey.status === 'published' && (
+            <button
+              onClick={() => handleCopyLink(contextMenu.journey)}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+            >
+              <LinkIcon size={16} />
+              <span>Copy link</span>
+            </button>
+          )}
+          <button
+            onClick={() => handleMoveClick(contextMenu.journey)}
+            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+          >
+            <Move size={16} />
+            <span>Move</span>
+          </button>
+        </div>
+      )}
+
+      {/* Move Journey Modal */}
+      {showMoveModal && journeyToMove && (
+        <Modal
+          isOpen={showMoveModal}
+          onClose={() => {
+            setShowMoveModal(false)
+            setJourneyToMove(null)
+            setSelectedMoveFolder('')
+          }}
+          title="Move User Journey"
+          size="sm"
+          footerContent={
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowMoveModal(false)
+                  setJourneyToMove(null)
+                  setSelectedMoveFolder('')
+                }}
+                disabled={movingJourney}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleMoveConfirm}
+                disabled={movingJourney}
+              >
+                {movingJourney ? 'Moving...' : 'Move'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-gray-600">
+              Move "<strong>{convertEmojis(journeyToMove.name)}</strong>" to a folder:
+            </p>
+            <div>
+              <select
+                value={selectedMoveFolder}
+                onChange={(e) => setSelectedMoveFolder(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={movingJourney}
+              >
+                <option value="">No folder (root)</option>
+                {folders
+                  .filter(folder => folder.id !== journeyToMove.folder_id) // Don't show current folder
+                  .map(folder => (
+                    <option key={folder.id} value={folder.id}>
+                      {convertEmojis(folder.name)}
+                    </option>
+                  ))}
+              </select>
             </div>
           </div>
         </Modal>
