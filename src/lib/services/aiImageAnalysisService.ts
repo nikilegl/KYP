@@ -392,19 +392,28 @@ function processJourneyData(data: any): AnalyzedJourney {
   console.log('Detected layout from AI:', detectedLayout)
   
   // --- Step 1: Extract content from AI (NO POSITIONS) ---
-  const rawNodes = (data.nodes || []).map((node: any) => ({
-    id: node.id,
-    label: node.label,
-    type: node.type,
-    swimLane: node.laneName, // Use laneName from AI as swimLane identifier
-    laneIndex: node.laneIndex,
-    laneName: node.laneName,
-    userRole: node.userRole,
-    platform: node.platform,
-    thirdPartyName: node.thirdPartyName,
-    bulletPoints: node.bulletPoints || [],
-    notifications: node.notifications || []
-  }))
+  // Only extract swim lane data for horizontal layouts
+  const rawNodes = (data.nodes || []).map((node: any) => {
+    const baseNode: any = {
+      id: node.id,
+      label: node.label,
+      type: node.type,
+      userRole: node.userRole,
+      platform: node.platform,
+      thirdPartyName: node.thirdPartyName,
+      bulletPoints: node.bulletPoints || [],
+      notifications: node.notifications || []
+    }
+    
+    // Only include swim lane properties for horizontal layouts
+    if (detectedLayout === 'horizontal') {
+      baseNode.swimLane = node.laneName // Use laneName from AI as swimLane identifier
+      baseNode.laneIndex = node.laneIndex
+      baseNode.laneName = node.laneName
+    }
+    
+    return baseNode
+  })
 
   // --- Step 2: Calculate positions using the appropriate layout calculator ---
   // The AI detects layout type, and we use the corresponding calculator
@@ -461,24 +470,30 @@ function processJourneyData(data: any): AnalyzedJourney {
       }))
       .filter((notif: JourneyNotification) => notif.message)
 
+    const nodeData: any = {
+      label: node.data?.label || node.label || node.id,
+      type: normalizeNodeType(node.type || node.data?.type),
+      userRole: node.data?.userRole || node.userRole || undefined,
+      variant: normalizeVariant(node.data?.variant || node.platform),
+      thirdPartyName: node.data?.thirdPartyName || node.thirdPartyName || '',
+      bulletPoints: Array.isArray(node.data?.bulletPoints || node.bulletPoints) 
+        ? (node.data?.bulletPoints || node.bulletPoints).filter((bp: any) => bp) 
+        : [],
+      notifications: notifications.length > 0 ? notifications : [],
+      customProperties: node.data?.customProperties || {},
+      journeyLayout: detectedLayout
+    }
+    
+    // Only include laneName for horizontal layouts
+    if (detectedLayout === 'horizontal' && node.laneName) {
+      nodeData.laneName = node.laneName
+    }
+
     return {
       id: node.id,
       type: normalizeNodeType(node.type || node.data?.type),
       position: node.position, // Use calculated position from layout calculator
-      data: {
-        label: node.data?.label || node.label || node.id,
-        type: normalizeNodeType(node.type || node.data?.type),
-        userRole: node.data?.userRole || node.userRole || undefined,
-        variant: normalizeVariant(node.data?.variant || node.platform),
-        thirdPartyName: node.data?.thirdPartyName || node.thirdPartyName || '',
-        bulletPoints: Array.isArray(node.data?.bulletPoints || node.bulletPoints) 
-          ? (node.data?.bulletPoints || node.bulletPoints).filter((bp: any) => bp) 
-          : [],
-        notifications: notifications.length > 0 ? notifications : [],
-        customProperties: node.data?.customProperties || {},
-        journeyLayout: detectedLayout,
-        laneName: node.laneName // Pass through the lane name from AI
-      }
+      data: nodeData
     }
   })
 
