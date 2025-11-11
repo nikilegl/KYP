@@ -107,7 +107,7 @@ export function CustomEdge(props: CustomEdgeProps) {
           {hasLabel ? (
             <div
               onClick={handleLabelClick}
-              className={`px-3 py-1.5 rounded-full border hover:shadow-md transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg border hover:shadow-md transition-all cursor-pointer whitespace-pre-wrap break-words max-w-xs ${
                 data?.highlighted 
                   ? 'bg-green-50 border-green-500 text-green-700' 
                   : 'bg-white border-gray-300 hover:border-blue-500 text-gray-700'
