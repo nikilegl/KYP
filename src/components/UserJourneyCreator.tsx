@@ -111,6 +111,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [configuringNode, setConfiguringNode] = useState<Node | null>(null)
   const [isAddingNewNode, setIsAddingNewNode] = useState(false)
@@ -1018,7 +1019,42 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     } finally {
       setSaving(false)
     }
-  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, journeyStatus, selectedLawFirmIds])
+  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, journeyStatus, selectedLawFirmIds, selectedFolderId])
+
+  // Handle back button click with save confirmation
+  const handleBackClick = useCallback(() => {
+    // If there are unsaved changes or journey hasn't been saved, show confirmation
+    if (hasUnsavedChanges || !currentJourneyId) {
+      setShowExitConfirmModal(true)
+    } else {
+      // No unsaved changes and journey is saved, navigate directly
+      navigate('/user-journeys')
+    }
+  }, [hasUnsavedChanges, currentJourneyId, navigate])
+
+  // Handle exit confirmation - save and exit
+  const handleExitConfirm = useCallback(async () => {
+    // Check if journey can be saved (has a valid name)
+    if (!journeyName.trim() || journeyName === 'User Journey 01') {
+      // Can't save without a name, just exit (user has been warned in modal)
+      setShowExitConfirmModal(false)
+      navigate('/user-journeys')
+      return
+    }
+
+    // Try to save before exiting
+    try {
+      await saveJourney()
+      setShowExitConfirmModal(false)
+      // Wait a moment for save to complete, then navigate
+      setTimeout(() => {
+        navigate('/user-journeys')
+      }, 100)
+    } catch (error) {
+      console.error('Error saving before exit:', error)
+      alert('Failed to save journey. Please try saving manually before exiting.')
+    }
+  }, [journeyName, saveJourney, navigate])
 
   // Export journey as JSON
   const exportJourney = useCallback(() => {
@@ -3027,7 +3063,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => navigate('/user-journeys')}
+            onClick={handleBackClick}
             className="flex items-center gap-2"
           >
             <ArrowLeft size={16} />
@@ -3568,6 +3604,56 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         currentJourneyLayout={journeyLayout}
         hasExistingNodes={nodes.length > 0}
       />
+
+      {/* Exit Confirmation Modal */}
+      <Modal
+        isOpen={showExitConfirmModal}
+        onClose={() => setShowExitConfirmModal(false)}
+        title="Save Before Exiting?"
+        size="sm"
+        footerContent={
+          <div className="flex items-center justify-between w-full">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowExitConfirmModal(false)
+                navigate('/user-journeys')
+              }}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              Don't Save
+            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => setShowExitConfirmModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleExitConfirm}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save and Exit'}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="p-6">
+          <p className="text-gray-700 mb-4">
+            Are you sure you want to exit? This user journey has unsaved changes.
+          </p>
+          {(!journeyName.trim() || journeyName === 'User Journey 01') && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                <strong>Warning:</strong> This journey has not been saved yet. Please save this user journey before exiting, or your changes will be lost.
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Import JSON Modal */}
       <Modal
