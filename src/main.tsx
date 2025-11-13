@@ -26,6 +26,7 @@ root.render(
       <Route path="/law-firm/:shortId" element={<App />} />
       <Route path="/law-firms" element={<App />} />
       <Route path="/user-journey/:shortId" element={<App />} />
+      <Route path="/user-journeys/:folderSlug" element={<App />} />
       <Route path="/user-journeys" element={<App />} />
       <Route path="/user-journey-creator" element={<App />} />
       <Route path="/themes" element={<App />} />

@@ -246,8 +246,8 @@ export function WorkspaceDataFetcher({
         return
       }
 
-      if (pathname === '/user-journeys') {
-        console.log('🔵 WorkspaceDataFetcher: Processing user-journeys path')
+      if (pathname === '/user-journeys' || pathname.startsWith('/user-journeys/')) {
+        console.log('🔵 WorkspaceDataFetcher: Processing user-journeys path', pathname)
         setCurrentView('user-journeys')
         onViewChange('user-journeys')
         setSelectedProject(null)

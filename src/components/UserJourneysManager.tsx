@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { Plus, Search, Edit, Trash2, Copy, FolderOpen, ChevronRight, Link as LinkIcon, Move } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
 import * as emoji from 'node-emoji'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
+import { nameToSlug, findFolderBySlug } from '../utils/slugUtils'
 
 interface WorkspaceUserInfo {
   id: string
@@ -49,6 +50,8 @@ interface UserJourneysManagerProps {
 
 export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const params = useParams<{ folderSlug?: string }>()
   const [userJourneys, setUserJourneys] = useState<UserJourneyWithProject[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [folders, setFolders] = useState<UserJourneyFolder[]>([])
@@ -110,10 +113,33 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   })
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
 
-  // Load projects and journeys on mount
+  // Load projects and journeys on mount and when folder slug changes
   useEffect(() => {
     loadData()
   }, [])
+
+  // Update current folder when URL slug changes
+  useEffect(() => {
+    // Wait for folders to load before processing URL slug
+    if (folders.length === 0) return
+
+    if (params.folderSlug) {
+      const folder = findFolderBySlug(folders, params.folderSlug)
+      if (folder) {
+        setCurrentFolderId(folder.id)
+        setFolderPath(buildFolderPath(folder.id))
+      } else {
+        // Folder not found, navigate to root
+        setCurrentFolderId(null)
+        setFolderPath([])
+        navigate('/user-journeys', { replace: true })
+      }
+    } else {
+      // No folder slug in URL, show root
+      setCurrentFolderId(null)
+      setFolderPath([])
+    }
+  }, [params.folderSlug, location.pathname, folders, navigate])
 
   // Handle creating a new law firm from the Edit Journey Details modal
   const handleCreateLawFirmFromModal = async (e: React.FormEvent) => {
@@ -495,13 +521,19 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
   // Navigate into a folder
   const handleFolderClick = (folderId: string) => {
-    setCurrentFolderId(folderId)
-    setFolderPath(buildFolderPath(folderId))
-    setSelectedJourneys([])
+    const folder = folders.find(f => f.id === folderId)
+    if (folder) {
+      const slug = nameToSlug(folder.name)
+      navigate(`/user-journeys/${slug}`)
+      setCurrentFolderId(folderId)
+      setFolderPath(buildFolderPath(folderId))
+      setSelectedJourneys([])
+    }
   }
 
   // Navigate to root
   const handleNavigateToRoot = () => {
+    navigate('/user-journeys')
     setCurrentFolderId(null)
     setFolderPath([])
     setSelectedJourneys([])
@@ -509,9 +541,22 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
   // Navigate to specific folder in breadcrumb
   const handleNavigateToFolder = (folderId: string | null) => {
-    setCurrentFolderId(folderId)
-    setFolderPath(buildFolderPath(folderId))
-    setSelectedJourneys([])
+    if (!folderId) {
+      navigate('/user-journeys')
+      setCurrentFolderId(null)
+      setFolderPath([])
+      setSelectedJourneys([])
+      return
+    }
+    
+    const folder = folders.find(f => f.id === folderId)
+    if (folder) {
+      const slug = nameToSlug(folder.name)
+      navigate(`/user-journeys/${slug}`)
+      setCurrentFolderId(folderId)
+      setFolderPath(buildFolderPath(folderId))
+      setSelectedJourneys([])
+    }
   }
 
   // Drag and drop handlers
