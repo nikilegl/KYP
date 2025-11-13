@@ -347,21 +347,25 @@ export function EditNodeModal({
   }, [formData, bulletPointsWithIds, onSave])
 
 
-  // Handle global Enter key press to trigger Save (when not in bullet point input)
+  // Handle global Enter key press to trigger Save (when not in textarea or select)
   useEffect(() => {
     if (!isOpen) return
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        // Check if the active element is a bullet point input or emoji autocomplete input
         const activeElement = document.activeElement
-        const isBulletPointInput = bulletInputRefs.current.some(ref => ref === activeElement)
-        const isInputField = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA'
+        const isTextarea = activeElement?.tagName === 'TEXTAREA'
+        const isSelect = activeElement?.tagName === 'SELECT'
         
-        // If not in a bullet point input or emoji autocomplete input, trigger Save
-        if (!isBulletPointInput && !isInputField) {
-          e.preventDefault()
-          handleSave()
+        // Trigger Save for all inputs except textareas and selects
+        // Bullet point inputs will be handled by their own onKeyDown handler
+        if (!isTextarea && !isSelect) {
+          // Check if it's already handled by a bullet point input
+          const isBulletPointInput = bulletInputRefs.current.some(ref => ref === activeElement)
+          if (!isBulletPointInput) {
+            e.preventDefault()
+            handleSave()
+          }
         }
       }
     }
@@ -423,33 +427,34 @@ export function EditNodeModal({
       return
     }
     
-    if (e.key === 'Tab' && !e.shiftKey && value.trim()) {
-      e.preventDefault()
-      setBulletPointsWithIds(prev => [...prev, { id: `bp-${Date.now()}`, text: '' }])
-      setTimeout(() => {
-        const newIndex = index + 1
-        if (bulletInputRefs.current[newIndex]) {
-          bulletInputRefs.current[newIndex]?.focus()
+    // Tab key: only add new bullet point if this is the last bullet point
+    if (e.key === 'Tab' && !e.shiftKey) {
+      // Use functional update to get current state
+      setBulletPointsWithIds(prev => {
+        const isLastBulletPoint = index === prev.length - 1
+        if (isLastBulletPoint) {
+          e.preventDefault()
+          const newBulletPoint = { id: `bp-${Date.now()}`, text: '' }
+          setTimeout(() => {
+            const newIndex = index + 1
+            if (bulletInputRefs.current[newIndex]) {
+              bulletInputRefs.current[newIndex]?.focus()
+            }
+          }, 0)
+          return [...prev, newBulletPoint]
         }
-      }, 0)
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      // Add new bullet point below current one
-      const newBulletPoint = { id: `bp-${Date.now()}`, text: '' }
-      setBulletPointsWithIds(prev => [
-        ...prev.slice(0, index + 1),
-        newBulletPoint,
-        ...prev.slice(index + 1)
-      ])
-      // Focus on the new bullet point
-      setTimeout(() => {
-        const newIndex = index + 1
-        if (bulletInputRefs.current[newIndex]) {
-          bulletInputRefs.current[newIndex]?.focus()
-        }
-      }, 0)
+        // If not the last bullet point, let Tab work normally (move to next field)
+        return prev
+      })
+      return
     }
-  }, [updateBulletPoint])
+    
+    // Enter key: trigger Save button
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault()
+      handleSave()
+    }
+  }, [updateBulletPoint, handleSave])
 
   // Notification handlers
   const addNotification = useCallback(() => {
