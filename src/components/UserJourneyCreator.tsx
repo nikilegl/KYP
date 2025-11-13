@@ -37,7 +37,8 @@ import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
-import { assignUserJourneysToFolder } from '../lib/database/services/userJourneyFolderService'
+import { assignUserJourneysToFolder, getUserJourneyFolders, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
+import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import { getPlatforms } from '../lib/database/services/platformService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
@@ -181,6 +182,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId || '')
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [journeyFolder, setJourneyFolder] = useState<UserJourneyFolder | null>(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
@@ -454,6 +456,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setJourneyLayout(journey.layout || 'vertical')
         setJourneyStatus(journey.status || 'draft')
         setSelectedProjectId(journey.project_id || '')
+        
+        // Load folder if journey belongs to one
+        if (journey.folder_id) {
+          try {
+            const folders = await getUserJourneyFolders()
+            const folder = folders.find(f => f.id === journey.folder_id)
+            if (folder) {
+              setJourneyFolder(folder)
+            }
+          } catch (error) {
+            console.error('Error loading folder:', error)
+          }
+        }
         
         // Load associated law firms
         const lawFirmIds = await getUserJourneyLawFirms(journey.id)
@@ -3242,7 +3257,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => navigate('/user-journeys')}
+            onClick={() => {
+              if (journeyFolder) {
+                const slug = nameToSlug(journeyFolder.name)
+                navigate(`/user-journeys/${slug}`)
+              } else {
+                navigate('/user-journeys')
+              }
+            }}
             className="flex items-center gap-2"
           >
             <ArrowLeft size={16} />
