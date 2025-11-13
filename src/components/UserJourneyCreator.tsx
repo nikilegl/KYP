@@ -99,9 +99,68 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const location = useLocation()
   const params = useParams()
   const [searchParams] = useSearchParams()
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const reactFlowInstanceRef = useRef<any>(null)
+  
+  // Track Alt key state and original node position for duplicate on drag
+  const isAltPressedRef = useRef(false)
+  const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
+  const duplicateNodeIdRef = useRef<string | null>(null) // Track the duplicate node ID during drag
+  
+  // Custom onNodesChange that intercepts Alt+drag to keep original node locked
+  const onNodesChange = useCallback((changes: any[]) => {
+    // If Alt+drag is active, intercept position changes
+    if (duplicateNodeIdRef.current) {
+      const originalNodeId = Array.from(dragStartPositionsRef.current.keys()).find(
+        id => id !== duplicateNodeIdRef.current
+      )
+      
+      // Process changes
+      const modifiedChanges: any[] = []
+      let duplicatePositionUpdate: { x: number; y: number } | null = null
+      
+      for (const change of changes) {
+        // If this is a position change for the original node, redirect it to duplicate
+        if (change.type === 'position' && change.dragging && change.id === originalNodeId) {
+          const originalPosition = dragStartPositionsRef.current.get(change.id)
+          if (originalPosition) {
+            // Store the position to apply to duplicate instead
+            duplicatePositionUpdate = change.position
+            // Add a change to reset original node position
+            modifiedChanges.push({
+              ...change,
+              position: originalPosition
+            })
+          }
+        } else {
+          // Allow other changes through
+          modifiedChanges.push(change)
+        }
+      }
+      
+      // Apply changes
+      if (modifiedChanges.length > 0) {
+        onNodesChangeBase(modifiedChanges)
+      }
+      
+      // Update duplicate position if needed
+      if (duplicatePositionUpdate && duplicateNodeIdRef.current) {
+        setNodes((nds) => {
+          return nds.map(n => {
+            if (n.id === duplicateNodeIdRef.current) {
+              // Maintain high z-index when updating position
+              return { ...n, position: duplicatePositionUpdate!, zIndex: 1000 }
+            }
+            return n
+          })
+        })
+      }
+    } else {
+      // Normal drag - apply changes normally
+      onNodesChangeBase(changes)
+    }
+  }, [onNodesChangeBase, setNodes])
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
   const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
@@ -466,23 +525,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }
 
   // Save state before drag starts (for undo)
-  const onNodeDragStart = useCallback(() => {
-    if (!isUndoing.current) {
-      const snapshot = {
-        nodes: JSON.parse(JSON.stringify(nodes)),
-        edges: JSON.parse(JSON.stringify(edges))
-      }
-      setHistory((prev) => {
-        // Clear any "future" states if we're not at the end
-        const newHistory = prev.slice(0, historyIndex + 1)
-        // Add new snapshot
-        const updated = [...newHistory, snapshot]
-        // Limit history to last 50 states
-        return updated.slice(-50)
-      })
-      setHistoryIndex((prev) => prev + 1)
-    }
-  }, [nodes, edges, historyIndex])
 
   // Undo functionality
   const undo = useCallback(() => {
@@ -613,9 +655,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [nodes, setEdges])
 
-  // Copy selected nodes to clipboard (Command+C / Ctrl+C)
+  // Copy selected nodes to clipboard (Command+C / Ctrl+C) - works across browser tabs
   const copySelectedNodes = useCallback(async () => {
-    const selectedNodes = nodes.filter(node => node.selected)
+    const selectedNodes = nodes.filter(node => node.selected && node.type !== 'highlightRegion')
     if (selectedNodes.length === 0) return
 
     const selectedNodeIds = new Set(selectedNodes.map(n => n.id))
@@ -624,16 +666,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
     )
 
+    // Add type identifier for cross-tab compatibility
     const copyData = {
+      type: 'kyp-user-journey-nodes',
+      version: '1.0',
       nodes: selectedNodes,
       edges: relevantEdges
     }
 
-    // Store in state for fallback
+    // Store in state for fallback (same-tab fallback)
     setCopiedNodes(selectedNodes)
     setCopiedEdges(relevantEdges)
 
-    // Copy to clipboard as JSON
+    // Copy to clipboard as JSON (works across browser tabs)
     try {
       await navigator.clipboard.writeText(JSON.stringify(copyData, null, 2))
       console.log(`Copied ${selectedNodes.length} node(s) and ${relevantEdges.length} edge(s) to clipboard`)
@@ -661,11 +706,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
 
       // Try to read from clipboard as text
-      let copyData: { nodes: Node[], edges: Edge[] } | null = null
+      let copyData: { type?: string; nodes: Node[], edges: Edge[] } | null = null
       
       try {
         const clipboardText = await navigator.clipboard.readText()
-        copyData = JSON.parse(clipboardText)
+        const parsed = JSON.parse(clipboardText)
+        
+        // Check if it's our format (for cross-tab compatibility)
+        if (parsed.type === 'kyp-user-journey-nodes' && Array.isArray(parsed.nodes)) {
+          copyData = {
+            nodes: parsed.nodes,
+            edges: parsed.edges || []
+          }
+        } else if (parsed.nodes && Array.isArray(parsed.nodes)) {
+          // Legacy format (from same tab fallback)
+          copyData = parsed
+        }
       } catch (clipboardError) {
         // Fallback to state if clipboard read fails
         console.log('Clipboard read failed, using fallback state')
@@ -682,18 +738,55 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      // Get the React Flow instance to access viewport utilities
+      const reactFlowInstance = reactFlowInstanceRef.current
+      if (!reactFlowInstance) {
+        console.error('React Flow instance not available')
+        return
+      }
+
+      // Get viewport center in flow coordinates
+      const viewportCenter = reactFlowInstance.screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2
+      })
+
+      // Calculate bounding box of nodes being pasted
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+
+      copyData.nodes.forEach(node => {
+        const pos = node.position || { x: 0, y: 0 }
+        minX = Math.min(minX, pos.x)
+        minY = Math.min(minY, pos.y)
+        maxX = Math.max(maxX, pos.x)
+        maxY = Math.max(maxY, pos.y)
+      })
+
+      // Calculate center of the bounding box
+      const boundingBoxCenterX = (minX + maxX) / 2
+      const boundingBoxCenterY = (minY + maxY) / 2
+
+      // Calculate offset to move bounding box center to viewport center
+      const offsetX = viewportCenter.x - boundingBoxCenterX
+      const offsetY = viewportCenter.y - boundingBoxCenterY
+
       // Create ID mapping for nodes
       const idMapping = new Map<string, string>()
       const newNodes: Node[] = copyData.nodes.map(node => {
         const newId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         idMapping.set(node.id, newId)
         
+        const originalPos = node.position || { x: 0, y: 0 }
+        
         return {
           ...node,
           id: newId,
           position: {
-            x: snapToGrid(node.position.x + 50), // Offset by 50px and snap to grid
-            y: snapToGrid(node.position.y + 50)
+            x: snapToGrid(originalPos.x + offsetX),
+            y: snapToGrid(originalPos.y + offsetY)
           },
           selected: true, // Select the pasted nodes
           data: {
@@ -739,7 +832,34 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [copiedNodes, copiedEdges, setNodes, setEdges, snapToGrid])
 
-  // Keyboard shortcuts for copy/paste
+  // Duplicate selected nodes (for Cmd+D shortcut)
+  const duplicateSelectedNodes = useCallback(() => {
+    const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
+    if (selectedNodes.length === 0) return
+
+    const timestamp = Date.now()
+    const newNodes = selectedNodes.map((node, index) => {
+      const newNodeId = `node-${timestamp}-${index}`
+      return {
+        ...node,
+        id: newNodeId,
+        type: 'process', // Always set to Middle/process type
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50
+        },
+        data: {
+          ...node.data,
+          type: 'process' // Always set to Middle/process type
+        },
+        selected: false // Deselect the new nodes
+      }
+    })
+
+    setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
+  }, [nodes, setNodes])
+
+  // Keyboard shortcuts for copy/paste/duplicate
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isModifierPressed = event.metaKey || event.ctrlKey
@@ -763,11 +883,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             copySelectedNodes()
           }
         } else if (event.key === 'v' || event.key === 'V') {
-          // Only paste if there are selected nodes/edges (meaning we're focused on the diagram)
-          if (hasSelection) {
-            // Don't prevent default for paste - let pasteNodes decide if it should handle it
-            // This allows image paste handlers (like ImportJourneyImageModal) to work
-            pasteNodes()
+          // Always allow paste (works across browser tabs)
+          // Don't prevent default for paste - let pasteNodes decide if it should handle it
+          // This allows image paste handlers (like ImportJourneyImageModal) to work
+          pasteNodes()
+        } else if (event.key === 'd' || event.key === 'D') {
+          // Duplicate selected nodes (Cmd/Ctrl+D)
+          const hasSelectedNodesForDuplicate = nodes.some(node => node.selected && node.type !== 'highlightRegion')
+          if (hasSelectedNodesForDuplicate) {
+            event.preventDefault()
+            duplicateSelectedNodes()
           }
         }
       }
@@ -775,7 +900,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes, nodes, edges])
+  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, nodes, edges])
 
   // Track if we're currently dragging a connection
   const [isConnecting, setIsConnecting] = useState(false)
@@ -1786,60 +1911,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setNodeToDelete(null)
   }, [])
 
-  // Duplicate selected nodes (for Cmd+D shortcut)
-  const duplicateSelectedNodes = useCallback(() => {
-    const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
-    if (selectedNodes.length === 0) return
-
-    const timestamp = Date.now()
-    const newNodes = selectedNodes.map((node, index) => {
-      const newNodeId = `node-${timestamp}-${index}`
-      return {
-        ...node,
-        id: newNodeId,
-        type: 'process', // Always set to Middle/process type
-        position: {
-          x: node.position.x + 50,
-          y: node.position.y + 50
-        },
-        data: {
-          ...node.data,
-          type: 'process' // Always set to Middle/process type
-        },
-        selected: false // Deselect the new nodes
-      }
-    })
-
-    setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
-  }, [nodes, setNodes])
-
-  // Keyboard shortcut for duplicating selected nodes (Cmd+D)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isModifierPressed = event.metaKey || event.ctrlKey
-      
-      // Don't trigger if user is typing in an input field
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      // Check if any nodes are selected
-      const hasSelectedNodes = nodes.some(node => node.selected && node.type !== 'highlightRegion')
-      
-      if (isModifierPressed && (event.key === 'd' || event.key === 'D')) {
-        // Only duplicate if there are selected nodes
-        if (hasSelectedNodes) {
-          event.preventDefault()
-          duplicateSelectedNodes()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [duplicateSelectedNodes, nodes])
-
   // Keyboard shortcut for deleting selected nodes/edges (Delete or Backspace)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2036,16 +2107,160 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setConfiguringRegion(null)
   }, [configuringRegion, regionConfigForm, setNodes])
 
-  // Handle node drag stop - auto-assign to regions
+  // Monitor Alt key state
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt' || e.altKey) {
+        isAltPressedRef.current = true
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt' || !e.altKey) {
+        isAltPressedRef.current = false
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [])
+
+  const onNodeDragStart = useCallback((_event: any, node: Node) => {
+    // Store original position when drag starts
+    dragStartPositionsRef.current.set(node.id, { ...node.position })
+    
+    // If Alt is pressed, create duplicate immediately
+    if (isAltPressedRef.current && node.type !== 'highlightRegion') {
+      const originalPosition = dragStartPositionsRef.current.get(node.id)
+      if (originalPosition) {
+        const timestamp = Date.now()
+        const newNodeId = `node-${timestamp}`
+        duplicateNodeIdRef.current = newNodeId
+        
+        // Create duplicate at original position (will follow mouse during drag)
+        const duplicateNode: Node = {
+          ...node,
+          id: newNodeId,
+          type: 'process',
+          position: { ...node.position },
+          data: {
+            ...node.data,
+            type: 'process'
+          },
+          selected: false,
+          draggable: true,
+          zIndex: 1000 // High z-index to ensure it appears on top
+        }
+        
+        // Add duplicate and keep original node visible (position will be locked via onNodesChange)
+        // Add duplicate at the end so it renders on top
+        setNodes((nds) => {
+          const updatedNodes = nds.map(n => {
+            if (n.id === node.id) {
+              // Keep original node visible and at original position
+              // Position will be locked via onNodesChange interceptor
+              // Lower z-index to ensure it stays below duplicate
+              return { ...n, position: originalPosition, zIndex: 0 }
+            }
+            return n
+          })
+          // Add duplicate at the end so it renders last (on top)
+          return [...updatedNodes, duplicateNode]
+        })
+      }
+    }
+    
+    if (!isUndoing.current) {
+      const snapshot = {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges))
+      }
+      setHistory((prev) => {
+        // Clear any "future" states if we're not at the end
+        const newHistory = prev.slice(0, historyIndex + 1)
+        // Add new snapshot
+        const updated = [...newHistory, snapshot]
+        // Limit history to last 50 states
+        return updated.slice(-50)
+      })
+      setHistoryIndex((prev) => prev + 1)
+    }
+  }, [nodes, edges, historyIndex, setNodes])
+
+  // Handle node drag - keep original node locked if Alt was pressed
+  const onNodeDrag = useCallback((_event: any, node: Node) => {
+    // If this is a duplicate operation, keep original node locked
+    if (duplicateNodeIdRef.current && node.id !== duplicateNodeIdRef.current) {
+      const originalPosition = dragStartPositionsRef.current.get(node.id)
+      if (originalPosition) {
+        // Reset original node position to keep it locked
+        setNodes((nds) => {
+          return nds.map(n => {
+            if (n.id === node.id && n.id !== duplicateNodeIdRef.current) {
+              return { ...n, position: originalPosition }
+            }
+            return n
+          })
+        })
+      }
+    }
+  }, [setNodes])
+
   const handleNodeDragStop = useCallback(
-    (_event: any, _node: Node) => {
+    (_event: any, draggedNode: Node) => {
+      // Check if this was a duplicate operation
+      if (duplicateNodeIdRef.current) {
+        // Find the original node ID (the one that's not the duplicate)
+        const originalNodeId = Array.from(dragStartPositionsRef.current.keys()).find(
+          id => id !== duplicateNodeIdRef.current
+        )
+        
+        if (originalNodeId) {
+          const originalPosition = dragStartPositionsRef.current.get(originalNodeId)
+          
+          // Restore original node's draggability and ensure it's at original position
+          // Make sure it exists and is visible
+          setNodes((nds) => {
+            return nds.map(n => {
+              if (n.id === originalNodeId) {
+                // Restore original node - make sure it's visible and draggable
+                return { 
+                  ...n, 
+                  position: originalPosition || n.position,
+                  draggable: true,
+                  selected: false,
+                  hidden: false
+                }
+              }
+              if (n.id === duplicateNodeIdRef.current) {
+                // Select the duplicate
+                return { ...n, selected: true }
+              }
+              return { ...n, selected: false }
+            })
+          })
+          
+          // Clean up
+          dragStartPositionsRef.current.delete(originalNodeId)
+          duplicateNodeIdRef.current = null
+          isAltPressedRef.current = false
+        }
+      } else {
+        // Normal drag - clean up stored position
+        dragStartPositionsRef.current.delete(draggedNode.id)
+        duplicateNodeIdRef.current = null
+      }
+      
       // Disabled automatic swim lane assignment on drag
       // Users should manually assign nodes to swim lanes via the Edit Node modal
       // This prevents unwanted position changes when dragging nodes
-      
-      // Future: Could add optional auto-assignment with a modifier key (e.g., hold Shift to auto-assign)
     },
-    []
+    [setNodes]
   )
 
   // Tidy up node positions with proper spacing
@@ -3169,6 +3384,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
           onNodeDragStop={handleNodeDragStop}
           onInit={(instance) => {
             reactFlowInstanceRef.current = instance
