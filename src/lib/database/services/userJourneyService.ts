@@ -42,6 +42,26 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
     const { data: { user } } = await supabase.auth.getUser()
     const currentUserId = user?.id
     
+    // Check if user is workspace owner or admin (they can see all journeys)
+    let isOwnerOrAdmin = false
+    if (currentUserId) {
+      try {
+        const { data: workspaceUser, error: roleError } = await supabase
+          .from('workspace_users')
+          .select('role')
+          .eq('user_id', currentUserId)
+          .single()
+        
+        // If query succeeds and user is owner/admin, grant access to all journeys
+        if (!roleError && workspaceUser && (workspaceUser.role === 'owner' || workspaceUser.role === 'admin')) {
+          isOwnerOrAdmin = true
+        }
+      } catch (error) {
+        // If there's an error checking role, fall back to regular filtering
+        console.warn('Could not check user role, using default filtering:', error)
+      }
+    }
+    
     let query = supabase
       .from('user_journeys')
       .select('*')
@@ -55,6 +75,11 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
     const { data, error } = await query
 
     if (error) throw error
+    
+    // If user is owner/admin, show all journeys (including drafts by others)
+    if (isOwnerOrAdmin) {
+      return data || []
+    }
     
     // Filter results: show published journeys to all, but draft journeys only to creator
     const filteredData = (data || []).filter(journey => {
