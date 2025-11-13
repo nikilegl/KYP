@@ -655,9 +655,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [nodes, setEdges])
 
-  // Copy selected nodes to clipboard (Command+C / Ctrl+C)
+  // Copy selected nodes to clipboard (Command+C / Ctrl+C) - works across browser tabs
   const copySelectedNodes = useCallback(async () => {
-    const selectedNodes = nodes.filter(node => node.selected)
+    const selectedNodes = nodes.filter(node => node.selected && node.type !== 'highlightRegion')
     if (selectedNodes.length === 0) return
 
     const selectedNodeIds = new Set(selectedNodes.map(n => n.id))
@@ -666,16 +666,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
     )
 
+    // Add type identifier for cross-tab compatibility
     const copyData = {
+      type: 'kyp-user-journey-nodes',
+      version: '1.0',
       nodes: selectedNodes,
       edges: relevantEdges
     }
 
-    // Store in state for fallback
+    // Store in state for fallback (same-tab fallback)
     setCopiedNodes(selectedNodes)
     setCopiedEdges(relevantEdges)
 
-    // Copy to clipboard as JSON
+    // Copy to clipboard as JSON (works across browser tabs)
     try {
       await navigator.clipboard.writeText(JSON.stringify(copyData, null, 2))
       console.log(`Copied ${selectedNodes.length} node(s) and ${relevantEdges.length} edge(s) to clipboard`)
@@ -703,11 +706,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
 
       // Try to read from clipboard as text
-      let copyData: { nodes: Node[], edges: Edge[] } | null = null
+      let copyData: { type?: string; nodes: Node[], edges: Edge[] } | null = null
       
       try {
         const clipboardText = await navigator.clipboard.readText()
-        copyData = JSON.parse(clipboardText)
+        const parsed = JSON.parse(clipboardText)
+        
+        // Check if it's our format (for cross-tab compatibility)
+        if (parsed.type === 'kyp-user-journey-nodes' && Array.isArray(parsed.nodes)) {
+          copyData = {
+            nodes: parsed.nodes,
+            edges: parsed.edges || []
+          }
+        } else if (parsed.nodes && Array.isArray(parsed.nodes)) {
+          // Legacy format (from same tab fallback)
+          copyData = parsed
+        }
       } catch (clipboardError) {
         // Fallback to state if clipboard read fails
         console.log('Clipboard read failed, using fallback state')
@@ -724,18 +738,55 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return
       }
 
+      // Get the React Flow instance to access viewport utilities
+      const reactFlowInstance = reactFlowInstanceRef.current
+      if (!reactFlowInstance) {
+        console.error('React Flow instance not available')
+        return
+      }
+
+      // Get viewport center in flow coordinates
+      const viewportCenter = reactFlowInstance.screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2
+      })
+
+      // Calculate bounding box of nodes being pasted
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+
+      copyData.nodes.forEach(node => {
+        const pos = node.position || { x: 0, y: 0 }
+        minX = Math.min(minX, pos.x)
+        minY = Math.min(minY, pos.y)
+        maxX = Math.max(maxX, pos.x)
+        maxY = Math.max(maxY, pos.y)
+      })
+
+      // Calculate center of the bounding box
+      const boundingBoxCenterX = (minX + maxX) / 2
+      const boundingBoxCenterY = (minY + maxY) / 2
+
+      // Calculate offset to move bounding box center to viewport center
+      const offsetX = viewportCenter.x - boundingBoxCenterX
+      const offsetY = viewportCenter.y - boundingBoxCenterY
+
       // Create ID mapping for nodes
       const idMapping = new Map<string, string>()
       const newNodes: Node[] = copyData.nodes.map(node => {
         const newId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         idMapping.set(node.id, newId)
         
+        const originalPos = node.position || { x: 0, y: 0 }
+        
         return {
           ...node,
           id: newId,
           position: {
-            x: snapToGrid(node.position.x + 50), // Offset by 50px and snap to grid
-            y: snapToGrid(node.position.y + 50)
+            x: snapToGrid(originalPos.x + offsetX),
+            y: snapToGrid(originalPos.y + offsetY)
           },
           selected: true, // Select the pasted nodes
           data: {
@@ -781,7 +832,34 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [copiedNodes, copiedEdges, setNodes, setEdges, snapToGrid])
 
-  // Keyboard shortcuts for copy/paste
+  // Duplicate selected nodes (for Cmd+D shortcut)
+  const duplicateSelectedNodes = useCallback(() => {
+    const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
+    if (selectedNodes.length === 0) return
+
+    const timestamp = Date.now()
+    const newNodes = selectedNodes.map((node, index) => {
+      const newNodeId = `node-${timestamp}-${index}`
+      return {
+        ...node,
+        id: newNodeId,
+        type: 'process', // Always set to Middle/process type
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50
+        },
+        data: {
+          ...node.data,
+          type: 'process' // Always set to Middle/process type
+        },
+        selected: false // Deselect the new nodes
+      }
+    })
+
+    setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
+  }, [nodes, setNodes])
+
+  // Keyboard shortcuts for copy/paste/duplicate
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isModifierPressed = event.metaKey || event.ctrlKey
@@ -805,11 +883,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             copySelectedNodes()
           }
         } else if (event.key === 'v' || event.key === 'V') {
-          // Only paste if there are selected nodes/edges (meaning we're focused on the diagram)
-          if (hasSelection) {
-            // Don't prevent default for paste - let pasteNodes decide if it should handle it
-            // This allows image paste handlers (like ImportJourneyImageModal) to work
-            pasteNodes()
+          // Always allow paste (works across browser tabs)
+          // Don't prevent default for paste - let pasteNodes decide if it should handle it
+          // This allows image paste handlers (like ImportJourneyImageModal) to work
+          pasteNodes()
+        } else if (event.key === 'd' || event.key === 'D') {
+          // Duplicate selected nodes (Cmd/Ctrl+D)
+          const hasSelectedNodesForDuplicate = nodes.some(node => node.selected && node.type !== 'highlightRegion')
+          if (hasSelectedNodesForDuplicate) {
+            event.preventDefault()
+            duplicateSelectedNodes()
           }
         }
       }
@@ -817,7 +900,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes, nodes, edges])
+  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, nodes, edges])
 
   // Track if we're currently dragging a connection
   const [isConnecting, setIsConnecting] = useState(false)
@@ -1827,60 +1910,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setShowDeleteConfirm(false)
     setNodeToDelete(null)
   }, [])
-
-  // Duplicate selected nodes (for Cmd+D shortcut)
-  const duplicateSelectedNodes = useCallback(() => {
-    const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
-    if (selectedNodes.length === 0) return
-
-    const timestamp = Date.now()
-    const newNodes = selectedNodes.map((node, index) => {
-      const newNodeId = `node-${timestamp}-${index}`
-      return {
-        ...node,
-        id: newNodeId,
-        type: 'process', // Always set to Middle/process type
-        position: {
-          x: node.position.x + 50,
-          y: node.position.y + 50
-        },
-        data: {
-          ...node.data,
-          type: 'process' // Always set to Middle/process type
-        },
-        selected: false // Deselect the new nodes
-      }
-    })
-
-    setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
-  }, [nodes, setNodes])
-
-  // Keyboard shortcut for duplicating selected nodes (Cmd+D)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isModifierPressed = event.metaKey || event.ctrlKey
-      
-      // Don't trigger if user is typing in an input field
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      // Check if any nodes are selected
-      const hasSelectedNodes = nodes.some(node => node.selected && node.type !== 'highlightRegion')
-      
-      if (isModifierPressed && (event.key === 'd' || event.key === 'D')) {
-        // Only duplicate if there are selected nodes
-        if (hasSelectedNodes) {
-          event.preventDefault()
-          duplicateSelectedNodes()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [duplicateSelectedNodes, nodes])
 
   // Keyboard shortcut for deleting selected nodes/edges (Delete or Backspace)
   useEffect(() => {
