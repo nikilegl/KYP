@@ -24,7 +24,7 @@ import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { OptionsMenu } from './DesignSystem/components/OptionsMenu'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
@@ -49,6 +49,11 @@ import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJour
 import { convertEmojis } from '../utils/emojiConverter'
 import { renderMarkdown } from '../utils/markdownRenderer'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
+import { HistorySection, type Comment } from './common/HistorySection'
+import { getUserJourneyComments, createUserJourneyComment, updateUserJourneyComment, deleteUserJourneyComment } from '../lib/database/services/userJourneyCommentService'
+import { getWorkspaceUsers } from '../lib/database'
+import { useAuth } from '../hooks/useAuth'
+import type { WorkspaceUser } from '../lib/supabase'
 
 // We need to define nodeTypes inside the component to access the handlers
 // This will be moved inside the component
@@ -215,6 +220,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([])
+  const [savingComment, setSavingComment] = useState(false)
+  const { user } = useAuth()
   
   // Undo state - stores snapshot before Tidy Up or AI Edit
   const [undoSnapshot, setUndoSnapshot] = useState<{
@@ -423,6 +433,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setPlatforms(platformsData)
       }
       
+      // Load workspace users for comments
+      const workspaceUsersData = await getWorkspaceUsers()
+      setWorkspaceUsers(workspaceUsersData)
+      
       // Check if there's an ID in the URL query params or path
       const urlJourneyId = searchParams.get('id')
       const urlProjectId = searchParams.get('projectId')
@@ -473,6 +487,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         // Load associated law firms
         const lawFirmIds = await getUserJourneyLawFirms(journey.id)
         setSelectedLawFirmIds(lawFirmIds)
+        
+        // Load comments if journey exists
+        try {
+          const commentsData = await getUserJourneyComments(journey.id)
+          setComments(commentsData.map(c => ({
+            id: c.id,
+            user_id: c.user_id,
+            comment_text: c.comment_text,
+            created_at: c.created_at,
+            updated_at: c.updated_at
+          })))
+        } catch (error) {
+          console.error('Error loading comments:', error)
+          setComments([])
+        }
         
         if (journey.flow_data) {
           // Ensure nodes are selectable
@@ -874,7 +903,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
   }, [nodes, setNodes])
 
-  // Keyboard shortcuts for copy/paste/duplicate
+  // Keyboard shortcuts for copy/paste/duplicate and comments toggle
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isModifierPressed = event.metaKey || event.ctrlKey
@@ -889,6 +918,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const hasSelectedNodes = nodes.some(node => node.selected)
       const hasSelectedEdges = edges.some(edge => edge.selected)
       const hasSelection = hasSelectedNodes || hasSelectedEdges
+
+      // Handle 'C' key without modifiers to toggle comments panel
+      if ((event.key === 'c' || event.key === 'C') && !isModifierPressed && !event.shiftKey && !event.altKey) {
+        event.preventDefault()
+        setShowComments(!showComments)
+        return
+      }
 
       if (isModifierPressed) {
         if (event.key === 'c' || event.key === 'C') {
@@ -915,7 +951,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, nodes, edges])
+  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, nodes, edges, showComments])
 
   // Track if we're currently dragging a connection
   const [isConnecting, setIsConnecting] = useState(false)
@@ -3239,6 +3275,67 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     ),
   }), [configureNode, thirdParties, platforms, configureRegion])
 
+  // Comment handlers
+  const handleAddComment = useCallback(async (commentText: string) => {
+    if (!currentJourneyId || !user) return
+    
+    setSavingComment(true)
+    try {
+      const newComment = await createUserJourneyComment(currentJourneyId, commentText, user.id)
+      if (newComment) {
+        setComments(prev => [{
+          id: newComment.id,
+          user_id: newComment.user_id,
+          comment_text: newComment.comment_text,
+          created_at: newComment.created_at,
+          updated_at: newComment.updated_at
+        }, ...prev])
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error)
+    } finally {
+      setSavingComment(false)
+    }
+  }, [currentJourneyId, user])
+
+  const handleEditComment = useCallback(async (commentId: string, commentText: string) => {
+    setSavingComment(true)
+    try {
+      const updatedComment = await updateUserJourneyComment(commentId, commentText)
+      if (updatedComment) {
+        setComments(prev => prev.map(c => 
+          c.id === commentId 
+            ? {
+                id: updatedComment.id,
+                user_id: updatedComment.user_id,
+                comment_text: updatedComment.comment_text,
+                created_at: updatedComment.created_at,
+                updated_at: updatedComment.updated_at
+              }
+            : c
+        ))
+      }
+    } catch (error) {
+      console.error('Error editing comment:', error)
+    } finally {
+      setSavingComment(false)
+    }
+  }, [])
+
+  const handleDeleteComment = useCallback(async (commentId: string) => {
+    setSavingComment(true)
+    try {
+      const success = await deleteUserJourneyComment(commentId)
+      if (success) {
+        setComments(prev => prev.filter(c => c.id !== commentId))
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+    } finally {
+      setSavingComment(false)
+    }
+  }, [])
+
   if (loading) {
     return (
       <div className="flex-1 p-6 flex items-center justify-center">
@@ -3250,9 +3347,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative h-full">
       {/* Header */}
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-6 p-6 pb-0 flex-shrink-0">
         {/* Row 1: Back button and Unsaved changes */}
         <div className="flex items-center justify-between">
           <Button
@@ -3395,9 +3492,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </div>
       </div>
 
-      {/* React Flow Canvas */}
-      <div className="flex-1 bg-white rounded-lg border overflow-hidden" style={{ minHeight: 0 }}>
-        <ReactFlow
+      {/* Content with React Flow and Comments Panel */}
+      <div className="flex-1 flex overflow-hidden relative" style={{ minHeight: 0 }}>
+        {/* React Flow Canvas */}
+        <div className={`flex-1 bg-white rounded-lg border overflow-hidden transition-all duration-300 mx-6 mb-6 ${showComments ? 'mr-0' : ''}`} style={{ minHeight: 0 }}>
+          <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
@@ -3483,7 +3582,42 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             </div>
           </Panel>
         </ReactFlow>
+        </div>
+
+        {/* History Column - Full Height */}
+        {currentJourneyId && (
+          <div className="absolute top-0 right-0 bottom-0 z-40">
+            <HistorySection
+              entityId={currentJourneyId}
+              entityType="user journey"
+              comments={comments}
+              decisions={[]}
+              auditHistory={[]}
+              user={user}
+              allUsers={workspaceUsers}
+              showHistory={showComments}
+              onAddComment={handleAddComment}
+              onEditComment={handleEditComment}
+              onDeleteComment={handleDeleteComment}
+              saving={savingComment}
+              className="h-full"
+            />
+          </div>
+        )}
       </div>
+
+      {/* Toggle Comments Button - only show if journey exists */}
+      {currentJourneyId && (
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
+            showComments ? 'right-[384px]' : 'right-0'
+          }`}
+          title={showComments ? 'Hide history' : 'Show history (Press C)'}
+        >
+          {showComments ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+        </button>
+      )}
 
       {/* Edit Node Modal */}
       <EditNodeModal

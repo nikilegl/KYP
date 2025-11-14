@@ -365,9 +365,9 @@ export function HistorySection({
   }
 
   return (
-    <div className={`flex-shrink-0 h-full transition-all duration-300 ease-in-out border-l border-gray-200 bg-white ${
+    <div className={`flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-200 bg-white ${
       showHistory ? 'w-96' : 'w-0'
-    } ${className}`}>
+    } ${className}`} style={{ height: '100%' }}>
       {showHistory && (
         <div className="w-96 overflow-hidden">
           <div className="bg-white p-6 h-full overflow-y-auto">

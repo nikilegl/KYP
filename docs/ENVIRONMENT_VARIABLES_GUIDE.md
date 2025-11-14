@@ -59,3 +59,4 @@ After deploying the updated function with logging:
 If `hasServiceKey: false`, set it manually in Dashboard.
 
 
+
