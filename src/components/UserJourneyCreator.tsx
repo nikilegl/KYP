@@ -48,6 +48,7 @@ import { calculateVerticalJourneyLayout } from '../lib/services/verticalJourneyL
 import { calculateHorizontalJourneyLayout } from '../lib/services/horizontalJourneyLayoutCalculator'
 import { convertEmojis } from '../utils/emojiConverter'
 import { renderMarkdown } from '../utils/markdownRenderer'
+import html2canvas from 'html2canvas'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
 
 // We need to define nodeTypes inside the component to access the handlers
@@ -1178,6 +1179,146 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     linkElement.setAttribute('download', exportFileDefaultName)
     linkElement.click()
   }, [journeyName, journeyDescription, nodes, edges])
+
+  // Export journey as JPG
+  const exportToJPG = useCallback(async () => {
+    const reactFlowInstance = reactFlowInstanceRef.current
+    if (!reactFlowInstance) {
+      console.error('React Flow instance not available')
+      return
+    }
+
+    try {
+      // Find the React Flow canvas container (excludes header with buttons/title)
+      const reactFlowContainer = document.querySelector('#react-flow-canvas-container') as HTMLElement
+      if (!reactFlowContainer) {
+        console.error('React Flow container not found')
+        return
+      }
+
+      // Find the actual React Flow element inside the container
+      const reactFlowElement = reactFlowContainer.querySelector('.react-flow') as HTMLElement
+      if (!reactFlowElement) {
+        console.error('React Flow element not found')
+        return
+      }
+
+      // Store original viewport
+      const originalViewport = reactFlowInstance.getViewport()
+      
+      // Calculate bounds of all nodes
+      const nodesBounds = reactFlowInstance.getNodesBounds(nodes.filter(n => n.type !== 'highlightRegion'))
+      
+      if (!nodesBounds) {
+        console.error('Could not calculate node bounds')
+        return
+      }
+
+      // Hide controls, minimap, attribution, and Panel buttons for cleaner export
+      const controls = reactFlowContainer.querySelector('.react-flow__controls') as HTMLElement
+      const minimap = reactFlowContainer.querySelector('.react-flow__minimap') as HTMLElement
+      const attribution = reactFlowContainer.querySelector('.react-flow__attribution') as HTMLElement
+      
+      // Find Panel buttons - React Flow renders Panel as a div with position classes
+      const allPanels = reactFlowContainer.querySelectorAll('[class*="react-flow__panel"]') as NodeListOf<HTMLElement>
+      const panelButtons = reactFlowContainer.querySelector('.react-flow-export-panel') as HTMLElement
+      const tidyUpButton = Array.from(reactFlowContainer.querySelectorAll('button')).find(
+        btn => btn.textContent?.includes('Tidy Up')
+      ) as HTMLElement
+      const editButton = Array.from(reactFlowContainer.querySelectorAll('button')).find(
+        btn => btn.textContent?.includes('Edit') && !btn.textContent?.includes('Tidy')
+      ) as HTMLElement
+      const addNodeButton = Array.from(reactFlowContainer.querySelectorAll('button')).find(
+        btn => btn.textContent?.includes('Add Node')
+      ) as HTMLElement
+      const addRegionButton = Array.from(reactFlowContainer.querySelectorAll('button')).find(
+        btn => btn.textContent?.includes('Add Region')
+      ) as HTMLElement
+      
+      const controlsVisible = controls?.style.display !== 'none'
+      const minimapVisible = minimap?.style.display !== 'none'
+      const attributionVisible = attribution?.style.display !== 'none'
+      const panelVisible = panelButtons?.style.display !== 'none'
+
+      if (controls) controls.style.display = 'none'
+      if (minimap) minimap.style.display = 'none'
+      if (attribution) attribution.style.display = 'none'
+      if (panelButtons) panelButtons.style.display = 'none'
+      allPanels.forEach(panel => {
+        if (panel) panel.style.display = 'none'
+      })
+      if (tidyUpButton) tidyUpButton.style.display = 'none'
+      if (editButton) editButton.style.display = 'none'
+      if (addNodeButton) addNodeButton.style.display = 'none'
+      if (addRegionButton) addRegionButton.style.display = 'none'
+
+      // Calculate optimal zoom to maximize node size while fitting all nodes
+      const padding = 50
+      const diagramWidth = nodesBounds.width + (padding * 2)
+      const diagramHeight = nodesBounds.height + (padding * 2)
+      
+      const viewportWidth = reactFlowContainer.offsetWidth
+      const viewportHeight = reactFlowContainer.offsetHeight
+      
+      const zoomForWidth = (viewportWidth - (padding * 2)) / diagramWidth
+      const zoomForHeight = (viewportHeight - (padding * 2)) / diagramHeight
+      
+      const optimalZoom = Math.min(zoomForWidth, zoomForHeight, 3.0)
+      
+      const centerX = nodesBounds.x + (nodesBounds.width / 2)
+      const centerY = nodesBounds.y + (nodesBounds.height / 2)
+      
+      const viewportX = (viewportWidth / 2) - (centerX * optimalZoom)
+      const viewportY = (viewportHeight / 2) - (centerY * optimalZoom)
+      
+      reactFlowInstance.setViewport(viewportX, viewportY, optimalZoom)
+
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const captureScale = 2
+      
+      const canvas = await html2canvas(reactFlowElement, {
+        backgroundColor: '#ffffff',
+        scale: captureScale,
+        useCORS: true,
+        logging: false,
+        width: reactFlowElement.offsetWidth,
+        height: reactFlowElement.offsetHeight,
+      })
+
+      // Restore UI elements
+      if (controls && controlsVisible) controls.style.display = ''
+      if (minimap && minimapVisible) minimap.style.display = ''
+      if (attribution && attributionVisible) attribution.style.display = ''
+      if (panelButtons && panelVisible) panelButtons.style.display = ''
+      allPanels.forEach(panel => {
+        if (panel && panelVisible) panel.style.display = ''
+      })
+      if (tidyUpButton && panelVisible) tidyUpButton.style.display = ''
+      if (editButton && panelVisible) editButton.style.display = ''
+      if (addNodeButton && panelVisible) addNodeButton.style.display = ''
+      if (addRegionButton && panelVisible) addRegionButton.style.display = ''
+
+      reactFlowInstance.setViewport(originalViewport.x, originalViewport.y, originalViewport.zoom)
+
+      // Convert canvas to JPG and download (quality 0.92 for good balance)
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          console.error('Failed to create blob')
+          return
+        }
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${(journeyName || 'user-journey').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.jpg`
+        link.click()
+        URL.revokeObjectURL(url)
+      }, 'image/jpeg', 0.92)
+    } catch (error) {
+      console.error('Error exporting to JPG:', error)
+      alert('Failed to export JPG. Please try again.')
+    }
+  }, [journeyName, nodes, reactFlowInstanceRef])
 
   // Import journey from pasted JSON text
   const handleImportFromJson = useCallback(() => {
@@ -3380,6 +3521,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <OptionsMenu
               items={[
                 {
+                  label: 'Export as JPG',
+                  icon: Download,
+                  onClick: exportToJPG
+                },
+                {
                   label: 'Export as JSON',
                   icon: Download,
                   onClick: exportJourney
@@ -3396,7 +3542,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       </div>
 
       {/* React Flow Canvas */}
-      <div className="flex-1 bg-white rounded-lg border overflow-hidden" style={{ minHeight: 0 }}>
+      <div id="react-flow-canvas-container" className="flex-1 bg-white rounded-lg border overflow-hidden" style={{ minHeight: 0 }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -3444,7 +3590,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             bgColor="#e5e7eb"
           />
           <KeyboardZoomHandler />
-          <Panel position="top-right">
+          <Panel position="top-right" className="react-flow-export-panel">
             <div className="flex gap-2">
               <Button
                 variant="outline"
