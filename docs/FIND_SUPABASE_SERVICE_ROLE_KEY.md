@@ -47,3 +47,4 @@ Edge functions should automatically have these variables. To verify:
 - ❌ **NEVER**: Expose service_role key in client-side code or `.env` files that are committed to git
 
 
+

@@ -49,8 +49,8 @@ export function PublicUserJourneyView() {
         }
 
         const journeyShortId = parseInt(shortId)
-        // Pass onlyPublished: true to only fetch published journeys for public access
-        const journey = await getUserJourneyByShortId(journeyShortId, true)
+        // Fetch journey by short_id (both personal and shared journeys can be accessed via public link)
+        const journey = await getUserJourneyByShortId(journeyShortId, false)
 
         if (!journey) {
           setError('Journey not found')
@@ -58,8 +58,8 @@ export function PublicUserJourneyView() {
           return
         }
 
-        // Check if journey is published (only published journeys can be viewed publicly)
-        if (journey.status !== 'published') {
+        // Both personal and shared journeys can be viewed via public link
+        if (journey.status !== 'personal' && journey.status !== 'shared') {
           setError('This journey is not publicly available')
           setLoading(false)
           return

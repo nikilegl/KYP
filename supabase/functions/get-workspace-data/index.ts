@@ -132,19 +132,19 @@ serve(async (req) => {
         : Promise.resolve({ data: [], error: null })
     ])
 
-    // Filter user journeys: show published to all, drafts only to creator
+    // Filter user journeys: show shared to all, personal only to creator
     let filteredUserJourneys = userJourneys.data || []
     if (userId) {
-      // For Auth0 users, userId is null, so show all published journeys
+      // For Auth0 users, userId is null, so show all shared journeys
       filteredUserJourneys = filteredUserJourneys.filter((journey: any) => {
-        if (journey.status === 'published') return true
-        if (journey.status === 'draft') return journey.created_by === userId
+        if (journey.status === 'shared') return true
+        if (journey.status === 'personal') return journey.created_by === userId
         return true // No status = show all
       })
     } else {
-      // Auth0 user: show all published, filter drafts by email match in created_by
+      // Auth0 user: show all shared, filter personal by email match in created_by
       filteredUserJourneys = filteredUserJourneys.filter((journey: any) => {
-        if (journey.status === 'published') return true
+        if (journey.status === 'shared') return true
         // For Auth0 users, created_by might be the Auth0 user ID (google-oauth2|...)
         // We can't match it perfectly, so show all for now
         return true

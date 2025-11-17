@@ -8,7 +8,7 @@ export interface UserJourney {
   name: string
   description?: string
   layout?: 'vertical' | 'horizontal'
-  status?: 'draft' | 'published'
+  status?: 'personal' | 'shared'
   flow_data?: {
     nodes: Node[]
     edges: Edge[]
@@ -76,17 +76,17 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
 
     if (error) throw error
     
-    // If user is owner/admin, show all journeys (including drafts by others)
+    // If user is owner/admin, show all journeys (including personal journeys by others)
     if (isOwnerOrAdmin) {
       return data || []
     }
     
-    // Filter results: show published journeys to all, but draft journeys only to creator
+    // Filter results: show shared journeys to all, but personal journeys only to creator
     const filteredData = (data || []).filter(journey => {
-      // If published, show to everyone
-      if (journey.status === 'published') return true
-      // If draft, only show to creator
-      if (journey.status === 'draft') return journey.created_by === currentUserId
+      // If shared, show to everyone
+      if (journey.status === 'shared') return true
+      // If personal, only show to creator
+      if (journey.status === 'personal') return journey.created_by === currentUserId
       // Default to showing if no status (for backwards compatibility)
       return true
     })
@@ -166,7 +166,7 @@ export const getUserJourneyByShortId = async (
           }
         })
       const journey = allJourneys.find((j: UserJourney) => j.short_id === shortId)
-      if (journey && onlyPublished && journey.status !== 'published') {
+      if (journey && onlyPublished && journey.status !== 'shared') {
         return null
       }
       return journey || null
@@ -182,9 +182,10 @@ export const getUserJourneyByShortId = async (
       .select('*')
       .eq('short_id', shortId)
     
-    // Only filter by published status if onlyPublished is true (for public access)
+    // Only filter by shared status if onlyPublished is true (for workspace visibility)
+    // Note: Both personal and shared journeys can be accessed via public link
     if (onlyPublished) {
-      query = query.eq('status', 'published')
+      query = query.eq('status', 'shared')
     }
     
     const { data, error } = await query.single()
@@ -275,7 +276,7 @@ export const updateUserJourney = async (
     name?: string
     description?: string
     layout?: 'vertical' | 'horizontal'
-    status?: 'draft' | 'published'
+    status?: 'personal' | 'shared'
     flow_data?: { nodes: Node[]; edges: Edge[] }
     project_id?: string | null
   }
