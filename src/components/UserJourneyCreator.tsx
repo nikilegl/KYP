@@ -114,6 +114,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
   const duplicateNodeIdRef = useRef<string | null>(null) // Track the duplicate node ID during drag
   
+  // Track Space key state for panning mode
+  const isSpacePressedRef = useRef(false)
+  const [isSpacePressed, setIsSpacePressed] = useState(false)
+  
   // Custom onNodesChange that intercepts Alt+drag to keep original node locked
   const onNodesChange = useCallback((changes: any[]) => {
     // If Alt+drag is active, intercept position changes
@@ -2097,17 +2101,35 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Add new highlight region
   const addHighlightRegion = useCallback(() => {
+    // Get the React Flow instance to access viewport utilities
+    const reactFlowInstance = reactFlowInstanceRef.current
+    if (!reactFlowInstance) {
+      console.error('React Flow instance not available')
+      return
+    }
+
+    // Get viewport center in flow coordinates
+    const viewportCenter = reactFlowInstance.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2
+    })
+
+    const regionWidth = 600
+    const regionHeight = 400
+
+    // Center the region at the viewport center
+    // Position is top-left corner, so subtract half width/height
     const newRegionId = `region-${Date.now()}`
     const newRegion: Node = {
       id: newRegionId,
       type: 'highlightRegion',
       position: { 
-        x: snapToGrid(100), 
-        y: snapToGrid(100) 
+        x: snapToGrid(viewportCenter.x - regionWidth / 2), 
+        y: snapToGrid(viewportCenter.y - regionHeight / 2) 
       },
       style: {
-        width: 600,
-        height: 400,
+        width: regionWidth,
+        height: regionHeight,
         zIndex: -1, // Render behind regular nodes
       },
       data: {
@@ -2180,6 +2202,54 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       window.removeEventListener('keyup', handleKeyUp)
     }
   }, [])
+
+  // Monitor Space key state for panning mode
+  useEffect(() => {
+    const handleSpaceKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault()
+        isSpacePressedRef.current = true
+        setIsSpacePressed(true)
+      }
+    }
+    
+    const handleSpaceKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault()
+        isSpacePressedRef.current = false
+        setIsSpacePressed(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleSpaceKeyDown)
+    window.addEventListener('keyup', handleSpaceKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleSpaceKeyDown)
+      window.removeEventListener('keyup', handleSpaceKeyUp)
+    }
+  }, [])
+
+  // Update region nodes' draggable property based on space bar state
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.type === 'highlightRegion') {
+          return {
+            ...node,
+            draggable: !isSpacePressed
+          }
+        }
+        return node
+      })
+    )
+  }, [isSpacePressed, setNodes])
 
   const onNodeDragStart = useCallback((_event: any, node: Node) => {
     // Store original position when drag starts
@@ -3520,11 +3590,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           connectionMode={ConnectionMode.Loose}
           fitView
           attributionPosition="bottom-left"
-          nodesDraggable={true}
+          nodesDraggable={!isSpacePressed}
           nodesConnectable={true}
           nodesFocusable={true}
           elementsSelectable={true}
-          selectNodesOnDrag={true}
+          selectNodesOnDrag={!isSpacePressed}
+          panOnSpace={true}
           multiSelectionKeyCode="Shift"
           deleteKeyCode={null}
           edgesReconnectable={true}

@@ -552,6 +552,7 @@ export function EditNodeModal({
       onClose={onClose}
       title={isAddingNewNode ? 'Add Node' : 'Edit Node'}
       size="lg"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex justify-between items-center">
           {/* Delete button on the left - only show when editing existing node */}
