@@ -2101,17 +2101,35 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Add new highlight region
   const addHighlightRegion = useCallback(() => {
+    // Get the React Flow instance to access viewport utilities
+    const reactFlowInstance = reactFlowInstanceRef.current
+    if (!reactFlowInstance) {
+      console.error('React Flow instance not available')
+      return
+    }
+
+    // Get viewport center in flow coordinates
+    const viewportCenter = reactFlowInstance.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2
+    })
+
+    const regionWidth = 600
+    const regionHeight = 400
+
+    // Center the region at the viewport center
+    // Position is top-left corner, so subtract half width/height
     const newRegionId = `region-${Date.now()}`
     const newRegion: Node = {
       id: newRegionId,
       type: 'highlightRegion',
       position: { 
-        x: snapToGrid(100), 
-        y: snapToGrid(100) 
+        x: snapToGrid(viewportCenter.x - regionWidth / 2), 
+        y: snapToGrid(viewportCenter.y - regionHeight / 2) 
       },
       style: {
-        width: 600,
-        height: 400,
+        width: regionWidth,
+        height: regionHeight,
         zIndex: -1, // Render behind regular nodes
       },
       data: {
