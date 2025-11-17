@@ -62,14 +62,14 @@ const columns: Column<TableItem>[] = [
           </span>
         )
       } else {
-        const status = item.data.status || 'draft'
+        const status = item.data.status || 'personal'
         return (
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            status === 'published' 
+            status === 'shared' 
               ? 'bg-green-100 text-green-800' 
-              : 'bg-gray-100 text-gray-800'
+              : 'bg-yellow-100 text-yellow-800'
           }`}>
-            {status === 'published' ? 'Published' : 'Draft'}
+            {status === 'shared' ? 'Shared' : 'Personal'}
           </span>
         )
       }

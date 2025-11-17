@@ -243,7 +243,7 @@ export interface UserJourney {
   folder_id?: string | null
   name: string
   layout?: 'vertical' | 'horizontal'
-  status?: 'draft' | 'published'
+  status?: 'personal' | 'shared'
   short_id: number
   created_at: string
   updated_at: string

@@ -13,7 +13,7 @@ interface EditJourneyModalProps {
   journeyName: string
   journeyDescription: string
   journeyLayout: 'vertical' | 'horizontal'
-  journeyStatus: 'draft' | 'published'
+  journeyStatus: 'personal' | 'shared'
   selectedProjectId: string
   selectedLawFirmIds: string[]
   lawFirmSearchQuery: string
@@ -22,7 +22,7 @@ interface EditJourneyModalProps {
   onNameChange: (name: string) => void
   onDescriptionChange: (description: string) => void
   onLayoutChange: (layout: 'vertical' | 'horizontal') => void
-  onStatusChange: (status: 'draft' | 'published') => void
+  onStatusChange: (status: 'personal' | 'shared') => void
   onProjectChange: (projectId: string) => void
   onLawFirmSearchChange: (query: string) => void
   onLawFirmToggle: (firmId: string, checked: boolean) => void
@@ -175,20 +175,20 @@ export function EditJourneyModal({
             Status
           </label>
           <p className="text-sm text-gray-500 mb-3">
-            Publish to make this journey accessible to everyone in Legl
+            Share to make this journey accessible to everyone in Legl
           </p>
           <label className="flex items-center gap-3 cursor-pointer">
             <div className="relative">
               <input
                 type="checkbox"
-                checked={journeyStatus === 'published'}
-                onChange={(e) => onStatusChange(e.target.checked ? 'published' : 'draft')}
+                checked={journeyStatus === 'shared'}
+                onChange={(e) => onStatusChange(e.target.checked ? 'shared' : 'personal')}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </div>
             <span className="text-sm font-medium text-gray-700">
-              {journeyStatus === 'published' ? 'Published' : 'Draft'}
+              {journeyStatus === 'shared' ? 'Shared' : 'Personal'}
             </span>
           </label>
         </div>

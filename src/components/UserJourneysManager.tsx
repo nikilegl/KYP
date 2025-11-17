@@ -663,12 +663,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   }
 
   const handleCopyLink = async (journey: UserJourneyWithProject) => {
-    if (journey.status !== 'published') {
-      alert('Only published journeys can be shared via link.')
-      return
-    }
-
-    const url = `${window.location.origin}/user-journey/${journey.short_id}`
+    const url = `${window.location.origin}/public/user-journey/${journey.short_id}`
     try {
       await navigator.clipboard.writeText(url)
       setContextMenu(null)
@@ -873,14 +868,14 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             </span>
           )
         } else {
-          const status = item.data.status || 'draft'
+          const status = item.data.status || 'personal'
           return (
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              status === 'published' 
+              status === 'shared' 
                 ? 'bg-green-100 text-green-800' 
-                : 'bg-gray-100 text-gray-800'
+                : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {status === 'published' ? 'Published' : 'Draft'}
+              {status === 'shared' ? 'Shared' : 'Personal'}
             </span>
           )
         }

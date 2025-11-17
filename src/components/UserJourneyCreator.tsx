@@ -172,7 +172,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [journeyLayout, setJourneyLayout] = useState<'vertical' | 'horizontal'>('vertical')
-  const [journeyStatus, setJourneyStatus] = useState<'draft' | 'published'>('draft')
+  const [journeyStatus, setJourneyStatus] = useState<'personal' | 'shared'>('personal')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -468,7 +468,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setJourneyName(journey.name)
         setJourneyDescription(journey.description || '')
         setJourneyLayout(journey.layout || 'vertical')
-        setJourneyStatus(journey.status || 'draft')
+        setJourneyStatus(journey.status || 'personal')
         setSelectedProjectId(journey.project_id || '')
         
         // Load folder if journey belongs to one
@@ -3394,11 +3394,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
               
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                journeyStatus === 'published' 
+                journeyStatus === 'shared' 
                   ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-800'
+                  : 'bg-yellow-100 text-yellow-800'
               }`}>
-                {journeyStatus === 'published' ? 'Published' : 'Draft'}
+                {journeyStatus === 'shared' ? 'Shared' : 'Personal'}
               </span>
               
               <button
@@ -3461,8 +3461,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             )}
           </Button>
 
-          {/* Share Button - only show if journey is saved and published */}
-          {currentJourneyId && journeyStatus === 'published' && (
+          {/* Share Button - show if journey is saved */}
+          {currentJourneyId && (
             <Button
               variant="outline"
               onClick={() => setShowShareModal(true)}
@@ -4321,7 +4321,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             </div>
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Only published journeys can be shared publicly. This journey is currently published.
+                <strong>Note:</strong> Anyone with this link can view this journey (no login required). This journey is currently {journeyStatus === 'shared' ? 'shared' : 'personal'}.
               </p>
             </div>
           </div>
