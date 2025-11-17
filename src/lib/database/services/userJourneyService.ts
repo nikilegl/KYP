@@ -9,6 +9,7 @@ export interface UserJourney {
   description?: string
   layout?: 'vertical' | 'horizontal'
   status?: 'personal' | 'shared'
+  archived?: boolean
   flow_data?: {
     nodes: Node[]
     edges: Edge[]
@@ -20,17 +21,19 @@ export interface UserJourney {
   short_id?: number
 }
 
-export const getUserJourneys = async (projectId?: string | null): Promise<UserJourney[]> => {
+export const getUserJourneys = async (projectId?: string | null, includeArchived: boolean = false): Promise<UserJourney[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
       if (projectId) {
         const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
-        return stored ? JSON.parse(stored) : []
+        const journeys = stored ? JSON.parse(stored) : []
+        return includeArchived ? journeys : journeys.filter((j: UserJourney) => !j.archived)
       } else {
         // Get all journeys
         const stored = localStorage.getItem('kyp_user_journeys_all')
-        return stored ? JSON.parse(stored) : []
+        const journeys = stored ? JSON.parse(stored) : []
+        return includeArchived ? journeys : journeys.filter((j: UserJourney) => !j.archived)
       }
     } catch {
       return []
@@ -72,6 +75,11 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
       query = query.eq('project_id', projectId)
     }
 
+    // Filter archived journeys unless explicitly including them
+    if (!includeArchived) {
+      query = query.eq('archived', false)
+    }
+
     const { data, error } = await query
 
     if (error) throw error
@@ -99,10 +107,12 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
     try {
       if (projectId) {
         const stored = localStorage.getItem(`kyp_user_journeys_${projectId}`)
-        return stored ? JSON.parse(stored) : []
+        const journeys = stored ? JSON.parse(stored) : []
+        return includeArchived ? journeys : journeys.filter((j: UserJourney) => !j.archived)
       } else {
         const stored = localStorage.getItem('kyp_user_journeys_all')
-        return stored ? JSON.parse(stored) : []
+        const journeys = stored ? JSON.parse(stored) : []
+        return includeArchived ? journeys : journeys.filter((j: UserJourney) => !j.archived)
       }
     } catch (fallbackError) {
       console.error('Local storage fallback also failed:', fallbackError)
@@ -328,6 +338,102 @@ export const updateUserJourney = async (
   } catch (error) {
     console.error('Error updating user journey:', error)
     return null
+  }
+}
+
+export const archiveUserJourney = async (journeyId: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      const allKeys = Object.keys(localStorage).filter(key => key.startsWith('kyp_user_journeys_'))
+      
+      for (const key of allKeys) {
+        const stored = localStorage.getItem(key)
+        const journeys = stored ? JSON.parse(stored) : []
+        const journeyIndex = journeys.findIndex((j: UserJourney) => j.id === journeyId)
+        
+        if (journeyIndex !== -1) {
+          journeys[journeyIndex] = {
+            ...journeys[journeyIndex],
+            archived: true,
+            updated_at: new Date().toISOString()
+          }
+          localStorage.setItem(key, JSON.stringify(journeys))
+          return true
+        }
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const { error } = await supabase
+      .from('user_journeys')
+      .update({
+        archived: true,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null
+      })
+      .eq('id', journeyId)
+
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.error('Error archiving user journey:', error)
+    return false
+  }
+}
+
+export const unarchiveUserJourney = async (journeyId: string): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) {
+    // Local storage fallback
+    try {
+      const allKeys = Object.keys(localStorage).filter(key => key.startsWith('kyp_user_journeys_'))
+      
+      for (const key of allKeys) {
+        const stored = localStorage.getItem(key)
+        const journeys = stored ? JSON.parse(stored) : []
+        const journeyIndex = journeys.findIndex((j: UserJourney) => j.id === journeyId)
+        
+        if (journeyIndex !== -1) {
+          journeys[journeyIndex] = {
+            ...journeys[journeyIndex],
+            archived: false,
+            updated_at: new Date().toISOString()
+          }
+          localStorage.setItem(key, JSON.stringify(journeys))
+          return true
+        }
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const { error } = await supabase
+      .from('user_journeys')
+      .update({
+        archived: false,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null
+      })
+      .eq('id', journeyId)
+
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.error('Error unarchiving user journey:', error)
+    return false
   }
 }
 

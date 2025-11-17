@@ -238,6 +238,7 @@ export interface ProjectStakeholder {
 }
 
 export interface UserJourney {
+  archived?: boolean
   id: string
   project_id: string
   folder_id?: string | null

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { Plus, Search, Edit, Trash2, Copy, FolderOpen, ChevronRight, Link as LinkIcon, Move } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
@@ -8,6 +8,7 @@ import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { EditJourneyModal } from './EditJourneyModal'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
+import { archiveUserJourney, unarchiveUserJourney } from '../lib/database/services/userJourneyService'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
 import { getUserJourneyFolders, assignUserJourneysToFolder, moveFolderToParent, countJourneysInFolder, updateUserJourneyFolder, deleteUserJourneyFolder, createUserJourneyFolder, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
@@ -58,6 +59,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [showArchived, setShowArchived] = useState(false)
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [folderPath, setFolderPath] = useState<UserJourneyFolder[]>([])
   const [draggedItem, setDraggedItem] = useState<{ type: 'journey' | 'folder', id: string } | null>(null)
@@ -113,10 +115,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   })
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
 
-  // Load projects and journeys on mount and when folder slug changes
+  // Load projects and journeys on mount, when folder slug changes, or when showArchived changes
   useEffect(() => {
     loadData()
-  }, [])
+  }, [showArchived])
 
   // Update current folder when URL slug changes
   useEffect(() => {
@@ -204,7 +206,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       setLawFirms(lawFirmsData)
 
       // Load all journeys (including those without projects)
-      const allJourneys = await getUserJourneys()
+      // Include archived journeys if showArchived is true
+      const allJourneys = await getUserJourneys(projectId || null, showArchived)
       
       // Get unique user IDs from created_by and updated_by (journeys and folders)
       const userIds = new Set<string>()
@@ -292,9 +295,24 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   )
 
   // Get journeys at current level (for navigation)
-  const currentLevelJourneys = userJourneys.filter(journey =>
-    journey.folder_id === currentFolderId
-  )
+  // When showing archived, show all archived journeys regardless of folder
+  // When not showing archived, filter by folder and ensure not archived
+  const currentLevelJourneys = userJourneys.filter(journey => {
+    const isArchived = journey.archived === true
+    
+    if (showArchived) {
+      // Show archived journeys - all of them at top level (currentFolderId === null)
+      // When at top level, show all archived journeys regardless of folder
+      if (currentFolderId === null) {
+        return isArchived
+      }
+      // When in a folder, show archived journeys in that folder
+      return isArchived && journey.folder_id === currentFolderId
+    } else {
+      // Show non-archived journeys in current folder
+      return !isArchived && journey.folder_id === currentFolderId
+    }
+  })
 
   // Build path from root to current folder
   const buildFolderPath = (folderId: string | null): UserJourneyFolder[] => {
@@ -313,15 +331,29 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   }
 
   // Filter and combine folders + journeys for table display
-  const filteredTableItems: TableItem[] = (() => {
+  const filteredTableItems: TableItem[] = useMemo(() => {
     // If searching, show all matching items regardless of folder
     if (searchTerm) {
       const searchWithEmojis = emoji.emojify(searchTerm)
       const searchLower = searchWithEmojis.toLowerCase()
       
       const matchingJourneys = userJourneys.filter(journey => {
-        const matchesSearch = journey.name.toLowerCase().includes(searchLower) ||
-                             (journey.description && journey.description.toLowerCase().includes(searchLower))
+        // Search by journey name and description
+        const matchesJourneyName = journey.name.toLowerCase().includes(searchLower)
+        const matchesDescription = journey.description && journey.description.toLowerCase().includes(searchLower)
+        
+        // Search by created user name or email
+        const createdByUser = journey.createdByUser
+        const matchesCreatedBy = createdByUser && (
+          (createdByUser.full_name && createdByUser.full_name.toLowerCase().includes(searchLower)) ||
+          (createdByUser.email && createdByUser.email.toLowerCase().includes(searchLower))
+        )
+        
+        const matchesSearch = matchesJourneyName || matchesDescription || matchesCreatedBy || false
+        
+        // Apply archived filter
+        const isArchived = journey.archived === true
+        const matchesArchived = showArchived ? isArchived : !isArchived
         
         // Apply project filter
         let matchesProject = true
@@ -333,8 +365,13 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                           journey.project_id === projectFilter
         }
         
-        return matchesSearch && matchesProject
+        return matchesSearch && matchesProject && matchesArchived
       }).map(journey => ({ type: 'journey' as const, data: journey }))
+
+      // Don't show folders when viewing archived journeys
+      if (showArchived) {
+        return matchingJourneys
+      }
 
       const matchingFolders = folders.filter(folder =>
         folder.name.toLowerCase().includes(searchLower)
@@ -351,7 +388,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }
 
     // Normal navigation mode - show current level only
-    const folderItems: TableItem[] = currentLevelFolders.map(folder => ({
+    // Don't show folders when viewing archived journeys
+    const folderItems: TableItem[] = showArchived ? [] : currentLevelFolders.map(folder => ({
       type: 'folder',
       data: { 
         ...folder, 
@@ -361,6 +399,12 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }))
 
     const journeyItems: TableItem[] = currentLevelJourneys.filter(journey => {
+      // Apply archived filter (should already be filtered in currentLevelJourneys, but double-check)
+      const isArchived = journey.archived === true
+      const matchesArchived = showArchived ? isArchived : !isArchived
+      
+      if (!matchesArchived) return false
+      
       // Apply project filter
       let matchesProject = true
       if (projectId) {
@@ -376,7 +420,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
     // Folders first, then journeys
     return [...folderItems, ...journeyItems]
-  })()
+  }, [searchTerm, userJourneys, showArchived, projectId, projectFilter, folders, folderJourneyCounts, usersMap, currentLevelFolders, currentLevelJourneys])
 
   // Handle edit
   const handleEditClick = (journey: UserJourneyWithProject) => {
@@ -447,13 +491,28 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const confirmDelete = async () => {
     if (!journeyToDelete) return
     
-    const success = await deleteUserJourney(journeyToDelete.id)
-    if (success) {
-      setUserJourneys(prev => prev.filter(j => j.id !== journeyToDelete.id))
-      setShowDeleteConfirm(false)
-      setJourneyToDelete(null)
+    // If we're viewing archived journeys, delete permanently
+    // Otherwise, archive the journey
+    if (showArchived) {
+      const success = await deleteUserJourney(journeyToDelete.id)
+      if (success) {
+        setUserJourneys(prev => prev.filter(j => j.id !== journeyToDelete.id))
+        setShowDeleteConfirm(false)
+        setJourneyToDelete(null)
+        await loadData() // Reload to refresh the list
+      } else {
+        alert('Failed to delete journey')
+      }
     } else {
-      alert('Failed to delete journey')
+      // Archive the journey
+      const success = await archiveUserJourney(journeyToDelete.id)
+      if (success) {
+        setUserJourneys(prev => prev.filter(j => j.id !== journeyToDelete.id))
+        setShowDeleteConfirm(false)
+        setJourneyToDelete(null)
+      } else {
+        alert('Failed to archive journey')
+      }
     }
   }
 
@@ -1065,29 +1124,60 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 mb-6 text-sm flex-shrink-0">
-        <button
-          onClick={handleNavigateToRoot}
-          className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors ${
-            currentFolderId === null ? 'text-gray-900 font-medium' : 'text-gray-600'
-          }`}
-        >
-          <FolderOpen size={16} />
-          <span>All User Journeys</span>
-        </button>
-        
-        {folderPath.map((folder, index) => (
-          <div key={folder.id} className="flex items-center gap-2">
-            <ChevronRight size={16} className="text-gray-400" />
+        {/* Only show tabs when at top level (not inside a folder) */}
+        {currentFolderId === null && (
+          <>
             <button
-              onClick={() => handleNavigateToFolder(folder.id)}
+              onClick={() => {
+                setShowArchived(false)
+                handleNavigateToRoot()
+              }}
               className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors ${
-                index === folderPath.length - 1 ? 'text-gray-900 font-medium' : 'text-gray-600'
+                !showArchived ? 'text-gray-900 font-medium' : 'text-gray-600'
               }`}
             >
-              <span>{convertEmojis(folder.name)}</span>
+              <FolderOpen size={16} />
+              <span>All User Journeys</span>
             </button>
-          </div>
-        ))}
+            <button
+              onClick={() => {
+                setShowArchived(true)
+                handleNavigateToRoot()
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors ${
+                showArchived ? 'text-gray-900 font-medium' : 'text-gray-600'
+              }`}
+            >
+              <Trash2 size={16} />
+              <span>Archived</span>
+            </button>
+          </>
+        )}
+        {currentFolderId !== null && (
+          <>
+            <button
+              onClick={handleNavigateToRoot}
+              className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors text-gray-600`}
+            >
+              <FolderOpen size={16} />
+              <span>All User Journeys</span>
+            </button>
+            
+            {folderPath.map((folder, index) => (
+              <div key={folder.id} className="flex items-center gap-2">
+                <ChevronRight size={16} className="text-gray-400" />
+                <button
+                  onClick={() => handleNavigateToFolder(folder.id)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors ${
+                    index === folderPath.length - 1 ? 'text-gray-900 font-medium' : 'text-gray-600'
+                  }`}
+                >
+                  <span>{convertEmojis(folder.name)}</span>
+                </button>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Bulk Actions - Show when items are selected */}
@@ -1164,7 +1254,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
 
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete/Archive Confirmation Modal */}
       {showDeleteConfirm && journeyToDelete && (
         <Modal
           isOpen={showDeleteConfirm}
@@ -1172,7 +1262,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             setShowDeleteConfirm(false)
             setJourneyToDelete(null)
           }}
-          title="Delete User Journey"
+          title={showArchived ? "Permanently Delete User Journey" : "Archive User Journey"}
           size="sm"
           footerContent={
             <div className="flex items-center justify-end gap-3">
@@ -1190,14 +1280,22 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                 onClick={confirmDelete}
                 className="bg-red-600 hover:bg-red-700"
               >
-                Delete Journey
+                {showArchived ? "Delete Permanently" : "Archive Journey"}
               </Button>
             </div>
           }
         >
           <div className="p-6">
             <p className="text-gray-600">
-              Are you sure you want to delete "<strong>{journeyToDelete.name}</strong>"? This action cannot be undone.
+              {showArchived ? (
+                <>
+                  Are you sure you want to permanently delete "<strong>{journeyToDelete.name}</strong>"? This action cannot be undone and the journey will be permanently removed.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to archive "<strong>{journeyToDelete.name}</strong>"? The journey will be moved to the Archive and can be restored later.
+                </>
+              )}
             </p>
           </div>
         </Modal>
