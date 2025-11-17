@@ -458,15 +458,22 @@ export function EditNodeModal({
 
   // Notification handlers
   const addNotification = useCallback(() => {
-    const newNotification: Notification = {
-      id: `notif-${Date.now()}`,
-      type: 'info',
-      message: ''
-    }
-    setFormData(prev => ({
-      ...prev,
-      notifications: [...prev.notifications, newNotification]
-    }))
+    setFormData(prev => {
+      // Get the type of the last notification, or default to 'info' if no notifications exist
+      const lastNotificationType = prev.notifications.length > 0 
+        ? prev.notifications[prev.notifications.length - 1].type 
+        : 'info'
+      
+      const newNotification: Notification = {
+        id: `notif-${Date.now()}`,
+        type: lastNotificationType,
+        message: ''
+      }
+      return {
+        ...prev,
+        notifications: [...prev.notifications, newNotification]
+      }
+    })
   }, [])
 
   const updateNotification = useCallback((id: string, field: 'type' | 'message', value: string) => {
@@ -486,19 +493,29 @@ export function EditNodeModal({
   }, [])
 
   const insertNotification = useCallback((index: number) => {
-    const newNotification: Notification = {
-      id: `notif-${Date.now()}`,
-      type: 'info',
-      message: ''
-    }
-    setFormData(prev => ({
-      ...prev,
-      notifications: [
-        ...prev.notifications.slice(0, index + 1),
-        newNotification,
-        ...prev.notifications.slice(index + 1)
-      ]
-    }))
+    setFormData(prev => {
+      // Get the type of the notification at the current index (the one we're inserting after)
+      // or default to 'info' if no notifications exist
+      const previousNotificationType = prev.notifications.length > 0 && index >= 0 && index < prev.notifications.length
+        ? prev.notifications[index].type 
+        : prev.notifications.length > 0
+          ? prev.notifications[prev.notifications.length - 1].type
+          : 'info'
+      
+      const newNotification: Notification = {
+        id: `notif-${Date.now()}`,
+        type: previousNotificationType,
+        message: ''
+      }
+      return {
+        ...prev,
+        notifications: [
+          ...prev.notifications.slice(0, index + 1),
+          newNotification,
+          ...prev.notifications.slice(index + 1)
+        ]
+      }
+    })
   }, [])
 
   // Drag and drop handler for bullet points
