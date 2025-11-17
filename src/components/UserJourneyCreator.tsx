@@ -24,7 +24,7 @@ import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
 import { OptionsMenu } from './DesignSystem/components/OptionsMenu'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
@@ -201,6 +201,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [importJsonText, setImportJsonText] = useState('')
   const [importJsonError, setImportJsonError] = useState<string | null>(null)
   const [showImportTranscriptModal, setShowImportTranscriptModal] = useState(false)
+  const [showImportDropdown, setShowImportDropdown] = useState(false)
+  const importDropdownRef = useRef<HTMLDivElement>(null)
   const [importTranscriptText, setImportTranscriptText] = useState('')
   const [importTranscriptError, setImportTranscriptError] = useState<string | null>(null)
   const [importTranscriptLoading, setImportTranscriptLoading] = useState(false)
@@ -956,6 +958,23 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, nodes, edges, showComments])
+
+  // Handle clicking outside the import dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (importDropdownRef.current && !importDropdownRef.current.contains(event.target as Node)) {
+        setShowImportDropdown(false)
+      }
+    }
+
+    if (showImportDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showImportDropdown])
 
   // Track if we're currently dragging a connection
   const [isConnecting, setIsConnecting] = useState(false)
@@ -3487,24 +3506,54 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           {/* Action buttons */}
           <div className="flex items-center gap-3 flex-shrink-0">
             
-          <Button
-            variant="outline"
-            onClick={() => setShowImportTranscriptModal(true)}
-            className="flex items-center gap-2 whitespace-nowrap"
-          >
-            <Sparkles size={16} />
-            Import Transcript
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowImportImageModal(true)}
-            className="flex items-center gap-2 whitespace-nowrap"
-          >
-            <ImageIcon size={16} />
-            Import from Image
-          </Button>
-          
-        
+          {/* Import Dropdown */}
+          <div className="relative" ref={importDropdownRef}>
+            <Button
+              variant="outline"
+              onClick={() => setShowImportDropdown(!showImportDropdown)}
+              className="flex items-center gap-2 whitespace-nowrap"
+            >
+              Import
+              <ChevronDown size={16} />
+            </Button>
+            
+            {showImportDropdown && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                <button
+                  onClick={() => {
+                    setShowImportTranscriptModal(true)
+                    setShowImportDropdown(false)
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors text-gray-700 hover:bg-gray-100"
+                >
+                  <Sparkles size={16} />
+                  <span>Import from Transcript</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowImportImageModal(true)
+                    setShowImportDropdown(false)
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors text-gray-700 hover:bg-gray-100"
+                >
+                  <ImageIcon size={16} />
+                  <span>Import from Image</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Share Button - show if journey is saved */}
+          {currentJourneyId && (
+            <Button
+              variant="outline"
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-2 whitespace-nowrap"
+            >
+              <Share2 size={16} />
+              Share
+            </Button>
+          )}
 
           <Button
             onClick={() => {
@@ -3530,18 +3579,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               </>
             )}
           </Button>
-
-          {/* Share Button - show if journey is saved */}
-          {currentJourneyId && (
-            <Button
-              variant="outline"
-              onClick={() => setShowShareModal(true)}
-              className="flex items-center gap-2 whitespace-nowrap"
-            >
-              <Share2 size={16} />
-              Share
-            </Button>
-          )}
 
             {/* More Options Menu */}
             <OptionsMenu
