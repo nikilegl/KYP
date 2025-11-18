@@ -153,8 +153,10 @@ serve(async (req) => {
     }
 
     // Invite user via Supabase Auth
+    // Note: Since we use Google OAuth only, users will sign in with Google and be auto-added to workspace
+    // The redirectTo is set to home page where they can sign in with Google
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${req.headers.get('origin') || 'http://localhost:5173'}/reset-password`,
+      redirectTo: `${req.headers.get('origin') || 'http://localhost:5173'}/`,
       data: {
         workspace_id: workspaces.id,
         role: role
