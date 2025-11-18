@@ -13,16 +13,14 @@ export function LoginForm() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-white font-bold text-2xl">KYP</span>
             </div>
             
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
               Welcome to KYP
             </h1>
-            <p className="text-gray-600">
-              Know Your Project
-            </p>
+         
             
             {!isSupabaseConfigured && (
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
