@@ -14,30 +14,11 @@ const createMockUser = (email: string): User => ({
   user_metadata: {}
 })
 
-// Local storage keys
+// Local storage keys (kept for backward compatibility, but not used)
 const LOCAL_USER_KEY = 'kyp_local_user'
-const LOCAL_USERS_KEY = 'kyp_local_users'
+// LOCAL_USERS_KEY removed - no longer storing user credentials
 
-// Get stored users from localStorage
-const getStoredUsers = (): Array<{email: string, password: string}> => {
-  try {
-    const stored = localStorage.getItem(LOCAL_USERS_KEY)
-    return stored ? JSON.parse(stored) : [
-      { email: 'niki@legl.com', password: 'test1234' }
-    ]
-  } catch {
-    return [{ email: 'niki@legl.com', password: 'test1234' }]
-  }
-}
-
-// Store users in localStorage
-const storeUsers = (users: Array<{email: string, password: string}>) => {
-  try {
-    localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users))
-  } catch (error) {
-    console.error('Failed to store users:', error)
-  }
-}
+// Local authentication is no longer supported - Google OAuth only
 
 // Check if email is allowed (must be @legl.com)
 const isEmailAllowed = (email: string | null | undefined): boolean => {
@@ -115,77 +96,19 @@ export function useAuth() {
           setHasInitialized(true)
         }
       } else {
-        initLocalAuth()
+        // Supabase is required - no local fallback
+        console.warn('Supabase is not configured. Google OAuth authentication is required.')
+        setLoading(false)
+        setHasInitialized(true)
       }
-    }
-
-    const initLocalAuth = () => {
-      console.log('🔵 useAuth: initLocalAuth called')
-      try {
-        const storedUser = localStorage.getItem(LOCAL_USER_KEY)
-        console.log('🔵 useAuth: storedUser from localStorage:', storedUser)
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser)
-          console.log('🔵 useAuth: Setting user from localStorage:', parsedUser)
-          setUser(parsedUser)
-        } else {
-          console.log('🔵 useAuth: No stored user found')
-        }
-      } catch (error) {
-        console.error('Failed to load stored user:', error)
-      }
-      setLoading(false)
-      setHasInitialized(true)
     }
 
     initAuth()
   }, [hasInitialized])
 
   const signIn = async (email: string, password: string) => {
-    // Check email domain restriction
-    if (!isEmailAllowed(email)) {
-      return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        })
-        
-        if (error) {
-          return { error: { message: error.message } }
-        }
-        
-        // Double-check email domain after successful sign in
-        if (data.user && !isEmailAllowed(data.user.email)) {
-          await supabase.auth.signOut()
-          return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
-        }
-        
-        // User will be automatically added to workspace via database trigger
-        // No need to manually add them here
-        
-        return { error: null }
-      } catch (error) {
-        console.error('Supabase sign in error:', error)
-        return { error: { message: 'Failed to sign in. Please try again.' } }
-      }
-    } else {
-      // Local authentication
-      const users = getStoredUsers()
-      const foundUser = users.find(u => u.email === email && u.password === password)
-      
-      if (foundUser) {
-        const authUser = createMockUser(email)
-        setUser(authUser)
-        localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(authUser))
-        return { error: null }
-      } else {
-        return { error: { message: 'Invalid email or password' } }
-      }
-    }
+    // Email/password authentication is no longer supported
+    return { error: { message: 'Email/password authentication is not available. Please use Google Sign-In.' } }
   }
 
   const signInWithGoogle = async () => {
@@ -223,65 +146,8 @@ export function useAuth() {
   }
 
   const signUp = async (email: string, password: string) => {
-    // Check email domain restriction
-    if (!isEmailAllowed(email)) {
-      return { error: { message: 'Access restricted to @legl.com email addresses only.' } }
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password
-        })
-        
-        if (error) {
-          // Handle user already exists error with helpful message
-          if (error.message.includes('User already registered') || error.message.includes('user_already_exists')) {
-            return { 
-              error: { 
-                message: 'An account with this email already exists. If you were invited to join a workspace, please use the Sign In form instead. If you forgot your password, you can reset it using the "Forgot Password" option.' 
-              } 
-            }
-          }
-          return { error: { message: error.message } }
-        }
-        
-        // User will be automatically added to workspace via database trigger when they confirm email
-        
-        return { error: null }
-      } catch (error) {
-        console.error('Supabase sign up error:', error)
-        return { error: { message: 'Failed to create account. Please try again.' } }
-      }
-    } else {
-      // Local authentication
-      const users = getStoredUsers()
-      
-      // Check if user already exists
-      if (users.find(u => u.email === email)) {
-        return { error: { message: 'User already exists' } }
-      }
-      
-      // Add new user
-      users.push({ email, password })
-      storeUsers(users)
-      
-      // Check if user was pre-added to workspace and activate them
-      try {
-        const workspaceUsers = JSON.parse(localStorage.getItem('kyp_workspace_users') || '[]')
-        const updatedWorkspaceUsers = workspaceUsers.map((wu: any) => 
-          wu.user_email === email 
-            ? { ...wu, status: 'active', user_id: `user-${Date.now()}`, updated_at: new Date().toISOString() }
-            : wu
-        )
-        localStorage.setItem('kyp_workspace_users', JSON.stringify(updatedWorkspaceUsers))
-      } catch (error) {
-        console.error('Error updating workspace user status:', error)
-      }
-      
-      return { error: null }
-    }
+    // Email/password signup is no longer supported
+    return { error: { message: 'Email/password signup is not available. Please use Google Sign-In.' } }
   }
 
   const signOut = async () => {
@@ -302,63 +168,21 @@ export function useAuth() {
       console.log('🔵 useAuth: Supabase user set to null')
       return { error: null }
     } else {
-      console.log('🔵 useAuth: Using local signOut')
-      // Local authentication - clear localStorage FIRST
-      localStorage.removeItem(LOCAL_USER_KEY)
-      console.log('🔵 useAuth: localStorage cleared')
-      
-      // Then set user to null and reset initialization flag
+      // No local authentication fallback
       setUser(null)
-      setHasInitialized(false)
       setLoading(false)
-      console.log('🔵 useAuth: Local user set to null and hasInitialized reset')
-      
       return { error: null }
     }
   }
 
   const sendPasswordResetEmail = async (email: string) => {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`
-        })
-        
-        if (error) {
-          return { error: { message: error.message } }
-        }
-        
-        return { error: null }
-      } catch (error) {
-        console.error('Supabase password reset error:', error)
-        return { error: { message: 'Failed to send password reset email. Please try again.' } }
-      }
-    } else {
-      // Local authentication - simulate success
-      return { error: null }
-    }
+    // Password reset is no longer supported - Google OAuth only
+    return { error: { message: 'Password reset is not available. Please use Google Sign-In.' } }
   }
 
   const updateUserPassword = async (newPassword: string) => {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.auth.updateUser({
-          password: newPassword
-        })
-        
-        if (error) {
-          return { error: { message: error.message } }
-        }
-        
-        return { error: null }
-      } catch (error) {
-        console.error('Supabase password update error:', error)
-        return { error: { message: 'Failed to update password. Please try again.' } }
-      }
-    } else {
-      // Local authentication - simulate success
-      return { error: null }
-    }
+    // Password update is no longer supported - Google OAuth only
+    return { error: { message: 'Password update is not available. Please use Google Sign-In.' } }
   }
 
   return {

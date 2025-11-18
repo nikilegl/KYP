@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App.tsx';
-import { ResetPasswordForm } from './components/ResetPasswordForm.tsx';
 import { PublicUserJourneyView } from './components/PublicUserJourneyView.tsx';
 import './index.css';
 
@@ -15,7 +14,6 @@ root.render(
     <Routes>
       <Route path="/" element={<App />} />
         <Route path="/projects" element={<App />} />
-      <Route path="/reset-password" element={<ResetPasswordForm />} />
       <Route path="/public/user-journey/:shortId" element={<PublicUserJourneyView />} />
       <Route path="/project/:shortId" element={<App />} />
       <Route path="/stakeholder/:shortId" element={<App />} />
