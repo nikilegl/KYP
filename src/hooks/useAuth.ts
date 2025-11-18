@@ -54,7 +54,21 @@ export function useAuth() {
               return
             }
             
-            console.log('🔵 useAuth: Found Supabase session:', session.user.email)
+            // Check if user was authenticated with email/password (old method)
+            // Google OAuth users have app_metadata.provider === 'google'
+            const provider = session.user.app_metadata?.provider || session.user.app_metadata?.providers?.[0] || 'email'
+            
+            if (provider === 'email') {
+              console.warn('🔴 User authenticated with email/password (old method) - signing out')
+              await supabase.auth.signOut()
+              await forceSignOut()
+              setUser(null)
+              setLoading(false)
+              setHasInitialized(true)
+              return
+            }
+            
+            console.log('🔵 useAuth: Found Supabase session:', session.user.email, 'Provider:', provider)
             setUser(session.user)
           }
 
@@ -68,6 +82,18 @@ export function useAuth() {
                 if (!isEmailAllowed(session.user.email)) {
                   console.warn('User email domain not allowed, signing out')
                   await supabase.auth.signOut()
+                  setUser(null)
+                  setLoading(false)
+                  return
+                }
+                
+                // Check if user was authenticated with email/password (old method)
+                const provider = session.user.app_metadata?.provider || session.user.app_metadata?.providers?.[0] || 'email'
+                
+                if (provider === 'email') {
+                  console.warn('🔴 User authenticated with email/password (old method) - signing out')
+                  await supabase.auth.signOut()
+                  await forceSignOut()
                   setUser(null)
                   setLoading(false)
                   return
