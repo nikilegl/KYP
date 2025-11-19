@@ -179,6 +179,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [journeyStatus, setJourneyStatus] = useState<'personal' | 'shared'>('personal')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showNameEditModal, setShowNameEditModal] = useState(false)
+  const [hasAutoOpenedModal, setHasAutoOpenedModal] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [configuringNode, setConfiguringNode] = useState<Node | null>(null)
@@ -291,6 +292,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   useEffect(() => {
     loadData()
   }, [])
+
+  // Auto-open Edit Journey Details modal for new journeys (only once)
+  useEffect(() => {
+    // Only open modal if:
+    // 1. Not loading (data has loaded)
+    // 2. No current journey ID (it's a new journey)
+    // 3. Modal is not already open
+    // 4. We haven't auto-opened it before (prevents reopening after user closes it)
+    if (!loading && !currentJourneyId && !showNameEditModal && !hasAutoOpenedModal) {
+      setShowNameEditModal(true)
+      setHasAutoOpenedModal(true)
+    }
+  }, [loading, currentJourneyId, showNameEditModal, hasAutoOpenedModal])
 
   // Update all nodes when layout changes
   const prevLayoutRef = useRef(journeyLayout)
@@ -909,6 +923,86 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
   }, [nodes, setNodes])
 
+  // Duplicate selected regions (for Cmd+D shortcut)
+  const duplicateSelectedRegions = useCallback(() => {
+    const selectedRegions = nodes.filter((node) => node.selected && node.type === 'highlightRegion')
+    if (selectedRegions.length === 0) return
+
+    const timestamp = Date.now()
+    const regionIdMap = new Map<string, string>() // Map old region ID to new region ID
+    
+    // First, duplicate the regions themselves
+    const newRegions = selectedRegions.map((region, index) => {
+      const newRegionId = `region-${timestamp}-${index}`
+      regionIdMap.set(region.id, newRegionId)
+      
+      return {
+        ...region,
+        id: newRegionId,
+        position: {
+          x: region.position.x + 50,
+          y: region.position.y + 50
+        },
+        selected: false // Deselect the new region
+      }
+    })
+
+    // Then, duplicate nodes that belong to these regions (nodes with parentId matching region ID)
+    const nodesInRegions = nodes.filter((node) => 
+      node.parentId && selectedRegions.some(region => region.id === node.parentId)
+    )
+    
+    const newNodeIdMap = new Map<string, string>() // Map old node ID to new node ID
+    const newNodes = nodesInRegions.map((node, index) => {
+      const newNodeId = `node-${timestamp}-${index}`
+      newNodeIdMap.set(node.id, newNodeId)
+      
+      // Get the new parent region ID
+      const newParentId = regionIdMap.get(node.parentId || '')
+      
+      return {
+        ...node,
+        id: newNodeId,
+        parentId: newParentId || node.parentId,
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50
+        },
+        selected: false // Deselect the new nodes
+      }
+    })
+
+    // Update edges that connect nodes within the duplicated regions
+    const newEdges = edges
+      .filter((edge) => {
+        const sourceInRegion = newNodeIdMap.has(edge.source)
+        const targetInRegion = newNodeIdMap.has(edge.target)
+        return sourceInRegion && targetInRegion
+      })
+      .map((edge, index) => ({
+        ...edge,
+        id: `edge-${timestamp}-${index}`,
+        source: newNodeIdMap.get(edge.source) || edge.source,
+        target: newNodeIdMap.get(edge.target) || edge.target,
+        selected: false
+      }))
+
+    // Deselect all existing nodes/regions, then add the new ones
+    setNodes((nds) => [
+      ...nds.map(n => ({ ...n, selected: false })),
+      ...newRegions.map(r => ({ ...r, selected: true })),
+      ...newNodes
+    ])
+    
+    // Add new edges if any
+    if (newEdges.length > 0) {
+      setEdges((eds) => [
+        ...eds.map(e => ({ ...e, selected: false })),
+        ...newEdges
+      ])
+    }
+  }, [nodes, edges, setNodes, setEdges])
+
   // Keyboard shortcuts for copy/paste/duplicate and comments toggle
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -945,9 +1039,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // This allows image paste handlers (like ImportJourneyImageModal) to work
           pasteNodes()
         } else if (event.key === 'd' || event.key === 'D') {
-          // Duplicate selected nodes (Cmd/Ctrl+D)
+          // Duplicate selected nodes or regions (Cmd/Ctrl+D)
           const hasSelectedNodesForDuplicate = nodes.some(node => node.selected && node.type !== 'highlightRegion')
-          if (hasSelectedNodesForDuplicate) {
+          const hasSelectedRegionsForDuplicate = nodes.some(node => node.selected && node.type === 'highlightRegion')
+          
+          if (hasSelectedRegionsForDuplicate) {
+            event.preventDefault()
+            duplicateSelectedRegions()
+          } else if (hasSelectedNodesForDuplicate) {
             event.preventDefault()
             duplicateSelectedNodes()
           }
@@ -957,7 +1056,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, nodes, edges, showComments])
+  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, duplicateSelectedRegions, nodes, edges, showComments])
 
   // Handle clicking outside the import dropdown
   useEffect(() => {
@@ -3865,23 +3964,61 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setLawFirmSearchQuery('')
         }}
         onSave={async () => {
-          // Save to database if journey already exists
-          if (currentJourneyId && journeyName.trim()) {
-            try {
+          if (!journeyName.trim()) {
+            return
+          }
+
+          try {
+            // Sort nodes to ensure parents come before children
+            const sortedNodes = sortNodesForSaving(nodes)
+            const flowData = { nodes: sortedNodes, edges }
+
+            if (currentJourneyId) {
+              // Update existing journey
               await updateUserJourney(currentJourneyId, {
                 name: journeyName,
                 description: journeyDescription,
                 layout: journeyLayout,
                 status: journeyStatus,
+                flow_data: flowData,
                 project_id: selectedProjectId || null
               })
               
               // Save law firm associations
               await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
-            } catch (error) {
-              console.error('Error saving journey details:', error)
+              
+              console.log('Journey updated successfully')
+              setHasUnsavedChanges(false)
+            } else {
+              // Create new journey
+              const created = await createUserJourney(
+                journeyName,
+                journeyDescription,
+                flowData,
+                selectedProjectId || null,
+                journeyLayout
+              )
+              
+              if (created) {
+                // Save law firm associations
+                await setUserJourneyLawFirms(created.id, selectedLawFirmIds)
+                
+                // Assign to folder if folderId was provided
+                if (selectedFolderId) {
+                  await assignUserJourneysToFolder([created.id], selectedFolderId)
+                }
+                
+                console.log('Journey created successfully:', created)
+                setCurrentJourneyId(created.id)
+                setHasUnsavedChanges(false)
+              }
             }
+          } catch (error) {
+            console.error('Error saving journey details:', error)
+            alert('Failed to save journey. Please try again.')
+            return
           }
+          
           setShowNameEditModal(false)
         }}
         journeyName={journeyName}
