@@ -243,6 +243,9 @@ export function EditNodeModal({
   // Track if custom user role is selected
   const [isCustomUserRoleSelected, setIsCustomUserRoleSelected] = useState(false)
   
+  // Local state for emoji input to allow free editing
+  const [emojiInputValue, setEmojiInputValue] = useState<Record<string, string>>({})
+  
   // State for platforms from database
   const [platforms, setPlatforms] = useState<Platform[]>([])
   
@@ -374,6 +377,24 @@ export function EditNodeModal({
       setIsCustomUserRoleSelected(false)
     }
   }, [node, isOpen, isAddingNewNode, existingNodes])
+
+  // Sync emoji input value when user role changes (but not when override changes to allow editing)
+  useEffect(() => {
+    if (formData.userRole && onUpdateEmojiOverride) {
+      const roleId = formData.userRole.id
+      // Only initialize if we don't have a value for this role yet
+      if (emojiInputValue[roleId] === undefined) {
+        const hasOverride = roleId in userRoleEmojiOverrides
+        const initialEmoji = hasOverride 
+          ? userRoleEmojiOverrides[roleId] 
+          : (formData.userRole.icon || '')
+        setEmojiInputValue(prev => ({
+          ...prev,
+          [roleId]: initialEmoji
+        }))
+      }
+    }
+  }, [formData.userRole?.id])
 
   // Define handleSave early so it can be used in useEffect
   const handleSave = useCallback(() => {
@@ -759,6 +780,18 @@ export function EditNodeModal({
                   setIsCustomUserRoleSelected(false)
                   const role = userRoles.find(r => r.id === e.target.value)
                   setFormData(prev => ({ ...prev, userRole: role || null, customUserRoleName: '' }))
+                  
+                  // Initialize emoji input value for the selected role
+                  if (role) {
+                    const hasOverride = role.id in userRoleEmojiOverrides
+                    const initialEmoji = hasOverride 
+                      ? userRoleEmojiOverrides[role.id] 
+                      : (role.icon || '')
+                    setEmojiInputValue(prev => ({
+                      ...prev,
+                      [role.id]: initialEmoji
+                    }))
+                  }
                 }
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -774,10 +807,14 @@ export function EditNodeModal({
             
             {/* Emoji selector for selected user role */}
             {formData.userRole && onUpdateEmojiOverride && (() => {
-              const hasOverride = formData.userRole.id in userRoleEmojiOverrides
-              const currentEmoji = hasOverride 
-                ? userRoleEmojiOverrides[formData.userRole.id] 
-                : (formData.userRole.icon || '')
+              const roleId = formData.userRole.id
+              const hasOverride = roleId in userRoleEmojiOverrides
+              // Use local input value if it exists, otherwise use override or global emoji
+              const currentEmoji = emojiInputValue[roleId] !== undefined
+                ? emojiInputValue[roleId]
+                : (hasOverride 
+                    ? userRoleEmojiOverrides[roleId] 
+                    : (formData.userRole.icon || ''))
               
               return (
                 <div className="mt-2">
@@ -787,11 +824,16 @@ export function EditNodeModal({
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
                       <EmojiAutocomplete
-                        key={`emoji-${formData.userRole.id}-${hasOverride ? 'override' : 'default'}`}
                         value={currentEmoji}
                         onChange={(value) => {
                           if (formData.userRole) {
-                            onUpdateEmojiOverride(formData.userRole.id, value)
+                            // Update local state immediately for responsive UI
+                            setEmojiInputValue(prev => ({
+                              ...prev,
+                              [roleId]: value
+                            }))
+                            // Update the override
+                            onUpdateEmojiOverride(roleId, value)
                           }
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
@@ -804,7 +846,12 @@ export function EditNodeModal({
                         onClick={() => {
                           if (formData.userRole && onUpdateEmojiOverride) {
                             // Remove override to use global emoji
-                            onUpdateEmojiOverride(formData.userRole.id, '')
+                            onUpdateEmojiOverride(roleId, '')
+                            // Reset local input value to global emoji
+                            setEmojiInputValue(prev => ({
+                              ...prev,
+                              [roleId]: formData.userRole!.icon || ''
+                            }))
                           }
                         }}
                         className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
