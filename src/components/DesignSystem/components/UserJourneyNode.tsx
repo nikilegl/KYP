@@ -1,3 +1,4 @@
+import React from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Edit } from 'lucide-react'
 import { UserRoleTag } from '../../common/UserRoleTag'
@@ -37,9 +38,11 @@ interface UserJourneyNodeProps {
   thirdParties?: ThirdParty[]
   platforms?: Platform[]
   onEdit?: () => void
+  isConnecting?: boolean
+  connectedEdges?: Array<{ sourceHandle?: string | null; targetHandle?: string | null; source: string; target: string }>
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit, isConnecting = false, connectedEdges = [] }: UserJourneyNodeProps) {
   const nodeData = data as UserJourneyNodeData
   const {
     label = '',
@@ -113,42 +116,110 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
 
   const borderColor = getBorderColor()
 
-  // Get ALL possible handle positions (render all, but only show relevant ones)
+  // Track hover state for showing connectors
+  const [isHovered, setIsHovered] = React.useState(false)
+
+  // Get all handle positions - all nodes can connect from any side
   const getAllHandlePositions = () => {
-    const isHorizontal = journeyLayout === 'horizontal'
-    
-    console.log(`🔧 Node ${id} (${type}): layout=${journeyLayout}`)
-    
-    switch (type) {
-      case 'start':
-        return [
-          { type: 'source', position: Position.Bottom, id: 'bottom', visible: !isHorizontal },
-          { type: 'source', position: Position.Right, id: 'right', visible: isHorizontal }
-        ]
-      case 'process':
-        return [
-          { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
-          { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal },
-          { type: 'source', position: Position.Bottom, id: 'bottom', visible: !isHorizontal },
-          { type: 'source', position: Position.Right, id: 'right', visible: isHorizontal }
-        ]
-      case 'decision':
-          return [
-          { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
-          { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal },
-          { type: 'source', position: Position.Right, id: 'right', visible: true },
-          { type: 'source', position: Position.Bottom, id: 'bottom', visible: true }
-          ]
-      case 'end':
-        return [
-          { type: 'target', position: Position.Top, id: 'top', visible: !isHorizontal },
-          { type: 'target', position: Position.Left, id: 'left', visible: isHorizontal }
-        ]
-      case 'label':
-        return []
-      default:
-        return []
+    // All nodes have handles on all 4 sides
+    // Each side has both source and target handles with unique IDs
+    return [
+      { type: 'source' as const, position: Position.Top, id: 'source-top' },
+      { type: 'source' as const, position: Position.Right, id: 'source-right' },
+      { type: 'source' as const, position: Position.Bottom, id: 'source-bottom' },
+      { type: 'source' as const, position: Position.Left, id: 'source-left' },
+      { type: 'target' as const, position: Position.Top, id: 'target-top' },
+      { type: 'target' as const, position: Position.Right, id: 'target-right' },
+      { type: 'target' as const, position: Position.Bottom, id: 'target-bottom' },
+      { type: 'target' as const, position: Position.Left, id: 'target-left' },
+    ]
+  }
+
+  // Extract the side from handle ID (e.g., 'source-top' -> 'top')
+  const getHandleSide = (handleId: string): string => {
+    return handleId.replace(/^(source|target)-/, '')
+  }
+
+  // Check if a handle has an edge connected to it
+  // Supports:
+  // - New format (full IDs like 'source-top', 'target-top')
+  // - Old format (simple IDs like 'top', 'bottom')
+  // - No handle ID (null/undefined - React Flow will use default handles)
+  const hasEdgeOnHandle = (handleId: string, handleType: 'source' | 'target') => {
+    if (handleType === 'source') {
+      return connectedEdges.some(edge => {
+        if (edge.source !== id) return false
+        
+        // If edge has no sourceHandle, React Flow will use default handles
+        // In this case, we can't definitively match, but we'll show handles if node has any edges
+        // For now, only match if handle ID is explicitly set
+        if (!edge.sourceHandle) {
+          // Don't match edges without handle IDs to specific handles
+          // This prevents showing all handles when edges don't have explicit handles
+          return false
+        }
+        
+        // Check for exact match (new format: 'source-top')
+        if (edge.sourceHandle === handleId) return true
+        
+        // Extract side from handle ID (e.g., 'source-top' -> 'top')
+        const handleSide = getHandleSide(handleId)
+        
+        // Check for side match (old format: 'top' matches 'source-top')
+        if (edge.sourceHandle === handleSide) return true
+        
+        // Handle reverse: edge has new format but we're checking old format handle
+        const edgeSide = edge.sourceHandle.replace(/^(source|target)-/, '')
+        if (edgeSide === handleSide) return true
+        
+        return false
+      })
+    } else {
+      return connectedEdges.some(edge => {
+        if (edge.target !== id) return false
+        
+        // If edge has no targetHandle, React Flow will use default handles
+        // In this case, we can't definitively match, but we'll show handles if node has any edges
+        // For now, only match if handle ID is explicitly set
+        if (!edge.targetHandle) {
+          // Don't match edges without handle IDs to specific handles
+          // This prevents showing all handles when edges don't have explicit handles
+          return false
+        }
+        
+        // Check for exact match (new format: 'target-top')
+        if (edge.targetHandle === handleId) return true
+        
+        // Extract side from handle ID (e.g., 'target-top' -> 'top')
+        const handleSide = getHandleSide(handleId)
+        
+        // Check for side match (old format: 'top' matches 'target-top')
+        // This is the key fix: old edges have 'top', new handles have 'target-top'
+        if (edge.targetHandle === handleSide) return true
+        
+        // Handle reverse: edge has new format but we're checking old format handle
+        const edgeSide = edge.targetHandle.replace(/^(source|target)-/, '')
+        if (edgeSide === handleSide) return true
+        
+        return false
+      })
     }
+  }
+
+  // Determine if a handle should be visible
+  const shouldShowHandle = (handleId: string, handleType: 'source' | 'target') => {
+    // Always show if connecting (dragging an edge)
+    if (isConnecting) return true
+    
+    // Show if hovered (user is hovering over the node)
+    if (isHovered) return true
+    
+    // IMPORTANT: Always show handles that have edges connected
+    // This ensures React Flow can calculate edge paths correctly
+    if (hasEdgeOnHandle(handleId, handleType)) return true
+    
+    // Hide empty handles when not hovering or connecting
+    return false
   }
 
   return (
@@ -174,36 +245,38 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         e.stopPropagation()
         onEdit?.()
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Connection Handles - render all handles but only show relevant ones for current layout */}
-      {showHandles && type !== 'label' && getAllHandlePositions().map((handle) => (
-        <Handle
-          key={handle.id}
-          type={handle.type as 'source' | 'target'}
-          position={handle.position}
-          id={handle.id}
-          isConnectable={handle.visible}
-          onMouseEnter={() => {
-            if (handle.visible) {
-              console.log(`🎯 MOUSE ENTER handle: ${handle.id} on node ${id} (${type}), layout=${journeyLayout}`)
-            }
-          }}
-          onMouseLeave={() => {
-            if (handle.visible) {
-              console.log(`👋 MOUSE LEAVE handle: ${handle.id} on node ${id}`)
-            }
-          }}
-          style={{
-            width: '16px',
-            height: '16px',
-            background: '#9ca3af',
-            border: '2px solid white',
-            zIndex: 10,
-            opacity: handle.visible ? 1 : 0,
-            pointerEvents: handle.visible ? 'all' : 'none'
-          }}
-        />
-      ))}
+      {/* Connection Handles - show on all sides, visible on hover or when connecting */}
+      {/* IMPORTANT: All handles must always be rendered so React Flow can register them and calculate edge paths */}
+      {type !== 'label' && getAllHandlePositions().map((handle, index) => {
+        const isVisible = shouldShowHandle(handle.id, handle.type)
+        const hasEdge = hasEdgeOnHandle(handle.id, handle.type)
+        
+        return (
+          <Handle
+            key={`${handle.type}-${handle.id}-${index}`}
+            type={handle.type}
+            position={handle.position}
+            id={handle.id}
+            isConnectable={true}
+            style={{
+              width: '16px', // Always full size so React Flow can properly calculate positions
+              height: '16px',
+              background: isVisible ? '#9ca3af' : 'transparent',
+              border: isVisible ? '2px solid white' : 'none',
+              zIndex: 10,
+              // CRITICAL: Handles with edges MUST be visible (opacity 1) so React Flow can calculate edge paths
+              // Even if handle is "invisible", if it has an edge, make it slightly visible so React Flow can find it
+              opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
+              pointerEvents: isVisible || hasEdge ? 'all' : 'none', // Allow interaction if visible or has edge
+              transition: 'opacity 0.2s ease-in-out',
+              cursor: isVisible ? 'crosshair' : 'default'
+            }}
+          />
+        )
+      })}
 
       {/* Title Row: Title + Edit button */}
       <div className="flex items-start justify-between gap-3">
