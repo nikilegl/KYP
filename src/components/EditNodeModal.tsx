@@ -40,6 +40,7 @@ export interface NodeFormData {
   customPlatformName: string
   userRole: UserRole | null
   customUserRoleName: string
+  customUserRoleEmoji: string
   bulletPoints: string[]
   notifications: Notification[]
   customProperties: Record<string, unknown>
@@ -271,6 +272,7 @@ export function EditNodeModal({
     customPlatformName: '',
     userRole: null,
     customUserRoleName: '',
+    customUserRoleEmoji: '',
     bulletPoints: [''],
     notifications: [],
     customProperties: {},
@@ -336,6 +338,17 @@ export function EditNodeModal({
         : [{ id: `notif-${Date.now()}`, type: 'info' as const, message: '' }]
       
       const customUserRoleName = (node.data?.customUserRoleName as string) || ''
+      // If this node doesn't have an emoji but other nodes with the same custom role name do, use that emoji
+      let customUserRoleEmoji = (node.data?.customUserRoleEmoji as string) || ''
+      if (customUserRoleName && !customUserRoleEmoji) {
+        // Find another node with the same custom user role name that has an emoji
+        const nodeWithEmoji = existingNodes.find(
+          n => n.data?.customUserRoleName === customUserRoleName && n.data?.customUserRoleEmoji
+        )
+        if (nodeWithEmoji) {
+          customUserRoleEmoji = (nodeWithEmoji.data?.customUserRoleEmoji as string) || ''
+        }
+      }
       setFormData({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
@@ -344,6 +357,7 @@ export function EditNodeModal({
         customPlatformName: (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
         customUserRoleName: customUserRoleName,
+        customUserRoleEmoji: customUserRoleEmoji,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         notifications: notificationsWithDefault,
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
@@ -368,6 +382,7 @@ export function EditNodeModal({
         customPlatformName: '',
         userRole: null,
         customUserRoleName: '',
+        customUserRoleEmoji: '',
         bulletPoints: [''],
         notifications: [{ id: `notif-${Date.now()}`, type: 'info' as const, message: '' }],
         customProperties: {},
@@ -417,6 +432,15 @@ export function EditNodeModal({
         const activeElement = document.activeElement
         const isTextarea = activeElement?.tagName === 'TEXTAREA'
         const isSelect = activeElement?.tagName === 'SELECT'
+        
+        // Check if emoji picker is open (look for the picker dropdown in the DOM)
+        const emojiPicker = document.querySelector('.emoji-picker-dropdown')
+        const isEmojiPickerOpen = emojiPicker !== null
+        
+        // Don't trigger Save if emoji picker is open - let the picker handle Enter key
+        if (isEmojiPickerOpen) {
+          return
+        }
         
         // Trigger Save for all inputs except textareas and selects
         // Bullet point inputs will be handled by their own onKeyDown handler
@@ -899,16 +923,32 @@ export function EditNodeModal({
         {(isCustomUserRoleSelected || formData.customUserRoleName) && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Custom User Role Name <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
+              Custom User Role Name
             </label>
-            <EmojiAutocomplete
-              value={formData.customUserRoleName}
-              onChange={(value) => setFormData(prev => ({ ...prev, customUserRoleName: value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter custom user role name"
-            />
+            <div className="flex items-center gap-2">
+              <div className="w-20">
+                <EmojiAutocomplete
+                  key={`emoji-${formData.customUserRoleName}`}
+                  value={formData.customUserRoleEmoji || ''}
+                  onChange={(value) => {
+                    // Allow clearing the emoji by setting empty string
+                    setFormData(prev => ({ ...prev, customUserRoleEmoji: value || '' }))
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                  placeholder=":"
+                />
+              </div>
+              <div className="flex-1">
+                <EmojiAutocomplete
+                  value={formData.customUserRoleName}
+                  onChange={(value) => setFormData(prev => ({ ...prev, customUserRoleName: value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter custom user role name"
+                />
+              </div>
+            </div>
             <p className="mt-1 text-xs text-gray-500">
-              Enter a custom user role name for this node.
+              Enter a custom user role name. The emoji will be applied to all nodes with this role name.
             </p>
           </div>
         )}
