@@ -703,7 +703,7 @@ export function EditNodeModal({
         </div>
 
         {/* User Role and Platform - Side by side */}
-        <div className="grid grid-cols-2 gap-4 border-t py-4 border-b">
+        <div className="grid grid-cols-2 gap-4 border-t py-4">
           {/* User Role */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -771,81 +771,6 @@ export function EditNodeModal({
           </div>
         )}
 
-        {/* Node Type */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Node Type
-          </label>
-          <div className="grid grid-cols-4 gap-3">
-            {/* Start Node */}
-            <button
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, type: 'start' }))}
-              className={`relative px-3 py-2 pb-4 border-2 rounded-lg transition-all ${
-                formData.type === 'start'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <div className="h-1"></div>
-                <span className="font-medium text-sm">Start</span>
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
-              </div>
-            </button>
-
-            {/* Middle Node */}
-            <button
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, type: 'process' }))}
-              className={`relative px-3 py-2 pb-4 pt-4 border-2 rounded-lg transition-all ${
-                formData.type === 'process'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
-                <span className="font-medium text-sm">Middle</span>
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
-              </div>
-            </button>
-
-            {/* End Node */}
-            <button
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, type: 'end' }))}
-              className={`relative px-3 py-2 pt-4 border-2 rounded-lg transition-all ${
-                formData.type === 'end'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-current border-2 border-white"></div>
-                <span className="font-medium text-sm">End</span>
-                <div className="h-1"></div>
-              </div>
-            </button>
-
-            {/* Label Node */}
-            <button
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, type: 'label' }))}
-              className={`relative px-3 py-2 border-2 rounded-lg transition-all ${
-                formData.type === 'label'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-              }`}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <div className="h-1"></div>
-                <span className="font-medium text-sm">Label</span>
-                <div className="h-1"></div>
-              </div>
-            </button>
-          </div>
-        </div>
       </div>
     </Modal>
   )

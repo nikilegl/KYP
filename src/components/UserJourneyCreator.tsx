@@ -4098,7 +4098,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
         journeyName={journeyName}
         journeyDescription={journeyDescription}
-        journeyLayout={journeyLayout}
         journeyStatus={journeyStatus}
         selectedProjectId={selectedProjectId}
         selectedLawFirmIds={selectedLawFirmIds}
@@ -4107,7 +4106,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         lawFirms={lawFirms}
         onNameChange={setJourneyName}
         onDescriptionChange={setJourneyDescription}
-        onLayoutChange={setJourneyLayout}
         onStatusChange={setJourneyStatus}
         onProjectChange={setSelectedProjectId}
         onLawFirmSearchChange={setLawFirmSearchQuery}
