@@ -227,6 +227,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [userRoleEmojiOverrides, setUserRoleEmojiOverrides] = useState<Record<string, string>>({})
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<Comment[]>([])
   const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([])
@@ -434,6 +435,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
         
         if (journey.flow_data) {
+          // Extract userRoleEmojiOverrides from flow_data if it exists
+          const overrides = (journey.flow_data as any).userRoleEmojiOverrides || {}
+          setUserRoleEmojiOverrides(overrides)
+          
           // Ensure nodes are selectable
           const nodesWithSelection = journey.flow_data.nodes.map(node => ({
             ...node,
@@ -1325,7 +1330,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     try {
       // Sort nodes to ensure parents come before children
       const sortedNodes = sortNodesForSaving(nodes)
-      const flowData = { nodes: sortedNodes, edges }
+      const flowData = { 
+        nodes: sortedNodes, 
+        edges,
+        userRoleEmojiOverrides 
+      }
       
       if (currentJourneyId) {
         // Update existing journey
@@ -2025,6 +2034,23 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [nodes, configureNode])
 
+  // Update emoji override for a user role and update all nodes
+  const handleUpdateEmojiOverride = useCallback((roleId: string, emoji: string) => {
+    // Update the overrides state
+    const newOverrides = { ...userRoleEmojiOverrides }
+    if (emoji) {
+      newOverrides[roleId] = emoji
+    } else {
+      delete newOverrides[roleId]
+    }
+    setUserRoleEmojiOverrides(newOverrides)
+    setHasUnsavedChanges(true)
+    
+    // Update all nodes with this user role to use the new emoji
+    // Note: The actual emoji display will be handled by UserRoleTag using the override
+    // We don't need to modify node data, just the override state
+  }, [userRoleEmojiOverrides])
+
   // Save node configuration
   const saveNodeConfiguration = useCallback(async (formData: NodeFormData) => {
     if (isAddingNewNode) {
@@ -2054,7 +2080,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         try {
           const updatedNodes = [...nodes, newNode]
           await updateUserJourney(currentJourneyId, {
-            flow_data: { nodes: updatedNodes, edges }
+            flow_data: { 
+              nodes: updatedNodes, 
+              edges,
+              userRoleEmojiOverrides 
+            }
           })
         } catch (error) {
           console.error('Error saving new node:', error)
@@ -2120,7 +2150,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           })
           
           await updateUserJourney(currentJourneyId, {
-            flow_data: { nodes: updatedNodes, edges }
+            flow_data: { 
+              nodes: updatedNodes, 
+              edges,
+              userRoleEmojiOverrides 
+            }
           })
         } catch (error) {
           console.error('Error saving node configuration:', error)
@@ -2779,7 +2813,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     // Save to database if journey exists
     if (currentJourneyId) {
       updateUserJourney(currentJourneyId, {
-        flow_data: { nodes: finalNodes, edges }
+        flow_data: { 
+          nodes: finalNodes, 
+          edges,
+          userRoleEmojiOverrides 
+        }
       }).catch(error => {
         console.error('Error saving tidy layout:', error)
       })
@@ -3398,7 +3436,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Save to database if journey exists
       if (currentJourneyId) {
         updateUserJourney(currentJourneyId, {
-          flow_data: { nodes: updatedNodes, edges }
+          flow_data: { 
+            nodes: updatedNodes, 
+            edges,
+            userRoleEmojiOverrides 
+          }
         }).catch(error => {
           console.error('Error saving tidy layout:', error)
         })
@@ -3484,6 +3526,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
         connectedEdges={edges}
+        userRoleEmojiOverrides={userRoleEmojiOverrides}
       />
     ),
     process: (props: any) => (
@@ -3495,6 +3538,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
         connectedEdges={edges}
+        userRoleEmojiOverrides={userRoleEmojiOverrides}
       />
     ),
     decision: (props: any) => (
@@ -3506,6 +3550,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
         connectedEdges={edges}
+        userRoleEmojiOverrides={userRoleEmojiOverrides}
       />
     ),
     end: (props: any) => (
@@ -3517,6 +3562,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
         connectedEdges={edges}
+        userRoleEmojiOverrides={userRoleEmojiOverrides}
       />
     ),
     label: (props: any) => (
@@ -3528,6 +3574,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
         connectedEdges={edges}
+        userRoleEmojiOverrides={userRoleEmojiOverrides}
       />
     ),
     highlightRegion: (props: any) => (
@@ -3536,7 +3583,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureRegion(props.id)}
       />
     ),
-  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges])
+  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges, userRoleEmojiOverrides])
 
   // Comment handlers
   const handleAddComment = useCallback(async (commentText: string) => {
@@ -3926,6 +3973,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setNodes((nds) => nds.filter((node) => node.id !== configuringNode.id))
           setEdges((eds) => eds.filter((edge) => edge.source !== configuringNode.id && edge.target !== configuringNode.id))
         } : undefined}
+        userRoleEmojiOverrides={userRoleEmojiOverrides}
+        onUpdateEmojiOverride={handleUpdateEmojiOverride}
       />
 
       {/* Delete Confirmation Modal */}

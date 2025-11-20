@@ -41,9 +41,10 @@ interface UserJourneyNodeProps {
   onEdit?: () => void
   isConnecting?: boolean
   connectedEdges?: Array<{ sourceHandle?: string | null; targetHandle?: string | null; source: string; target: string }>
+  userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit, isConnecting = false, connectedEdges = [] }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit, isConnecting = false, connectedEdges = [], userRoleEmojiOverrides = {} }: UserJourneyNodeProps) {
   const nodeData = data as UserJourneyNodeData
   const {
     label = '',
@@ -344,12 +345,20 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
           <div>
             {type !== 'label' && (
               <>
-                {userRole && (
-                  <UserRoleTag
-                    userRole={userRole}
-                    size="sm"
-                  />
-                )}
+                {userRole && (() => {
+                  // Use journey-specific emoji override if available, otherwise use global emoji
+                  const emojiOverride = userRoleEmojiOverrides[userRole.id]
+                  const userRoleWithOverride = emojiOverride !== undefined
+                    ? { ...userRole, icon: emojiOverride || userRole.icon }
+                    : userRole
+                  
+                  return (
+                    <UserRoleTag
+                      userRole={userRoleWithOverride}
+                      size="sm"
+                    />
+                  )
+                })()}
                 {!userRole && customUserRoleName && (
                   <div className="inline-flex items-center rounded-full font-medium px-2 py-1 text-xs gap-2 bg-gray-100 text-gray-700">
                     <span>{customUserRoleName}</span>
