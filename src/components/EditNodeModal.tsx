@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Node } from '@xyflow/react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
@@ -37,6 +37,7 @@ export interface NodeFormData {
   thirdPartyName: string
   customPlatformName: string
   userRole: UserRole | null
+  customUserRoleName: string
   bulletPoints: string[]
   notifications: Notification[]
   customProperties: Record<string, unknown>
@@ -235,6 +236,9 @@ export function EditNodeModal({
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
+  // Track if custom user role is selected
+  const [isCustomUserRoleSelected, setIsCustomUserRoleSelected] = useState(false)
+  
   // State for platforms from database
   const [platforms, setPlatforms] = useState<Platform[]>([])
   
@@ -259,6 +263,7 @@ export function EditNodeModal({
     thirdPartyName: '',
     customPlatformName: '',
     userRole: null,
+    customUserRoleName: '',
     bulletPoints: [''],
     notifications: [],
     customProperties: {},
@@ -273,6 +278,30 @@ export function EditNodeModal({
     }
     loadPlatforms()
   }, [])
+
+  // Sort platforms in the desired order
+  const sortedPlatforms = useMemo(() => {
+    const order = ['Legl', 'Legl End Client Platform', 'Legl Email', 'Back end', 'CMS']
+    const ordered: Platform[] = []
+    const unordered: Platform[] = []
+    
+    // First, add platforms in the specified order
+    order.forEach(name => {
+      const platform = platforms.find(p => p.name === name)
+      if (platform) {
+        ordered.push(platform)
+      }
+    })
+    
+    // Then add any remaining platforms that aren't in the order list
+    platforms.forEach(platform => {
+      if (!order.includes(platform.name)) {
+        unordered.push(platform)
+      }
+    })
+    
+    return [...ordered, ...unordered]
+  }, [platforms])
 
   // Update form when node changes
   useEffect(() => {
@@ -299,6 +328,7 @@ export function EditNodeModal({
         ? existingNotifications 
         : [{ id: `notif-${Date.now()}`, type: 'info' as const, message: '' }]
       
+      const customUserRoleName = (node.data?.customUserRoleName as string) || ''
       setFormData({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
@@ -306,11 +336,14 @@ export function EditNodeModal({
         thirdPartyName: (node.data?.thirdPartyName as string) || '',
         customPlatformName: (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || '',
         userRole: (node.data?.userRole as UserRole | null) || null,
+        customUserRoleName: customUserRoleName,
         bulletPoints: existingBulletPoints.length > 0 ? existingBulletPoints : [''],
         notifications: notificationsWithDefault,
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
         swimLane: (node as any).parentId || null
       })
+      // Set custom user role selected state if customUserRoleName exists
+      setIsCustomUserRoleSelected(!!customUserRoleName)
     } else if (isAddingNewNode && isOpen) {
       // Reset form for new node with one empty notification by default
       setBulletPointsWithIds([{ id: `bp-${Date.now()}`, text: '' }])
@@ -327,11 +360,14 @@ export function EditNodeModal({
         thirdPartyName: '',
         customPlatformName: '',
         userRole: null,
+        customUserRoleName: '',
         bulletPoints: [''],
         notifications: [{ id: `notif-${Date.now()}`, type: 'info' as const, message: '' }],
         customProperties: {},
         swimLane: null
       })
+      
+      setIsCustomUserRoleSelected(false)
     }
   }, [node, isOpen, isAddingNewNode, existingNodes])
 
@@ -710,14 +746,21 @@ export function EditNodeModal({
               User Role
             </label>
             <select
-              value={formData.userRole?.id || ''}
+              value={formData.customUserRoleName ? 'custom' : (formData.userRole?.id || '')}
               onChange={(e) => {
-                const role = userRoles.find(r => r.id === e.target.value)
-                setFormData(prev => ({ ...prev, userRole: role || null }))
+                if (e.target.value === 'custom') {
+                  setIsCustomUserRoleSelected(true)
+                  setFormData(prev => ({ ...prev, userRole: null, customUserRoleName: prev.customUserRoleName || '' }))
+                } else {
+                  setIsCustomUserRoleSelected(false)
+                  const role = userRoles.find(r => r.id === e.target.value)
+                  setFormData(prev => ({ ...prev, userRole: role || null, customUserRoleName: '' }))
+                }
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a role...</option>
+              <option value="custom">*Custom</option>
               {userRoles.map(role => (
                 <option key={role.id} value={role.id}>
                   {role.icon ? `${role.icon} ${role.name}` : role.name}
@@ -740,28 +783,45 @@ export function EditNodeModal({
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a platform...</option>
+              {/* Custom option */}
+              <option value="Custom">*Custom</option>
               {/* Database platforms */}
-              {platforms.map(platform => (
+              {sortedPlatforms.map(platform => (
                 <option key={platform.id} value={platform.name}>
                   {platform.name}
                 </option>
               ))}
-              {/* Custom option */}
-              <option value="Custom">Custom</option>
             </select>
           </div>
         </div>
+
+        {/* Custom User Role Name (conditionally shown) */}
+        {(isCustomUserRoleSelected || formData.customUserRoleName) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Custom User Role Name <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
+            </label>
+            <EmojiAutocomplete
+              value={formData.customUserRoleName}
+              onChange={(value) => setFormData(prev => ({ ...prev, customUserRoleName: value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter custom user role name"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Enter a custom user role name for this node.
+            </p>
+          </div>
+        )}
 
         {/* Custom Platform Name (conditionally shown) */}
         {formData.variant === 'Custom' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Custom Platform Name
+              Custom Platform Name <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
             </label>
-            <input
-              type="text"
+            <EmojiAutocomplete
               value={formData.customPlatformName}
-              onChange={(e) => setFormData(prev => ({ ...prev, customPlatformName: e.target.value }))}
+              onChange={(value) => setFormData(prev => ({ ...prev, customPlatformName: value }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="e.g., Stripe, Mailchimp, Twilio..."
             />
