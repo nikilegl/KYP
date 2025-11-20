@@ -23,6 +23,8 @@ interface EditNodeModalProps {
   existingNodes: Node[] // List of existing nodes to determine default node type
   onSave: (formData: NodeFormData) => void
   onDelete?: () => void
+  userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
+  onUpdateEmojiOverride?: (roleId: string, emoji: string) => void // Callback to update emoji override for all nodes
 }
 
 interface BulletPoint {
@@ -232,7 +234,9 @@ export function EditNodeModal({
   journeyLayout,
   existingNodes,
   onSave,
-  onDelete
+  onDelete,
+  userRoleEmojiOverrides = {},
+  onUpdateEmojiOverride
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
@@ -763,10 +767,59 @@ export function EditNodeModal({
               <option value="custom">*Custom</option>
               {userRoles.map(role => (
                 <option key={role.id} value={role.id}>
-                  {role.icon ? `${role.icon} ${role.name}` : role.name}
+                  {role.name}
                 </option>
               ))}
             </select>
+            
+            {/* Emoji selector for selected user role */}
+            {formData.userRole && onUpdateEmojiOverride && (() => {
+              const hasOverride = formData.userRole.id in userRoleEmojiOverrides
+              const currentEmoji = hasOverride 
+                ? userRoleEmojiOverrides[formData.userRole.id] 
+                : (formData.userRole.icon || '')
+              
+              return (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Emoji for this role
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <EmojiAutocomplete
+                        key={`emoji-${formData.userRole.id}-${hasOverride ? 'override' : 'default'}`}
+                        value={currentEmoji}
+                        onChange={(value) => {
+                          if (formData.userRole) {
+                            onUpdateEmojiOverride(formData.userRole.id, value)
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                        placeholder="Select emoji..."
+                      />
+                    </div>
+                    {hasOverride && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (formData.userRole && onUpdateEmojiOverride) {
+                            // Remove override to use global emoji
+                            onUpdateEmojiOverride(formData.userRole.id, '')
+                          }
+                        }}
+                        className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Reset to global emoji"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    This emoji will be used for all nodes with this role in this journey.
+                  </p>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Platform/Variant */}
