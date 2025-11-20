@@ -20,6 +20,7 @@ export interface UserJourneyNodeData {
   label: string
   type: UserJourneyNodeType
   userRole?: UserRole
+  customUserRoleName?: string
   bulletPoints?: string[]
   notifications?: Notification[]
   customProperties?: Record<string, unknown>
@@ -48,6 +49,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     label = '',
     type = 'process',
     userRole,
+    customUserRoleName = '',
     bulletPoints = [],
     notifications = [],
     customProperties = {},
@@ -335,16 +337,25 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
       )}
 
       {/* User Role Tag and Platform Label */}
-      {/* Show for all nodes if either userRole or variant is present */}
+      {/* Show for all nodes if either userRole, customUserRoleName, or variant is present */}
       {/* For label nodes, only show platform (hide user role) */}
-      {(userRole || variant) && (
+      {(userRole || customUserRoleName || variant) && (
         <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
           <div>
-            {type !== 'label' && userRole && (
-              <UserRoleTag
-                userRole={userRole}
-                size="sm"
-              />
+            {type !== 'label' && (
+              <>
+                {userRole && (
+                  <UserRoleTag
+                    userRole={userRole}
+                    size="sm"
+                  />
+                )}
+                {!userRole && customUserRoleName && (
+                  <div className="inline-flex items-center rounded-full font-medium px-2 py-1 text-xs gap-2 bg-gray-100 text-gray-700">
+                    <span>{customUserRoleName}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div>
