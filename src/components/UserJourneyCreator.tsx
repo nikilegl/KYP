@@ -3696,7 +3696,48 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => {
+            onClick={async () => {
+              // Save changes before navigating if there are unsaved changes
+              if (hasUnsavedChanges && journeyName.trim() && currentJourneyId) {
+                try {
+                  await saveJourney()
+                } catch (error) {
+                  console.error('Error saving journey before navigation:', error)
+                  // Still navigate even if save fails
+                }
+              } else if (hasUnsavedChanges && journeyName.trim() && !currentJourneyId) {
+                // For new journeys, save even if name is default (don't open modal, just save)
+                try {
+                  setSaving(true)
+                  const sortedNodes = sortNodesForSaving(nodes)
+                  const flowData = { 
+                    nodes: sortedNodes, 
+                    edges,
+                    userRoleEmojiOverrides 
+                  }
+                  const created = await createUserJourney(
+                    journeyName,
+                    journeyDescription,
+                    flowData,
+                    selectedProjectId || null,
+                    journeyLayout
+                  )
+                  if (created) {
+                    await setUserJourneyLawFirms(created.id, selectedLawFirmIds)
+                    if (selectedFolderId) {
+                      await assignUserJourneysToFolder([created.id], selectedFolderId)
+                    }
+                    setHasUnsavedChanges(false)
+                  }
+                  setSaving(false)
+                } catch (error) {
+                  console.error('Error saving journey before navigation:', error)
+                  setSaving(false)
+                  // Still navigate even if save fails
+                }
+              }
+              
+              // Navigate after saving (or if no unsaved changes)
               if (journeyFolder) {
                 const slug = nameToSlug(journeyFolder.name)
                 navigate(`/user-journeys/${slug}`)
