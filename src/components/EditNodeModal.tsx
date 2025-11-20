@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Node } from '@xyflow/react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
@@ -278,6 +278,30 @@ export function EditNodeModal({
     }
     loadPlatforms()
   }, [])
+
+  // Sort platforms in the desired order
+  const sortedPlatforms = useMemo(() => {
+    const order = ['Legl', 'Legl End Client Platform', 'Legl Email', 'Back end', 'CMS']
+    const ordered: Platform[] = []
+    const unordered: Platform[] = []
+    
+    // First, add platforms in the specified order
+    order.forEach(name => {
+      const platform = platforms.find(p => p.name === name)
+      if (platform) {
+        ordered.push(platform)
+      }
+    })
+    
+    // Then add any remaining platforms that aren't in the order list
+    platforms.forEach(platform => {
+      if (!order.includes(platform.name)) {
+        unordered.push(platform)
+      }
+    })
+    
+    return [...ordered, ...unordered]
+  }, [platforms])
 
   // Update form when node changes
   useEffect(() => {
@@ -762,7 +786,7 @@ export function EditNodeModal({
               {/* Custom option */}
               <option value="Custom">*Custom</option>
               {/* Database platforms */}
-              {platforms.map(platform => (
+              {sortedPlatforms.map(platform => (
                 <option key={platform.id} value={platform.name}>
                   {platform.name}
                 </option>
