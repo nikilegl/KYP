@@ -324,98 +324,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [journeyLayout, setNodes])
 
   // Update edges when layout changes to map handle IDs
-  // This runs AFTER nodes have been updated and re-rendered
-  useEffect(() => {
-    // Only update if layout actually changed
-    if (prevLayoutRef.current === journeyLayout) {
-      return
-    }
-    
-    const oldLayout = prevLayoutRef.current
-    const newLayout = journeyLayout
-    
-    console.log('🔗 Scheduling edge update for layout change:', oldLayout, '->', newLayout)
-    
-    // Use setTimeout to ensure nodes have re-rendered with new handles first
-    const timeoutId = setTimeout(() => {
-      console.log('⏰ Now recreating edges after nodes have re-rendered')
-      
-      // RECREATE edges with new IDs instead of just updating properties
-      // This is necessary because React Flow embeds handle IDs in auto-generated edge IDs
-      setEdges((currentEdges) => {
-        console.log('📊 Current edges before update:', currentEdges.map(e => ({ 
-          id: e.id, 
-          source: e.source, 
-          sourceHandle: e.sourceHandle,
-          target: e.target,
-          targetHandle: e.targetHandle 
-        })))
-        
-        const recreated = currentEdges.map((edge) => {
-          let newSourceHandle = edge.sourceHandle
-          let newTargetHandle = edge.targetHandle
-          
-          // Map source handles
-          if (edge.sourceHandle) {
-            if (oldLayout === 'vertical' && newLayout === 'horizontal') {
-              // Vertical -> Horizontal: bottom -> right, top -> left
-              if (edge.sourceHandle === 'bottom') newSourceHandle = 'right'
-              else if (edge.sourceHandle === 'top') newSourceHandle = 'left'
-            } else if (oldLayout === 'horizontal' && newLayout === 'vertical') {
-              // Horizontal -> Vertical: right -> bottom, left -> top
-              if (edge.sourceHandle === 'right') newSourceHandle = 'bottom'
-              else if (edge.sourceHandle === 'left') newSourceHandle = 'top'
-            }
-          }
-          
-          // Map target handles
-          if (edge.targetHandle) {
-            if (oldLayout === 'vertical' && newLayout === 'horizontal') {
-              // Vertical -> Horizontal: top -> left, bottom -> right
-              if (edge.targetHandle === 'top') newTargetHandle = 'left'
-              else if (edge.targetHandle === 'bottom') newTargetHandle = 'right'
-            } else if (oldLayout === 'horizontal' && newLayout === 'vertical') {
-              // Horizontal -> Vertical: left -> top, right -> bottom
-              if (edge.targetHandle === 'left') newTargetHandle = 'top'
-              else if (edge.targetHandle === 'right') newTargetHandle = 'bottom'
-            }
-          }
-          
-          if (edge.sourceHandle !== newSourceHandle || edge.targetHandle !== newTargetHandle) {
-            console.log(`  📝 Edge ${edge.id}: ${edge.sourceHandle} -> ${newSourceHandle}, ${edge.targetHandle} -> ${newTargetHandle}`)
-          }
-          
-          // Create a new edge with updated handles and a new ID
-          // This forces React Flow to recognize the new handle IDs
-          const newEdge = {
-            ...edge,
-            id: `xy-edge__${edge.source}${newSourceHandle}-${edge.target}${newTargetHandle}`,
-            sourceHandle: newSourceHandle,
-            targetHandle: newTargetHandle
-          }
-          
-          console.log(`  🔄 Recreated edge: old ID="${edge.id}" -> new ID="${newEdge.id}"`)
-          
-          return newEdge
-        })
-        
-        console.log('✅ Recreated edges with new IDs:', recreated.map(e => ({ 
-          id: e.id, 
-          source: e.source, 
-          sourceHandle: e.sourceHandle,
-          target: e.target,
-          targetHandle: e.targetHandle 
-        })))
-        
-        return recreated
-      })
-    }, 500) // Delay to let nodes re-render and handles re-register with React Flow
-    
-    // Update ref for next time
-    prevLayoutRef.current = journeyLayout
-    
-    return () => clearTimeout(timeoutId)
-  }, [journeyLayout, setEdges])
+  // Note: Layout-specific handle mapping removed - nodes now support connectors on all sides
+  // Handles can be on any side (top, bottom, left, right) regardless of layout
 
   const loadData = async () => {
     try {
@@ -530,7 +440,107 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             selectable: true
           }))
           setNodes(nodesWithSelection)
-          setEdges(journey.flow_data.edges)
+          
+          // Migrate old edge handle IDs to new format if needed
+          // Old format: 'top', 'bottom', 'left', 'right' (simple side names) or null/undefined
+          // New format: 'source-top', 'target-top', etc. (with type prefix)
+          console.log('🔍 Checking edges for migration:', {
+            totalEdges: journey.flow_data.edges.length,
+            sampleEdges: journey.flow_data.edges.slice(0, 5).map(e => ({
+              id: e.id,
+              source: e.source,
+              sourceHandle: e.sourceHandle,
+              target: e.target,
+              targetHandle: e.targetHandle,
+              sourceHandleType: typeof e.sourceHandle,
+              targetHandleType: typeof e.targetHandle
+            }))
+          })
+          
+          // Determine default handle side based on journey layout
+          // For vertical layouts: source-bottom, target-top
+          // For horizontal layouts: source-right, target-left
+          const defaultSourceHandle = journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'
+          const defaultTargetHandle = journeyLayout === 'horizontal' ? 'target-left' : 'target-top'
+          
+          const migratedEdges = journey.flow_data.edges.map(edge => {
+            let newSourceHandle = edge.sourceHandle
+            let newTargetHandle = edge.targetHandle
+            let needsMigration = false
+            
+            // Check if sourceHandle needs migration
+            if (!newSourceHandle || 
+                (typeof newSourceHandle === 'string' &&
+                 !newSourceHandle.startsWith('source-') && 
+                 !newSourceHandle.startsWith('target-'))) {
+              if (newSourceHandle && typeof newSourceHandle === 'string') {
+                // Old format: 'top', 'bottom', etc. - migrate to new format
+                const validSides = ['top', 'bottom', 'left', 'right']
+                if (validSides.includes(newSourceHandle)) {
+                  newSourceHandle = `source-${newSourceHandle}`
+                  needsMigration = true
+                }
+              } else {
+                // No handle ID - assign default based on layout
+                newSourceHandle = defaultSourceHandle
+                needsMigration = true
+              }
+            }
+            
+            // Check if targetHandle needs migration
+            if (!newTargetHandle || 
+                (typeof newTargetHandle === 'string' &&
+                 !newTargetHandle.startsWith('source-') && 
+                 !newTargetHandle.startsWith('target-'))) {
+              if (newTargetHandle && typeof newTargetHandle === 'string') {
+                // Old format: 'top', 'bottom', etc. - migrate to new format
+                const validSides = ['top', 'bottom', 'left', 'right']
+                if (validSides.includes(newTargetHandle)) {
+                  newTargetHandle = `target-${newTargetHandle}`
+                  needsMigration = true
+                }
+              } else {
+                // No handle ID - assign default based on layout
+                newTargetHandle = defaultTargetHandle
+                needsMigration = true
+              }
+            }
+            
+            // Always return migrated edge if migration was needed
+            if (needsMigration) {
+              console.log('🔄 Migrating edge handles:', {
+                edgeId: edge.id,
+                old: { sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle },
+                new: { sourceHandle: newSourceHandle, targetHandle: newTargetHandle }
+              })
+              return {
+                ...edge,
+                sourceHandle: newSourceHandle,
+                targetHandle: newTargetHandle
+              }
+            }
+            
+            return edge
+          })
+          
+          const migratedCount = migratedEdges.filter((e, i) => {
+            const original = journey.flow_data.edges[i]
+            return e.sourceHandle !== original.sourceHandle || e.targetHandle !== original.targetHandle
+          }).length
+          
+          console.log('📊 Edge migration complete:', {
+            totalEdges: migratedEdges.length,
+            migratedCount,
+            sampleEdges: migratedEdges.slice(0, 3).map(e => ({
+              id: e.id,
+              source: e.source,
+              sourceHandle: e.sourceHandle,
+              target: e.target,
+              targetHandle: e.targetHandle
+            }))
+          })
+          
+          setEdges(migratedEdges)
         }
       } else {
         // New journey - set up defaults
@@ -1100,10 +1110,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [journeyLayout, nodes])
 
   // Handle connection end (when user releases the drag)
-  const onConnectEnd = useCallback((_event: any) => {
+  const onConnectEnd = useCallback((_event: any, params?: any) => {
     setIsConnecting(false)
-    console.log('🛑 Connection END - User released drag')
-  }, [])
+    console.log('🛑 Connection END - User released drag', params)
+    
+    // Log current edges to see if edge was created
+    setTimeout(() => {
+      console.log('📊 Current edges after connection end:', edges.map(e => ({
+        id: e.id,
+        source: e.source,
+        sourceHandle: e.sourceHandle,
+        target: e.target,
+        targetHandle: e.targetHandle
+      })))
+    }, 100)
+  }, [edges])
 
   // Monitor cursor state changes by checking document classes
   useEffect(() => {
@@ -1140,7 +1161,43 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         target: params.target,
         targetHandle: params.targetHandle
       })
-      setEdges((eds) => addEdge({ ...params, data: {} }, eds))
+      
+      // Fix handle IDs if React Flow picked the wrong handle type
+      // React Flow might pick target handles when dragging from source handles
+      // because we have both source and target handles at the same position
+      let fixedSourceHandle = params.sourceHandle
+      let fixedTargetHandle = params.targetHandle
+      
+      // If sourceHandle starts with 'target-', convert it to 'source-'
+      if (fixedSourceHandle && fixedSourceHandle.startsWith('target-')) {
+        fixedSourceHandle = fixedSourceHandle.replace(/^target-/, 'source-')
+        console.log('🔧 Fixed sourceHandle:', params.sourceHandle, '->', fixedSourceHandle)
+      }
+      
+      // If targetHandle starts with 'source-', convert it to 'target-'
+      if (fixedTargetHandle && fixedTargetHandle.startsWith('source-')) {
+        fixedTargetHandle = fixedTargetHandle.replace(/^source-/, 'target-')
+        console.log('🔧 Fixed targetHandle:', params.targetHandle, '->', fixedTargetHandle)
+      }
+      
+      const edgeParams = {
+        ...params,
+        sourceHandle: fixedSourceHandle,
+        targetHandle: fixedTargetHandle,
+        data: {}
+      }
+      
+      console.log('📝 Creating edge with handle IDs:', {
+        sourceHandle: edgeParams.sourceHandle,
+        targetHandle: edgeParams.targetHandle
+      })
+      
+      setEdges((eds) => {
+        const newEdges = addEdge(edgeParams, eds)
+        console.log('🔗 Edge added. Total edges:', newEdges.length)
+        console.log('🔗 New edge:', newEdges[newEdges.length - 1])
+        return newEdges
+      })
     },
     [setEdges]
   )
@@ -1166,6 +1223,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       return false
     }
     
+    // Don't allow connections to label nodes
+    if (sourceNode.data?.type === 'label' || targetNode.data?.type === 'label') {
+      console.log('  ❌ Validation FAILED: Cannot connect to/from label nodes')
+      return false
+    }
+    
     console.log('  ℹ️ Node info:', {
       source: { id: sourceNode.id, type: sourceNode.data?.type, layout: sourceNode.data?.journeyLayout },
       target: { id: targetNode.id, type: targetNode.data?.type, layout: targetNode.data?.journeyLayout }
@@ -1174,6 +1237,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     // Basic validation - can't connect to self
     const isValid = connection.source !== connection.target
     console.log(`  ${isValid ? '✅' : '❌'} Validation result: ${isValid}`)
+    
+    // Always return true for valid node-to-node connections (all sides are allowed now)
     return isValid
   }, [nodes])
 
@@ -3417,6 +3482,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         thirdParties={thirdParties}
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
+        isConnecting={isConnecting}
+        connectedEdges={edges}
       />
     ),
     process: (props: any) => (
@@ -3426,6 +3493,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         thirdParties={thirdParties}
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
+        isConnecting={isConnecting}
+        connectedEdges={edges}
       />
     ),
     decision: (props: any) => (
@@ -3435,6 +3504,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         thirdParties={thirdParties}
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
+        isConnecting={isConnecting}
+        connectedEdges={edges}
       />
     ),
     end: (props: any) => (
@@ -3444,6 +3515,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         thirdParties={thirdParties}
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
+        isConnecting={isConnecting}
+        connectedEdges={edges}
       />
     ),
     label: (props: any) => (
@@ -3453,6 +3526,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         thirdParties={thirdParties}
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
+        isConnecting={isConnecting}
+        connectedEdges={edges}
       />
     ),
     highlightRegion: (props: any) => (
@@ -3461,7 +3536,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         onEdit={() => configureRegion(props.id)}
       />
     ),
-  }), [configureNode, thirdParties, platforms, configureRegion])
+  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges])
 
   // Comment handlers
   const handleAddComment = useCallback(async (commentText: string) => {
@@ -4023,7 +4098,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
         journeyName={journeyName}
         journeyDescription={journeyDescription}
-        journeyLayout={journeyLayout}
         journeyStatus={journeyStatus}
         selectedProjectId={selectedProjectId}
         selectedLawFirmIds={selectedLawFirmIds}
@@ -4032,7 +4106,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         lawFirms={lawFirms}
         onNameChange={setJourneyName}
         onDescriptionChange={setJourneyDescription}
-        onLayoutChange={setJourneyLayout}
         onStatusChange={setJourneyStatus}
         onProjectChange={setSelectedProjectId}
         onLawFirmSearchChange={setLawFirmSearchQuery}
