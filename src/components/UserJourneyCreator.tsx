@@ -2094,6 +2094,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Update existing node
       if (!configuringNode) return
 
+      // If custom user role name and emoji are set, apply emoji to all nodes with the same custom user role name
+      const customUserRoleName = formData.customUserRoleName?.trim()
+      const customUserRoleEmoji = (formData.customUserRoleEmoji || '').trim()
+
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id === configuringNode.id) {
@@ -2117,6 +2121,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             
             return updatedNode
           }
+          
+          // Apply emoji to all nodes with the same custom user role name
+          if (customUserRoleName && node.data?.customUserRoleName === customUserRoleName) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                customUserRoleEmoji: customUserRoleEmoji
+              }
+            }
+          }
+          
           return node
         })
       )
@@ -2124,6 +2140,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Save to database if journey already exists
       if (currentJourneyId) {
         try {
+          // If custom user role name and emoji are set, apply emoji to all nodes with the same custom user role name
+          const customUserRoleName = formData.customUserRoleName?.trim()
+          const customUserRoleEmoji = (formData.customUserRoleEmoji || '').trim()
+          
           const updatedNodes = nodes.map((node) => {
             if (node.id === configuringNode.id) {
               const updatedNode: any = {
@@ -2146,6 +2166,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               
               return updatedNode
             }
+            
+            // Apply emoji to all nodes with the same custom user role name
+            if (customUserRoleName && node.data?.customUserRoleName === customUserRoleName) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  customUserRoleEmoji: customUserRoleEmoji
+                }
+              }
+            }
+            
             return node
           })
           

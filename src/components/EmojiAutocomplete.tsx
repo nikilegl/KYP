@@ -136,6 +136,7 @@ export function EmojiAutocomplete({
           }
           if (emojiMatches[selectedIndex]) {
             e.preventDefault()
+            e.stopPropagation() // Prevent event from bubbling up to modal's Enter handler
             insertEmoji(emojiMatches[selectedIndex].emoji)
             return
           }
@@ -236,7 +237,7 @@ export function EmojiAutocomplete({
       {showPicker && emojiMatches.length > 0 && pickerPosition && (
         <div
           ref={pickerRef}
-          className="fixed z-[100] w-64 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-64 overflow-y-auto"
+          className="emoji-picker-dropdown fixed z-[100] w-64 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-64 overflow-y-auto"
           style={{ 
             top: `${pickerPosition.top}px`, 
             left: `${pickerPosition.left}px` 

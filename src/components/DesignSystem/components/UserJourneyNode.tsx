@@ -21,6 +21,7 @@ export interface UserJourneyNodeData {
   type: UserJourneyNodeType
   userRole?: UserRole
   customUserRoleName?: string
+  customUserRoleEmoji?: string
   bulletPoints?: string[]
   notifications?: Notification[]
   customProperties?: Record<string, unknown>
@@ -51,6 +52,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     type = 'process',
     userRole,
     customUserRoleName = '',
+    customUserRoleEmoji = '',
     bulletPoints = [],
     notifications = [],
     customProperties = {},
@@ -361,6 +363,16 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                 })()}
                 {!userRole && customUserRoleName && (
                   <div className="inline-flex items-center rounded-full font-medium px-2 py-1 text-xs gap-2 bg-gray-100 text-gray-700">
+                    {customUserRoleEmoji && (
+                      <span 
+                        style={{ 
+                          fontSize: 14,
+                          lineHeight: 1
+                        }}
+                      >
+                        {customUserRoleEmoji}
+                      </span>
+                    )}
                     <span>{customUserRoleName}</span>
                   </div>
                 )}
