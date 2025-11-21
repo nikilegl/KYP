@@ -29,22 +29,6 @@ export function UserRoleIconDisplay({
     const iconColor = userRole.colour
     const iconSize = iconSizes[size]
 
-    // Prefer glossy icon if available
-    if (userRole.glossy_icon) {
-      return (
-        <div 
-          style={{ 
-            width: iconSize, 
-            height: iconSize,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          dangerouslySetInnerHTML={{ __html: userRole.glossy_icon }}
-        />
-      )
-    }
-
     if (!userRole.icon) {
       return <Users size={iconSize} style={{ color: iconColor }} />
     }

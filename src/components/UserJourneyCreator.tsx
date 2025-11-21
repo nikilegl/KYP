@@ -42,6 +42,7 @@ import { assignUserJourneysToFolder, getUserJourneyFolders, type UserJourneyFold
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import { getPlatforms } from '../lib/database/services/platformService'
+import { createUserRole } from '../lib/database/services/userRoleService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
@@ -4437,6 +4438,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         } : undefined}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         onUpdateEmojiOverride={handleUpdateEmojiOverride}
+        onCreateUserRole={async (name: string, colour: string, icon?: string) => {
+          try {
+            const userRole = await createUserRole(name, colour, icon)
+            if (userRole) {
+              // Note: The parent component (WorkspaceDataFetcher) should refresh userRoles
+              // For now, we'll return the created role so EditNodeModal can use it immediately
+              return userRole
+            }
+            return null
+          } catch (error) {
+            console.error('Error creating user role:', error)
+            return null
+          }
+        }}
         onThirdPartyCreated={async (thirdParty) => {
           // Refresh third parties list
           if (workspaceId) {

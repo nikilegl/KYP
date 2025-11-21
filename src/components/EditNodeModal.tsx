@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { getPlatforms } from '../lib/database'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
 import { AddPlatformModal } from './AddPlatformModal'
+import { UserRoleForm } from './UserRoleManager/UserRoleForm'
 
 interface EditNodeModalProps {
   isOpen: boolean
@@ -26,6 +27,7 @@ interface EditNodeModalProps {
   onDelete?: () => void
   userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
   onUpdateEmojiOverride?: (roleId: string, emoji: string) => void // Callback to update emoji override for all nodes
+  onCreateUserRole?: (name: string, colour: string, icon?: string) => Promise<UserRole | null> // Callback to create a new user role
 }
 
 interface BulletPoint {
@@ -238,6 +240,7 @@ export function EditNodeModal({
   onDelete,
   userRoleEmojiOverrides = {},
   onUpdateEmojiOverride,
+  onCreateUserRole,
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
@@ -264,6 +267,18 @@ export function EditNodeModal({
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null)
   const platformSearchRef = useRef<HTMLDivElement>(null)
   const platformInputRef = useRef<HTMLInputElement>(null)
+
+  // State for user role search and modal
+  const [userRoleSearchQuery, setUserRoleSearchQuery] = useState('')
+  const [showUserRoleForm, setShowUserRoleForm] = useState(false)
+  const [newUserRole, setNewUserRole] = useState({ name: '', colour: '#3B82F6', icon: '' })
+  const [creatingUserRole, setCreatingUserRole] = useState(false)
+  const [selectedUserRole, setSelectedUserRole] = useState<UserRole | null>(null)
+  const [showUserRoleDropdown, setShowUserRoleDropdown] = useState(false)
+  const [highlightedUserRoleIndex, setHighlightedUserRoleIndex] = useState(-1)
+  const [userRoleDropdownPosition, setUserRoleDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null)
+  const userRoleSearchRef = useRef<HTMLDivElement>(null)
+  const userRoleInputRef = useRef<HTMLInputElement>(null)
 
   // DnD sensors
   const sensors = useSensors(
@@ -309,10 +324,26 @@ export function EditNodeModal({
     )
   }, [platforms, platformSearchQuery])
 
+  // Filter user roles based on search query
+  const filteredUserRoles = useMemo(() => {
+    if (!userRoleSearchQuery.trim()) {
+      return []
+    }
+    const query = userRoleSearchQuery.toLowerCase().trim()
+    return userRoles.filter(role => 
+      role.name.toLowerCase().includes(query)
+    )
+  }, [userRoles, userRoleSearchQuery])
+
   // Reset highlighted index when filtered platforms change
   useEffect(() => {
     setHighlightedIndex(-1)
   }, [filteredPlatforms])
+
+  // Reset highlighted user role index when filtered user roles change
+  useEffect(() => {
+    setHighlightedUserRoleIndex(-1)
+  }, [filteredUserRoles])
 
   // Scroll highlighted item into view
   useEffect(() => {
@@ -325,7 +356,18 @@ export function EditNodeModal({
     }
   }, [highlightedIndex])
 
-  // Handle keyboard navigation
+  // Scroll highlighted user role into view
+  useEffect(() => {
+    if (highlightedUserRoleIndex >= 0) {
+      const dropdown = document.querySelector('.user-role-dropdown')
+      const highlightedItem = dropdown?.children[highlightedUserRoleIndex] as HTMLElement
+      if (highlightedItem) {
+        highlightedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      }
+    }
+  }, [highlightedUserRoleIndex])
+
+  // Handle keyboard navigation for platforms
   const handlePlatformSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showPlatformDropdown || !platformSearchQuery.trim()) {
       return
@@ -363,6 +405,58 @@ export function EditNodeModal({
     }
   }
 
+  // Handle keyboard navigation for user roles
+  const handleUserRoleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showUserRoleDropdown || !userRoleSearchQuery.trim()) {
+      return
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const maxIndex = filteredUserRoles.length > 0 ? filteredUserRoles.length - 1 : 0
+      setHighlightedUserRoleIndex(prev => (prev < maxIndex ? prev + 1 : 0))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      const maxIndex = filteredUserRoles.length > 0 ? filteredUserRoles.length - 1 : 0
+      setHighlightedUserRoleIndex(prev => (prev > 0 ? prev - 1 : maxIndex))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlightedUserRoleIndex >= 0 && highlightedUserRoleIndex < filteredUserRoles.length) {
+        const role = filteredUserRoles[highlightedUserRoleIndex]
+        setSelectedUserRole(role)
+        setUserRoleSearchQuery(role.name)
+        setFormData(prev => ({ 
+          ...prev, 
+          userRole: role,
+          customUserRoleName: ''
+        }))
+        setIsCustomUserRoleSelected(false)
+        setShowUserRoleDropdown(false)
+        setHighlightedUserRoleIndex(-1)
+        
+        // Initialize emoji input value for the selected role
+        if (onUpdateEmojiOverride) {
+          const hasOverride = role.id in userRoleEmojiOverrides
+          const initialEmoji = hasOverride 
+            ? userRoleEmojiOverrides[role.id] 
+            : (role.icon || '')
+          setEmojiInputValue(prev => ({
+            ...prev,
+            [role.id]: initialEmoji
+          }))
+        }
+      } else if (filteredUserRoles.length === 0 && userRoleSearchQuery.trim()) {
+        // If no results, open user role form modal
+        setNewUserRole({ name: userRoleSearchQuery.trim(), colour: '#3B82F6', icon: '' })
+        setShowUserRoleForm(true)
+        setShowUserRoleDropdown(false)
+      }
+    } else if (e.key === 'Escape') {
+      setShowUserRoleDropdown(false)
+      setHighlightedUserRoleIndex(-1)
+    }
+  }
+
   // Find selected platform
   useEffect(() => {
     if (formData.variant && formData.variant !== 'Custom') {
@@ -378,6 +472,19 @@ export function EditNodeModal({
       }
     }
   }, [formData.variant, platforms, showPlatformDropdown])
+
+  // Find selected user role
+  useEffect(() => {
+    if (formData.userRole) {
+      setSelectedUserRole(formData.userRole)
+      setUserRoleSearchQuery(formData.userRole.name)
+    } else {
+      setSelectedUserRole(null)
+      if (!showUserRoleDropdown) {
+        setUserRoleSearchQuery('')
+      }
+    }
+  }, [formData.userRole, showUserRoleDropdown])
 
   // Update dropdown position when it opens
   useEffect(() => {
@@ -404,6 +511,31 @@ export function EditNodeModal({
     }
   }, [showPlatformDropdown, platformSearchQuery])
 
+  // Update user role dropdown position when it opens
+  useEffect(() => {
+    if (showUserRoleDropdown && userRoleInputRef.current) {
+      const updatePosition = () => {
+        if (userRoleInputRef.current) {
+          const rect = userRoleInputRef.current.getBoundingClientRect()
+          setUserRoleDropdownPosition({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width
+          })
+        }
+      }
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    } else {
+      setUserRoleDropdownPosition(null)
+    }
+  }, [showUserRoleDropdown, userRoleSearchQuery])
+
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -429,6 +561,32 @@ export function EditNodeModal({
       }
     }
   }, [showPlatformDropdown])
+
+  // Handle click outside to close user role dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      const dropdown = document.querySelector('.user-role-dropdown')
+      if (
+        userRoleSearchRef.current && 
+        !userRoleSearchRef.current.contains(target) &&
+        dropdown &&
+        !dropdown.contains(target)
+      ) {
+        setShowUserRoleDropdown(false)
+      }
+    }
+
+    if (showUserRoleDropdown) {
+      // Use a small delay to avoid closing immediately on open
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside)
+      }, 0)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showUserRoleDropdown])
 
   // Update form when node changes
   useEffect(() => {
@@ -514,6 +672,9 @@ export function EditNodeModal({
       // Reset platform search for new node
       setPlatformSearchQuery('')
       setSelectedPlatform(null)
+      // Reset user role search for new node
+      setUserRoleSearchQuery('')
+      setSelectedUserRole(null)
       setIsCustomUserRoleSelected(false)
     }
     
@@ -928,40 +1089,101 @@ export function EditNodeModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               User Role
             </label>
-            <select
-              value={formData.customUserRoleName ? 'custom' : (formData.userRole?.id || '')}
-              onChange={(e) => {
-                if (e.target.value === 'custom') {
-                  setIsCustomUserRoleSelected(true)
-                  setFormData(prev => ({ ...prev, userRole: null, customUserRoleName: prev.customUserRoleName || '' }))
-                } else {
-                  setIsCustomUserRoleSelected(false)
-                  const role = userRoles.find(r => r.id === e.target.value)
-                  setFormData(prev => ({ ...prev, userRole: role || null, customUserRoleName: '' }))
-                  
-                  // Initialize emoji input value for the selected role
-                  if (role) {
-                    const hasOverride = role.id in userRoleEmojiOverrides
-                    const initialEmoji = hasOverride 
-                      ? userRoleEmojiOverrides[role.id] 
-                      : (role.icon || '')
-                    setEmojiInputValue(prev => ({
-                      ...prev,
-                      [role.id]: initialEmoji
-                    }))
+            <div className="relative" ref={userRoleSearchRef}>
+              <input
+                ref={userRoleInputRef}
+                type="text"
+                value={userRoleSearchQuery}
+                onChange={(e) => {
+                  setUserRoleSearchQuery(e.target.value)
+                  setShowUserRoleDropdown(true)
+                  setHighlightedUserRoleIndex(-1)
+                  if (e.target.value.trim() === '') {
+                    setFormData(prev => ({ ...prev, userRole: null, customUserRoleName: '' }))
+                    setSelectedUserRole(null)
+                    setIsCustomUserRoleSelected(false)
                   }
-                }
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a role...</option>
-              <option value="custom">*Custom</option>
-              {userRoles.map(role => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
+                }}
+                onKeyDown={handleUserRoleSearchKeyDown}
+                onFocus={() => {
+                  setShowUserRoleDropdown(true)
+                }}
+                placeholder="Search for a user role..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {showUserRoleDropdown && userRoleSearchQuery.trim() && userRoleDropdownPosition && createPortal(
+                <div 
+                  className="user-role-dropdown fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                  style={{
+                    top: `${userRoleDropdownPosition.top}px`,
+                    left: `${userRoleDropdownPosition.left}px`,
+                    width: `${userRoleDropdownPosition.width}px`
+                  }}
+                >
+                  {filteredUserRoles.length > 0 ? (
+                    filteredUserRoles.map((role, index) => (
+                      <button
+                        key={role.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedUserRole(role)
+                          setUserRoleSearchQuery(role.name)
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            userRole: role,
+                            customUserRoleName: ''
+                          }))
+                          setIsCustomUserRoleSelected(false)
+                          setShowUserRoleDropdown(false)
+                          setHighlightedUserRoleIndex(-1)
+                          
+                          // Initialize emoji input value for the selected role
+                          if (onUpdateEmojiOverride) {
+                            const hasOverride = role.id in userRoleEmojiOverrides
+                            const initialEmoji = hasOverride 
+                              ? userRoleEmojiOverrides[role.id] 
+                              : (role.icon || '')
+                            setEmojiInputValue(prev => ({
+                              ...prev,
+                              [role.id]: initialEmoji
+                            }))
+                          }
+                        }}
+                        onMouseEnter={() => setHighlightedUserRoleIndex(index)}
+                        className={`w-full text-left px-3 py-2 flex items-center gap-2 ${
+                          highlightedUserRoleIndex === index 
+                            ? 'bg-blue-50 text-blue-900' 
+                            : 'hover:bg-gray-100'
+                        }`}
+                      >
+                        {role.icon && (
+                          <span className="text-lg">{role.icon}</span>
+                        )}
+                        <span>{role.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          const roleName = userRoleSearchQuery.trim()
+                          setNewUserRole({ name: roleName, colour: '#3B82F6', icon: '' })
+                          setShowUserRoleForm(true)
+                          setShowUserRoleDropdown(false)
+                        }}
+                        className="w-full text-left text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        + Add user role "{userRoleSearchQuery}"
+                      </button>
+                    </div>
+                  )}
+                </div>,
+                document.body
+              )}
+            </div>
             
             {/* Emoji selector for selected user role */}
             {formData.userRole && onUpdateEmojiOverride && (() => {
@@ -1183,6 +1405,65 @@ export function EditNodeModal({
         }}
         initialName={platformSearchQuery.trim()}
       />
+
+      {/* Add User Role Form Modal */}
+      {onCreateUserRole && showUserRoleForm && (
+        <UserRoleForm
+          isEditing={false}
+          userRole={newUserRole}
+          loading={creatingUserRole}
+          onUpdate={(updates) => setNewUserRole({ ...newUserRole, ...updates })}
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (!newUserRole.name.trim()) return
+
+            setCreatingUserRole(true)
+            try {
+              // Create the user role using the callback
+              const createdRole = await onCreateUserRole(
+                newUserRole.name.trim(),
+                newUserRole.colour,
+                newUserRole.icon || undefined
+              )
+              if (createdRole) {
+                // Select the newly created user role
+                setSelectedUserRole(createdRole)
+                setUserRoleSearchQuery(createdRole.name)
+                setFormData(prev => ({ 
+                  ...prev, 
+                  userRole: createdRole,
+                  customUserRoleName: ''
+                }))
+                setIsCustomUserRoleSelected(false)
+                
+                // Initialize emoji input value for the selected role
+                if (onUpdateEmojiOverride) {
+                  const hasOverride = createdRole.id in userRoleEmojiOverrides
+                  const initialEmoji = hasOverride 
+                    ? userRoleEmojiOverrides[createdRole.id] 
+                    : (createdRole.icon || '')
+                  setEmojiInputValue(prev => ({
+                    ...prev,
+                    [createdRole.id]: initialEmoji
+                  }))
+                }
+                
+                // Reset form and close modal
+                setNewUserRole({ name: '', colour: '#3B82F6', icon: '' })
+                setShowUserRoleForm(false)
+              }
+            } catch (error) {
+              console.error('Error creating user role:', error)
+            } finally {
+              setCreatingUserRole(false)
+            }
+          }}
+          onClose={() => {
+            setShowUserRoleForm(false)
+            setNewUserRole({ name: '', colour: '#3B82F6', icon: '' })
+          }}
+        />
+      )}
     </Modal>
   )
 }

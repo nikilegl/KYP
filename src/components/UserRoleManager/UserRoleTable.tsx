@@ -88,9 +88,6 @@ export function UserRoleTable({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Icon
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Glossy Icon
-              </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => handleSort('name')}
@@ -124,16 +121,6 @@ export function UserRoleTable({
                       {role.icon || '👤'}
                     </span>
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {role.glossy_icon ? (
-                    <div 
-                      className="w-8 h-8 flex items-center justify-center"
-                      dangerouslySetInnerHTML={{ __html: role.glossy_icon }}
-                    />
-                  ) : (
-                    <span className="text-xs text-gray-400">—</span>
-                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <button

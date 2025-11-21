@@ -26,7 +26,7 @@ export const getUserRoles = async (): Promise<UserRole[]> => {
   }
 }
 
-export const createUserRole = async (name: string, colour: string, icon?: string, glossy_icon?: string): Promise<UserRole | null> => {
+export const createUserRole = async (name: string, colour: string, icon?: string): Promise<UserRole | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
@@ -37,7 +37,6 @@ export const createUserRole = async (name: string, colour: string, icon?: string
         name,
         colour,
         icon: icon || null,
-        glossy_icon: glossy_icon || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -65,8 +64,7 @@ export const createUserRole = async (name: string, colour: string, icon?: string
         workspace_id: workspaces?.id || null,
         name,
         colour,
-        icon,
-        glossy_icon
+        icon
       }])
       .select()
       .single()
@@ -79,7 +77,7 @@ export const createUserRole = async (name: string, colour: string, icon?: string
   }
 }
 
-export const updateCustomUserRole = async (roleId: string, updates: { name?: string; colour?: string; icon?: string; glossy_icon?: string }): Promise<UserRole | null> => {
+export const updateCustomUserRole = async (roleId: string, updates: { name?: string; colour?: string; icon?: string }): Promise<UserRole | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
