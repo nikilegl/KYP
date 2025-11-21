@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Node } from '@xyflow/react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
@@ -260,6 +261,7 @@ export function EditNodeModal({
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
   const [showPlatformDropdown, setShowPlatformDropdown] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null)
   const platformSearchRef = useRef<HTMLDivElement>(null)
   const platformInputRef = useRef<HTMLInputElement>(null)
 
@@ -314,8 +316,8 @@ export function EditNodeModal({
 
   // Scroll highlighted item into view
   useEffect(() => {
-    if (highlightedIndex >= 0 && platformSearchRef.current) {
-      const dropdown = platformSearchRef.current.querySelector('.platform-dropdown')
+    if (highlightedIndex >= 0) {
+      const dropdown = document.querySelector('.platform-dropdown')
       const highlightedItem = dropdown?.children[highlightedIndex] as HTMLElement
       if (highlightedItem) {
         highlightedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
@@ -377,16 +379,51 @@ export function EditNodeModal({
     }
   }, [formData.variant, platforms, showPlatformDropdown])
 
+  // Update dropdown position when it opens
+  useEffect(() => {
+    if (showPlatformDropdown && platformInputRef.current) {
+      const updatePosition = () => {
+        if (platformInputRef.current) {
+          const rect = platformInputRef.current.getBoundingClientRect()
+          setDropdownPosition({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width
+          })
+        }
+      }
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    } else {
+      setDropdownPosition(null)
+    }
+  }, [showPlatformDropdown, platformSearchQuery])
+
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (platformSearchRef.current && !platformSearchRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const dropdown = document.querySelector('.platform-dropdown')
+      if (
+        platformSearchRef.current && 
+        !platformSearchRef.current.contains(target) &&
+        dropdown &&
+        !dropdown.contains(target)
+      ) {
         setShowPlatformDropdown(false)
       }
     }
 
     if (showPlatformDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
+      // Use a small delay to avoid closing immediately on open
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside)
+      }, 0)
       return () => {
         document.removeEventListener('mousedown', handleClickOutside)
       }
@@ -1016,8 +1053,15 @@ export function EditNodeModal({
                 placeholder="Search for a platform..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              {showPlatformDropdown && platformSearchQuery.trim() && (
-                <div className="platform-dropdown absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              {showPlatformDropdown && platformSearchQuery.trim() && dropdownPosition && createPortal(
+                <div 
+                  className="platform-dropdown fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                  style={{
+                    top: `${dropdownPosition.top}px`,
+                    left: `${dropdownPosition.left}px`,
+                    width: `${dropdownPosition.width}px`
+                  }}
+                >
                   {filteredPlatforms.length > 0 ? (
                     filteredPlatforms.map((platform, index) => (
                       <button
@@ -1070,7 +1114,8 @@ export function EditNodeModal({
                       </button>
                     </div>
                   )}
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           </div>
