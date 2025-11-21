@@ -1,17 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Upload, Check, X } from 'lucide-react'
+import { Upload, X } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
-import { createThirdParty, updateThirdParty } from '../lib/database/services/thirdPartyService'
-import type { ThirdParty } from '../lib/supabase'
+import { createPlatform, updatePlatform } from '../lib/database/services/platformService'
+import type { Platform } from '../lib/supabase'
 
-interface AddThirdPartyModalProps {
+interface AddPlatformModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: (thirdParty: ThirdParty) => void
-  workspaceId: string
+  onSuccess: (platform: Platform) => void
   initialName?: string
-  editingThirdParty?: ThirdParty | null // If provided, modal is in edit mode
+  editingPlatform?: Platform | null // If provided, modal is in edit mode
 }
 
 interface CropArea {
@@ -21,15 +20,14 @@ interface CropArea {
   height: number
 }
 
-export function AddThirdPartyModal({
+export function AddPlatformModal({
   isOpen,
   onClose,
   onSuccess,
-  workspaceId,
   initialName = '',
-  editingThirdParty = null
-}: AddThirdPartyModalProps) {
-  const isEditing = !!editingThirdParty
+  editingPlatform = null
+}: AddPlatformModalProps) {
+  const isEditing = !!editingPlatform
   const [formData, setFormData] = useState({ name: initialName, logo: '' })
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -48,12 +46,12 @@ export function AddThirdPartyModal({
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
   const [imageDisplaySize, setImageDisplaySize] = useState({ width: 0, height: 0, offsetX: 0, offsetY: 0 })
 
-  // Reset form when modal opens/closes or initialName/editingThirdParty changes
+  // Reset form when modal opens/closes or initialName/editingPlatform changes
   useEffect(() => {
     if (isOpen) {
-      if (editingThirdParty) {
+      if (editingPlatform) {
         // Edit mode: populate with existing data
-        setFormData({ name: editingThirdParty.name, logo: editingThirdParty.logo || '' })
+        setFormData({ name: editingPlatform.name, logo: editingPlatform.logo || '' })
       } else {
         // Create mode: use initialName or empty
         setFormData({ name: initialName, logo: '' })
@@ -68,7 +66,7 @@ export function AddThirdPartyModal({
       setIsDragging(false)
       setResizeHandle(null)
     }
-  }, [isOpen, initialName, editingThirdParty])
+  }, [isOpen, initialName, editingPlatform])
 
   // Calculate image display size when image loads or container resizes
   useEffect(() => {
@@ -484,11 +482,11 @@ export function AddThirdPartyModal({
 
     setSaving(true)
     try {
-      let result: ThirdParty | null = null
+      let result: Platform | null = null
       
-      if (isEditing && editingThirdParty) {
-        // Update existing third party
-        result = await updateThirdParty(editingThirdParty.id, {
+      if (isEditing && editingPlatform) {
+        // Update existing platform
+        result = await updatePlatform(editingPlatform.id, {
           name: formData.name.trim(),
           logo: formData.logo || undefined
         })
@@ -498,26 +496,27 @@ export function AddThirdPartyModal({
           setFormData({ name: '', logo: '' })
           onClose()
         } else {
-          alert('Failed to update third party')
+          alert('Failed to update platform')
         }
       } else {
-        // Create new third party
-        result = await createThirdParty(workspaceId, {
-          name: formData.name.trim(),
-          logo: formData.logo || undefined
-        })
+        // Create new platform
+        result = await createPlatform(
+          formData.name.trim(),
+          '#5A6698', // Default colour for new platforms
+          formData.logo || undefined
+        )
         
         if (result) {
           onSuccess(result)
           setFormData({ name: '', logo: '' })
           onClose()
         } else {
-          alert('Failed to create third party')
+          alert('Failed to create platform')
         }
       }
     } catch (error) {
-      console.error(`Error ${isEditing ? 'updating' : 'creating'} third party:`, error)
-      alert(`Failed to ${isEditing ? 'update' : 'create'} third party`)
+      console.error(`Error ${isEditing ? 'updating' : 'creating'} platform:`, error)
+      alert(`Failed to ${isEditing ? 'update' : 'create'} platform`)
     } finally {
       setSaving(false)
     }
@@ -561,7 +560,7 @@ export function AddThirdPartyModal({
     <Modal
       isOpen={isOpen}
       onClose={handleCancel}
-      title={isEditing ? 'Edit Third Party' : 'Add Third Party'}
+      title={isEditing ? 'Edit Platform' : 'Add Platform'}
       size="md"
       footerContent={
         <div className="flex items-center justify-end gap-3">
@@ -755,3 +754,4 @@ export function AddThirdPartyModal({
     </Modal>
   )
 }
+

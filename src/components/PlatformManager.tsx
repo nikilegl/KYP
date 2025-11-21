@@ -1,15 +1,14 @@
-import { useState, useRef } from 'react'
-import { Plus, Server, Database, Zap, User, Globe, ExternalLink, Cloud, Cpu, HardDrive, Monitor } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Server, Search } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
-import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, type Column } from './DesignSystem/components/DataTable'
-import { PlatformForm } from './PlatformManager/PlatformForm'
+import { AddPlatformModal } from './AddPlatformModal'
 import type { Platform } from '../lib/supabase'
 
 interface PlatformManagerProps {
   platforms: Platform[]
-  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string, logo?: string) => Promise<void>
-  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string; logo?: string }) => Promise<boolean>
+  onCreatePlatform: (name: string, colour: string, logo?: string) => Promise<void>
+  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; logo?: string }) => Promise<boolean>
   onDeletePlatform: (platformId: string) => Promise<void>
 }
 
@@ -22,119 +21,43 @@ export function PlatformManager({
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    colour: '#3B82F6', 
-    icon: 'Server',
-    description: '',
-    logo: ''
-  })
-  const [saving, setSaving] = useState(false)
-  const [uploadingLogo, setUploadingLogo] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const editFileInputRef = useRef<HTMLInputElement>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    // Validate file type (SVG preferred, but allow images)
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
-      return
-    }
-
-    // Validate file size (2MB limit)
-    if (file.size > 2 * 1024 * 1024) {
-      alert('File size must be less than 2MB')
-      return
-    }
-
-    setUploadingLogo(true)
-
-    try {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        
-        // If it's an SVG, store as text, otherwise as base64
-        if (file.type === 'image/svg+xml') {
-          // Read as text for SVG
-          const textReader = new FileReader()
-          textReader.onload = (evt) => {
-            const svgText = evt.target?.result as string
-            setFormData(prev => ({ ...prev, logo: svgText }))
-            setUploadingLogo(false)
-          }
-          textReader.readAsText(file)
-        } else {
-          setFormData(prev => ({ ...prev, logo: result }))
-          setUploadingLogo(false)
-        }
-      }
-      reader.readAsDataURL(file)
-    } catch (error) {
-      console.error('Error uploading logo:', error)
-      setUploadingLogo(false)
-      alert('Failed to upload logo')
-    }
-  }
-
-  const handleCreate = async () => {
-    setSaving(true)
+  const handlePlatformCreated = async (platform: Platform) => {
+    // Platform is already created by AddPlatformModal
+    // Add it to the parent's state by calling onCreatePlatform
+    // This will add it to the local state (even though it's already in DB)
+    // The createPlatform call will either succeed (if no duplicate) or fail gracefully
     try {
       await onCreatePlatform(
-        formData.name, 
-        formData.colour, 
-        formData.icon,
-        formData.description,
-        formData.logo
+        platform.name,
+        platform.colour || '#5A6698',
+        platform.logo
       )
-      setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
-      setShowCreateModal(false)
     } catch (error) {
-      console.error('Error creating platform:', error)
-    } finally {
-      setSaving(false)
+      // If platform already exists, that's okay - it was already created by AddPlatformModal
+      // We still want to close the modal
+      console.log('Platform may already exist, but that\'s expected')
     }
+    setShowCreateModal(false)
   }
 
-  const handleEdit = async () => {
-    if (!selectedPlatform) return
-    
-    setSaving(true)
-    try {
-      const success = await onUpdatePlatform(selectedPlatform.id, {
-        name: formData.name,
-        colour: formData.colour,
-        icon: formData.icon,
-        description: formData.description,
-        logo: formData.logo
+  const handlePlatformUpdated = async (platform: Platform) => {
+    // Platform is already updated by AddPlatformModal
+    // Refresh the parent's state
+    if (selectedPlatform) {
+      await onUpdatePlatform(selectedPlatform.id, {
+        name: platform.name,
+        colour: platform.colour,
+        logo: platform.logo
       })
-      
-      if (success) {
-        setShowEditModal(false)
-        setSelectedPlatform(null)
-        setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
-      } else {
-        console.error('Failed to update platform')
-      }
-    } catch (error) {
-      console.error('Error updating platform:', error)
-    } finally {
-      setSaving(false)
     }
+    setShowEditModal(false)
+    setSelectedPlatform(null)
   }
 
   const openEditModal = (platform: Platform) => {
     setSelectedPlatform(platform)
-    setFormData({
-      name: platform.name,
-      colour: platform.colour,
-      icon: platform.icon || 'Server',
-      description: platform.description || '',
-      logo: platform.logo || ''
-    })
     setShowEditModal(true)
   }
 
@@ -145,35 +68,39 @@ export function PlatformManager({
     await onDeletePlatform(platform.id)
   }
 
-  const getIcon = (iconName?: string) => {
-    const iconMap: Record<string, typeof Server> = {
-      'Server': Server,
-      'Database': Database,
-      'Zap': Zap,
-      'User': User,
-      'Globe': Globe,
-      'ExternalLink': ExternalLink,
-      'Cloud': Cloud,
-      'Cpu': Cpu,
-      'HardDrive': HardDrive,
-      'Monitor': Monitor
-    }
-    
-    const IconComponent = iconMap[iconName || 'Server'] || Server
-    return IconComponent
-  }
-
   const renderLogo = (logo?: string) => {
     if (!logo) return null
     
     // If it's SVG content
-    if (logo.includes('<svg')) {
-      return <div className="w-8 h-8 flex items-center justify-center mr-3" dangerouslySetInnerHTML={{ __html: logo }} />
+    if (logo.includes('<svg') || logo.startsWith('<?xml')) {
+      return <div className="w-16 h-16 flex items-center justify-center mr-3" dangerouslySetInnerHTML={{ __html: logo }} />
     }
     
     // If it's a base64 image
-    return <img src={logo} alt="Logo" className="w-8 h-8 object-contain mr-3" />
+    return <img src={logo} alt="Logo" className="w-16 h-16 object-contain mr-3" />
   }
+
+  // Filter and sort platforms based on search query
+  const filteredPlatforms = useMemo(() => {
+    let filtered = platforms
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = platforms.filter(platform => 
+        platform.name.toLowerCase().includes(query)
+      )
+    }
+    
+    // Sort by name alphabetically
+    return [...filtered].sort((a, b) => {
+      const nameA = a.name.toLowerCase()
+      const nameB = b.name.toLowerCase()
+      if (nameA < nameB) return -1
+      if (nameA > nameB) return 1
+      return 0
+    })
+  }, [platforms, searchQuery])
 
   // Define columns for DataTable
   const columns: Column<Platform>[] = [
@@ -182,47 +109,28 @@ export function PlatformManager({
       header: 'Platform',
       sortable: true,
       render: (platform) => {
-        const IconComponent = getIcon(platform.icon)
         return (
           <div className="flex items-center min-w-0">
             {platform.logo ? (
               renderLogo(platform.logo)
             ) : (
               <div 
-                className="flex-shrink-0 h-8 w-8 rounded-lg flex items-center justify-center mr-3"
+                className="flex-shrink-0 h-16 w-16 rounded-lg flex items-center justify-center mr-3"
                 style={{ backgroundColor: platform.colour }}
               >
-                <IconComponent size={16} className="text-white" />
+                <span className="text-white text-lg font-medium">
+                  {platform.name.charAt(0).toUpperCase()}
+                </span>
               </div>
             )}
             <div className="min-w-0">
               <div className="text-sm font-medium text-gray-900 truncate">
                 {platform.name}
               </div>
-              {platform.description && (
-                <div className="text-xs text-gray-500 truncate">
-                  {platform.description}
-                </div>
-              )}
             </div>
           </div>
         )
       }
-    },
-    {
-      key: 'colour',
-      header: 'Color',
-      render: (platform) => (
-        <div className="flex items-center gap-2">
-          <div 
-            className="w-5 h-5 rounded border border-gray-300 flex-shrink-0"
-            style={{ backgroundColor: platform.colour }}
-          />
-          <span className="text-xs text-gray-500 font-mono">
-            {platform.colour}
-          </span>
-        </div>
-      )
     }
   ]
 
@@ -245,104 +153,52 @@ export function PlatformManager({
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search platforms..."
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
       {/* Platforms Table */}
       <DataTable<Platform>
-        data={platforms}
+        data={filteredPlatforms}
         columns={columns}
         sortableFields={['name']}
         getItemId={(platform) => platform.id}
         onEdit={openEditModal}
         onDelete={handleDelete}
         emptyStateIcon={Server as any}
-        emptyStateMessage="No platforms yet. Click 'Add Platform' to create your first platform."
+        emptyStateMessage={searchQuery.trim() ? `No platforms found matching "${searchQuery}"` : "No platforms yet. Click 'Add Platform' to create your first platform."}
         tableLayout="auto"
       />
 
       {/* Create Modal */}
-      <Modal
+      <AddPlatformModal
         isOpen={showCreateModal}
         onClose={() => {
           setShowCreateModal(false)
-          setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
         }}
-        title="Create Platform"
-        size="md"
-        footerContent={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowCreateModal(false)
-                setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreate}
-              disabled={saving || !formData.name.trim()}
-            >
-              {saving ? 'Creating...' : 'Create Platform'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-6 space-y-4">
-          <PlatformForm
-            platform={formData}
-            setPlatform={setFormData}
-            isModal={true}
-            uploadingLogo={uploadingLogo}
-            onLogoUpload={handleLogoUpload}
-            fileInputRef={fileInputRef}
-          />
-        </div>
-      </Modal>
+        onSuccess={handlePlatformCreated}
+      />
 
       {/* Edit Modal */}
-      <Modal
+      <AddPlatformModal
         isOpen={showEditModal}
         onClose={() => {
           setShowEditModal(false)
           setSelectedPlatform(null)
-          setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
         }}
-        title="Edit Platform"
-        size="md"
-        footerContent={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowEditModal(false)
-                setSelectedPlatform(null)
-                setFormData({ name: '', colour: '#3B82F6', icon: 'Server', description: '', logo: '' })
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleEdit}
-              disabled={saving || !formData.name.trim()}
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-6 space-y-4">
-          <PlatformForm
-            platform={formData}
-            setPlatform={setFormData}
-            isModal={true}
-            uploadingLogo={uploadingLogo}
-            onLogoUpload={handleLogoUpload}
-            fileInputRef={editFileInputRef}
-          />
-        </div>
-      </Modal>
+        onSuccess={handlePlatformUpdated}
+        editingPlatform={selectedPlatform}
+      />
     </div>
   )
 }

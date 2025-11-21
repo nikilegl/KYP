@@ -100,7 +100,14 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
   )
   
   // Find matching platform logo
-  const matchingPlatform = platforms.find(p => p.name === variant)
+  // First check if variant matches a platform name
+  // Then check if customPlatformName matches a platform name (for Custom variants)
+  let matchingPlatform = platforms.find(p => p.name === variant)
+  if (!matchingPlatform && variant === 'Custom' && customPlatformName) {
+    matchingPlatform = platforms.find(p => 
+      p.name.toLowerCase() === customPlatformName.toLowerCase()
+    )
+  }
   
   // Generate unique gradient ID for Legl logo
   const gradientId = `legl-gradient-${id}`
@@ -394,10 +401,26 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                     <path fill="#fff" d="M27.1,7.9c0,0,.1,0,.1.1v.7s0,4.6,0,4.6c0,.5,0,.9-.1,1.3-.4,1.1-1.3,1.9-2.3,2.2-.3,0-.6.1-.9.1,0,0,0,0,0,0-1.2,0-2.3-.6-2.9-1.6,0-.2.1-.8.4-.7.3.2,1.3.7,2.1.7s1.2-.3,1.5-.5c.2-.2.4-.7.4-1.2v-.2h0c-.4.5-1,.9-1.9.9-1.5,0-2.9-1.1-2.9-3.1,0-2,1.4-3.1,2.9-3.1,1,0,1.6.5,1.9.9v-.6s0,0,0-.1c.5-.4,1.2-.6,1.8-.6h0ZM30,4.7c0,0,.1,0,.1.1v8.8s0,0,0,.1c-.6.4-1.2.6-2,.6h0c0,0-.1,0-.1-.1V5.5s0,0,0-.1c.6-.4,1.2-.6,2-.6h0ZM16.7,8c1.8,0,3.1,1.2,3.1,3s0,.7,0,.7h-4.4c0,.2,0,.3.1.4,0,.1.1.2.2.3.2.2.6.5,1.4.5.8,0,1.8-.5,2.1-.7.2-.1.5.2.4.4-.6,1-1.7,1.8-2.9,1.8-1.5,0-2.7-1-3.2-2.3,0-.3,0-.6,0-.9,0-2.1,1.5-3.2,3.3-3.2ZM10.4,5.5c0,0,.1,0,.1.1v6.9s0,0,0,0h2.4s0,0,0,0c.3.4.5,1,.5,1.5h0c0,0,0,.1-.1.1h-4.4c-.3,0-.5-.2-.5-.5v-7.4h0,0s.3-.8,1.9-.8ZM23.9,9.9c-.9,0-1.5.7-1.5,1.5s.6,1.5,1.5,1.5c.9,0,1.4-.7,1.4-1.5s-.6-1.5-1.4-1.5ZM16.7,9.3c-.8,0-1.3.7-1.3,1.2h2.5c0-.6-.4-1.2-1.3-1.2Z"/>
                   </svg>
                 </div>
-              ) : ((variant === 'Third party' && thirdPartyName) || (variant === 'Custom' && customPlatformName)) && matchingThirdParty?.logo ? (
-                // Show third party logo if available (for both Third party and Custom variants)
+              ) : matchingPlatform?.logo ? (
+                // Show platform logo if available (prioritize platforms over third parties)
                 <div className="flex items-center justify-center h-5">
-                  {matchingThirdParty.logo.includes('<svg') ? (
+                  {matchingPlatform.logo.includes('<svg') || matchingPlatform.logo.startsWith('<?xml') ? (
+                    <div 
+                      className="h-5 flex items-center"
+                      dangerouslySetInnerHTML={{ __html: matchingPlatform.logo }}
+                    />
+                  ) : (
+                    <img 
+                      src={matchingPlatform.logo} 
+                      alt={matchingPlatform.name}
+                      className="h-5 object-contain"
+                    />
+                  )}
+                </div>
+              ) : ((variant === 'Third party' && thirdPartyName) || (variant === 'Custom' && customPlatformName)) && matchingThirdParty?.logo ? (
+                // Fallback to third party logo if platform logo not found (for backward compatibility)
+                <div className="flex items-center justify-center h-5">
+                  {matchingThirdParty.logo.includes('<svg') || matchingThirdParty.logo.startsWith('<?xml') ? (
                     <div 
                       className="h-5 flex items-center"
                       dangerouslySetInnerHTML={{ __html: matchingThirdParty.logo }}
@@ -406,22 +429,6 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                     <img 
                       src={matchingThirdParty.logo} 
                       alt={platformName}
-                      className="h-5 object-contain"
-                    />
-                  )}
-                </div>
-              ) : matchingPlatform?.logo ? (
-                // Show platform logo if available
-                <div className="flex items-center justify-center h-5">
-                  {matchingPlatform.logo.includes('<svg') ? (
-                    <div 
-                      className="h-5 flex items-center"
-                      dangerouslySetInnerHTML={{ __html: matchingPlatform.logo }}
-                    />
-                  ) : (
-                    <img 
-                      src={matchingPlatform.logo} 
-                      alt={variant}
                       className="h-5 object-contain"
                     />
                   )}
