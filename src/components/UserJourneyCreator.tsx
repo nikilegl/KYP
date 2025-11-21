@@ -118,19 +118,83 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const isSpacePressedRef = useRef(false)
   const [isSpacePressed, setIsSpacePressed] = useState(false)
   
-  // Custom onNodesChange that intercepts Alt+drag to keep original node locked
+  // Track Shift key state for axis-constrained dragging
+  const isShiftPressedRef = useRef(false)
+  const dragInitialDirectionRef = useRef<Map<string, 'x' | 'y' | null>>(new Map()) // Track initial drag direction for each node
+  const resizeStartDimensionsRef = useRef<Map<string, { width: number; height: number }>>(new Map()) // Track initial dimensions when resizing starts
+  const resizeInitialDirectionRef = useRef<Map<string, 'width' | 'height' | null>>(new Map()) // Track initial resize direction for each region
+  
+  // Custom onNodesChange that intercepts Alt+drag to keep original node locked and Shift+resize to constrain axis
   const onNodesChange = useCallback((changes: any[]) => {
-    // If Alt+drag is active, intercept position changes
-    if (duplicateNodeIdRef.current) {
-      const originalNodeId = Array.from(dragStartPositionsRef.current.keys()).find(
-        id => id !== duplicateNodeIdRef.current
-      )
+    // Process changes for resize constraints (Shift+resize for regions)
+    const modifiedChanges: any[] = []
+    let duplicatePositionUpdate: { x: number; y: number } | null = null
+    
+    for (const change of changes) {
+      // Check if this is a dimension change (resize) for a region with Shift pressed
+      if (change.type === 'dimensions' && isShiftPressedRef.current) {
+        const node = nodes.find(n => n.id === change.id)
+        if (node && node.type === 'highlightRegion' && change.dimensions) {
+          // Get or initialize start dimensions
+          let startDimensions = resizeStartDimensionsRef.current.get(change.id)
+          if (!startDimensions) {
+            // First resize change - capture initial dimensions from the node BEFORE resize
+            // Always use node's current dimensions, not the change dimensions
+            const currentWidth = (node.style?.width as number) || (node.width as number) || 600
+            const currentHeight = (node.style?.height as number) || (node.height as number) || 400
+            startDimensions = { width: currentWidth, height: currentHeight }
+            resizeStartDimensionsRef.current.set(change.id, startDimensions)
+          }
+          
+          // Get the new dimensions from the change (use current node dimensions as fallback)
+          const currentWidth = (node.style?.width as number) || (node.width as number) || startDimensions.width
+          const currentHeight = (node.style?.height as number) || (node.height as number) || startDimensions.height
+          const newWidth = change.dimensions.width ?? currentWidth
+          const newHeight = change.dimensions.height ?? currentHeight
+          
+          // Calculate deltas from start dimensions (matching drag constraint logic)
+          const deltaWidth = Math.abs(newWidth - startDimensions.width)
+          const deltaHeight = Math.abs(newHeight - startDimensions.height)
+          
+          // Determine initial resize direction if not already set (same logic as drag)
+          let resizeDirection = resizeInitialDirectionRef.current.get(change.id)
+          if (!resizeDirection && (deltaWidth > 5 || deltaHeight > 5)) {
+            // Set direction based on which dimension has more change (with threshold)
+            // Simple comparison - same as drag constraint
+            resizeDirection = deltaWidth > deltaHeight ? 'width' : 'height'
+            resizeInitialDirectionRef.current.set(change.id, resizeDirection)
+          }
+          
+          // Constrain resize to the determined dimension (same pattern as drag constraint)
+          if (resizeDirection) {
+            const constrainedDimensions: { width: number; height: number } = {
+              width: newWidth,
+              height: newHeight
+            }
+            
+            if (resizeDirection === 'width') {
+              // Constrain to width only - allow width to change, keep height at start
+              constrainedDimensions.height = startDimensions.height
+            } else {
+              // Constrain to height only - allow height to change, keep width at start
+              constrainedDimensions.width = startDimensions.width
+            }
+            
+            modifiedChanges.push({
+              ...change,
+              dimensions: constrainedDimensions
+            })
+            continue
+          }
+        }
+      }
       
-      // Process changes
-      const modifiedChanges: any[] = []
-      let duplicatePositionUpdate: { x: number; y: number } | null = null
-      
-      for (const change of changes) {
+      // If Alt+drag is active, intercept position changes
+      if (duplicateNodeIdRef.current) {
+        const originalNodeId = Array.from(dragStartPositionsRef.current.keys()).find(
+          id => id !== duplicateNodeIdRef.current
+        )
+        
         // If this is a position change for the original node, redirect it to duplicate
         if (change.type === 'position' && change.dragging && change.id === originalNodeId) {
           const originalPosition = dragStartPositionsRef.current.get(change.id)
@@ -142,35 +206,33 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               ...change,
               position: originalPosition
             })
+            continue
           }
-        } else {
-          // Allow other changes through
-          modifiedChanges.push(change)
         }
       }
       
-      // Apply changes
-      if (modifiedChanges.length > 0) {
-        onNodesChangeBase(modifiedChanges)
-      }
-      
-      // Update duplicate position if needed
-      if (duplicatePositionUpdate && duplicateNodeIdRef.current) {
-        setNodes((nds) => {
-          return nds.map(n => {
-            if (n.id === duplicateNodeIdRef.current) {
-              // Maintain high z-index when updating position
-              return { ...n, position: duplicatePositionUpdate!, zIndex: 1000 }
-            }
-            return n
-          })
-        })
-      }
-    } else {
-      // Normal drag - apply changes normally
-      onNodesChangeBase(changes)
+      // Allow other changes through
+      modifiedChanges.push(change)
     }
-  }, [onNodesChangeBase, setNodes])
+    
+    // Apply changes
+    if (modifiedChanges.length > 0) {
+      onNodesChangeBase(modifiedChanges)
+    }
+    
+    // Update duplicate position if needed
+    if (duplicatePositionUpdate && duplicateNodeIdRef.current) {
+      setNodes((nds) => {
+        return nds.map(n => {
+          if (n.id === duplicateNodeIdRef.current) {
+            // Maintain high z-index when updating position
+            return { ...n, position: duplicatePositionUpdate!, zIndex: 1000 }
+          }
+          return n
+        })
+      })
+    }
+  }, [onNodesChangeBase, setNodes, nodes])
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
   const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
@@ -196,6 +258,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
+  const [workspaceId, setWorkspaceId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [showImportImageModal, setShowImportImageModal] = useState(false)
   const [showImportJsonModal, setShowImportJsonModal] = useState(false)
@@ -351,6 +414,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               .single()
             
             if (workspaceUser) {
+              setWorkspaceId(workspaceUser.workspace_id)
               const thirdPartiesData = await getThirdParties(workspaceUser.workspace_id)
               setThirdParties(thirdPartiesData)
             }
@@ -2485,6 +2549,46 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [])
 
+  // Monitor Shift key state for axis-constrained dragging
+  useEffect(() => {
+    const handleShiftKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      
+      if (e.key === 'Shift' || e.shiftKey) {
+        const wasPressed = isShiftPressedRef.current
+        isShiftPressedRef.current = true
+        
+        // If Shift was just pressed (not already pressed), reset resize tracking
+        // This allows users to press Shift mid-resize to start constraining
+        if (!wasPressed) {
+          resizeStartDimensionsRef.current.clear()
+          resizeInitialDirectionRef.current.clear()
+        }
+      }
+    }
+    
+    const handleShiftKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift' || !e.shiftKey) {
+        isShiftPressedRef.current = false
+        // Clear resize tracking when Shift is released
+        resizeStartDimensionsRef.current.clear()
+        resizeInitialDirectionRef.current.clear()
+      }
+    }
+
+    window.addEventListener('keydown', handleShiftKeyDown)
+    window.addEventListener('keyup', handleShiftKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleShiftKeyDown)
+      window.removeEventListener('keyup', handleShiftKeyUp)
+    }
+  }, [])
+
   // Update region nodes' draggable property based on space bar state
   useEffect(() => {
     setNodes((nds) =>
@@ -2503,6 +2607,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const onNodeDragStart = useCallback((_event: any, node: Node) => {
     // Store original position when drag starts
     dragStartPositionsRef.current.set(node.id, { ...node.position })
+    
+    // Reset initial drag direction for this node (will be determined on first movement)
+    dragInitialDirectionRef.current.set(node.id, null)
+    
+    // For regions, store initial dimensions when drag starts (for resize constraint)
+    if (node.type === 'highlightRegion') {
+      const width = (node.style?.width as number) || (node.width as number) || 600
+      const height = (node.style?.height as number) || (node.height as number) || 400
+      resizeStartDimensionsRef.current.set(node.id, { width, height })
+      resizeInitialDirectionRef.current.set(node.id, null)
+    }
     
     // If Alt is pressed, create duplicate immediately
     if (isAltPressedRef.current && node.type !== 'highlightRegion') {
@@ -2562,7 +2677,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [nodes, edges, historyIndex, setNodes])
 
-  // Handle node drag - keep original node locked if Alt was pressed
+  // Handle node drag - keep original node locked if Alt was pressed, constrain to axis if Shift is pressed
   const onNodeDrag = useCallback((_event: any, node: Node) => {
     // If this is a duplicate operation, keep original node locked
     if (duplicateNodeIdRef.current && node.id !== duplicateNodeIdRef.current) {
@@ -2579,10 +2694,51 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         })
       }
     }
+    
+    // If Shift is pressed, constrain movement to one axis
+    if (isShiftPressedRef.current) {
+      const startPosition = dragStartPositionsRef.current.get(node.id)
+      if (startPosition) {
+        const deltaX = Math.abs(node.position.x - startPosition.x)
+        const deltaY = Math.abs(node.position.y - startPosition.y)
+        
+        // Determine initial drag direction if not already set
+        let dragDirection = dragInitialDirectionRef.current.get(node.id)
+        if (!dragDirection && (deltaX > 5 || deltaY > 5)) {
+          // Set direction based on which axis has more movement (with threshold)
+          dragDirection = deltaX > deltaY ? 'x' : 'y'
+          dragInitialDirectionRef.current.set(node.id, dragDirection)
+        }
+        
+        // Constrain movement to the determined axis
+        if (dragDirection) {
+          setNodes((nds) => {
+            return nds.map(n => {
+              if (n.id === node.id) {
+                if (dragDirection === 'x') {
+                  // Constrain to X axis (horizontal)
+                  return { ...n, position: { x: node.position.x, y: startPosition.y } }
+                } else {
+                  // Constrain to Y axis (vertical)
+                  return { ...n, position: { x: startPosition.x, y: node.position.y } }
+                }
+              }
+              return n
+            })
+          })
+        }
+      }
+    }
   }, [setNodes])
 
   const handleNodeDragStop = useCallback(
     (_event: any, draggedNode: Node) => {
+      // Clear resize tracking when drag/resize stops
+      if (draggedNode.type === 'highlightRegion') {
+        resizeStartDimensionsRef.current.delete(draggedNode.id)
+        resizeInitialDirectionRef.current.delete(draggedNode.id)
+      }
+      
       // Check if this was a duplicate operation
       if (duplicateNodeIdRef.current) {
         // Find the original node ID (the one that's not the duplicate)
@@ -4048,6 +4204,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         } : undefined}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         onUpdateEmojiOverride={handleUpdateEmojiOverride}
+        workspaceId={workspaceId}
+        onThirdPartyCreated={async (thirdParty) => {
+          // Refresh third parties list
+          if (workspaceId) {
+            const updatedThirdParties = await getThirdParties(workspaceId)
+            setThirdParties(updatedThirdParties)
+          }
+        }}
       />
 
       {/* Delete Confirmation Modal */}

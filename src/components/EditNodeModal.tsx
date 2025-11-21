@@ -4,12 +4,13 @@ import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import type { Notification } from './DesignSystem/components/UserJourneyNode'
 import type { UserRole, ThirdParty, Platform } from '../lib/supabase'
-import { Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, GripVertical, ChevronDown, Check } from 'lucide-react'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { getPlatforms } from '../lib/database'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
+import { AddThirdPartyModal } from './AddThirdPartyModal'
 
 interface EditNodeModalProps {
   isOpen: boolean
@@ -25,6 +26,8 @@ interface EditNodeModalProps {
   onDelete?: () => void
   userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
   onUpdateEmojiOverride?: (roleId: string, emoji: string) => void // Callback to update emoji override for all nodes
+  workspaceId: string // Workspace ID for creating third parties
+  onThirdPartyCreated?: (thirdParty: ThirdParty) => void // Callback when a third party is created
 }
 
 interface BulletPoint {
@@ -230,14 +233,16 @@ export function EditNodeModal({
   node,
   isAddingNewNode,
   userRoles,
-  thirdParties: _thirdParties,
+  thirdParties,
   availableRegions,
   journeyLayout,
   existingNodes,
   onSave,
   onDelete,
   userRoleEmojiOverrides = {},
-  onUpdateEmojiOverride
+  onUpdateEmojiOverride,
+  workspaceId,
+  onThirdPartyCreated
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
@@ -254,6 +259,12 @@ export function EditNodeModal({
   const [bulletPointsWithIds, setBulletPointsWithIds] = useState<BulletPoint[]>([
     { id: `bp-${Date.now()}`, text: '' }
   ])
+
+  // State for third party validation and modal
+  const [showAddThirdPartyModal, setShowAddThirdPartyModal] = useState(false)
+  const [matchedThirdParty, setMatchedThirdParty] = useState<ThirdParty | null>(null)
+  const [isValidatingThirdParty, setIsValidatingThirdParty] = useState(false)
+  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // DnD sensors
   const sensors = useSensors(
@@ -391,7 +402,26 @@ export function EditNodeModal({
       
       setIsCustomUserRoleSelected(false)
     }
+    
+    // Cleanup validation timeout on unmount or close
+    return () => {
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current)
+      }
+    }
   }, [node, isOpen, isAddingNewNode, existingNodes])
+  
+  // Cleanup validation timeout when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current)
+      }
+      setMatchedThirdParty(null)
+      setIsValidatingThirdParty(false)
+      setShowAddThirdPartyModal(false)
+    }
+  }, [isOpen])
 
   // Sync emoji input value when user role changes (but not when override changes to allow editing)
   useEffect(() => {
@@ -959,19 +989,92 @@ export function EditNodeModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Custom Platform Name <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
             </label>
-            <EmojiAutocomplete
-              value={formData.customPlatformName}
-              onChange={(value) => setFormData(prev => ({ ...prev, customPlatformName: value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Stripe, Mailchimp, Twilio..."
-            />
+            <div className="relative">
+              <EmojiAutocomplete
+                value={formData.customPlatformName}
+                onChange={(value) => {
+                  setFormData(prev => ({ ...prev, customPlatformName: value }))
+                  
+                  // Clear previous timeout
+                  if (validationTimeoutRef.current) {
+                    clearTimeout(validationTimeoutRef.current)
+                  }
+                  
+                  // Reset validation state
+                  setMatchedThirdParty(null)
+                  setIsValidatingThirdParty(false)
+                  
+                  // If empty, don't validate
+                  if (!value.trim()) {
+                    return
+                  }
+                  
+                  // Set validating state
+                  setIsValidatingThirdParty(true)
+                  
+                  // Debounce validation - wait 1 second after user stops typing
+                  validationTimeoutRef.current = setTimeout(() => {
+                    // Check if platform name matches any existing third party (case-insensitive)
+                    const trimmedValue = value.trim()
+                    const matched = thirdParties.find(
+                      tp => tp.name.toLowerCase().trim() === trimmedValue.toLowerCase()
+                    )
+                    
+                    setMatchedThirdParty(matched || null)
+                    setIsValidatingThirdParty(false)
+                  }, 1000)
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                placeholder="e.g., Stripe, Mailchimp, Twilio..."
+              />
+              {/* Validation indicator */}
+              {formData.customPlatformName.trim() && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {isValidatingThirdParty ? (
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                  ) : matchedThirdParty ? (
+                    <Check className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="small"
+                      onClick={() => setShowAddThirdPartyModal(true)}
+                      className="text-xs px-2 py-1 h-auto"
+                    >
+                      Add logo
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
             <p className="mt-1 text-xs text-gray-500">
-              Enter a custom platform name. If it matches a known third party, we'll show its logo.
+              {matchedThirdParty 
+                ? `Matches existing third party: ${matchedThirdParty.name}`
+                : "Enter a custom platform name. If it matches a known third party, we'll show its logo."}
             </p>
           </div>
         )}
 
       </div>
+
+      {/* Add Third Party Modal */}
+      <AddThirdPartyModal
+        isOpen={showAddThirdPartyModal}
+        onClose={() => setShowAddThirdPartyModal(false)}
+        onSuccess={(thirdParty) => {
+          // Update matched third party
+          setMatchedThirdParty(thirdParty)
+          // Notify parent component if callback provided
+          if (onThirdPartyCreated) {
+            onThirdPartyCreated(thirdParty)
+          }
+          // Close modal
+          setShowAddThirdPartyModal(false)
+        }}
+        workspaceId={workspaceId}
+        initialName={formData.customPlatformName.trim()}
+      />
     </Modal>
   )
 }
