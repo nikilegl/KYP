@@ -42,6 +42,7 @@ import { assignUserJourneysToFolder, getUserJourneyFolders, type UserJourneyFold
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import { getPlatforms } from '../lib/database/services/platformService'
+import { createUserRole } from '../lib/database/services/userRoleService'
 import type { AnalyzedJourney } from '../lib/services/aiImageAnalysisService'
 import { convertTranscriptToJourney, editJourneyWithAI } from '../lib/aiService'
 import { generateTranscriptToJourneyPrompt } from '../lib/prompts/transcript-to-journey-prompt'
@@ -4276,6 +4277,29 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onNodeDragStart={onNodeDragStart}
           onNodeDrag={onNodeDrag}
           onNodeDragStop={handleNodeDragStop}
+          onPaneClick={(event) => {
+            // Only close menus if clicking directly on the pane (not on a node or button)
+            const target = event.target as HTMLElement
+            // Check if click is on a node, button, or other interactive element
+            const isNode = target.closest('.react-flow__node')
+            const isButton = target.closest('button') || target.tagName === 'BUTTON'
+            const isInteractive = target.closest('[role="button"]') || target.closest('a')
+            
+            // Only close if clicking directly on the pane background
+            if (!isNode && !isButton && !isInteractive) {
+              const customEvent = new CustomEvent('reactflow-pane-click')
+              document.dispatchEvent(customEvent)
+            }
+          }}
+          onMoveStart={(event, viewport) => {
+            // Only close menus if panning started from the pane (not from a node drag)
+            // Check if any node is currently being dragged
+            const isDraggingNode = nodes.some(node => node.dragging === true)
+            if (!isDraggingNode) {
+              const customEvent = new CustomEvent('reactflow-pan-start')
+              document.dispatchEvent(customEvent)
+            }
+          }}
           onInit={(instance) => {
             reactFlowInstanceRef.current = instance
           }}
@@ -4414,6 +4438,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         } : undefined}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         onUpdateEmojiOverride={handleUpdateEmojiOverride}
+        onCreateUserRole={async (name: string, colour: string, icon?: string) => {
+          try {
+            const userRole = await createUserRole(name, colour, icon)
+            if (userRole) {
+              // Note: The parent component (WorkspaceDataFetcher) should refresh userRoles
+              // For now, we'll return the created role so EditNodeModal can use it immediately
+              return userRole
+            }
+            return null
+          } catch (error) {
+            console.error('Error creating user role:', error)
+            return null
+          }
+        }}
         onThirdPartyCreated={async (thirdParty) => {
           // Refresh third parties list
           if (workspaceId) {

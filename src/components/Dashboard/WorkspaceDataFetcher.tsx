@@ -761,14 +761,14 @@ export function WorkspaceDataFetcher({
   }
 
   // User role handlers
-  const handleCreateUserRole = async (name: string, colour: string, icon?: string, glossy_icon?: string) => {
-    const userRole = await createUserRole(name, colour, icon, glossy_icon)
+  const handleCreateUserRole = async (name: string, colour: string, icon?: string) => {
+    const userRole = await createUserRole(name, colour, icon)
     if (userRole) {
       setUserRoles([userRole, ...userRoles])
     }
   }
 
-  const handleUpdateUserRoleDefinition = async (roleId: string, updates: { name?: string; colour?: string; icon?: string; glossy_icon?: string }) => {
+  const handleUpdateUserRoleDefinition = async (roleId: string, updates: { name?: string; colour?: string; icon?: string }) => {
     const updatedRole = await updateCustomUserRole(roleId, updates)
     if (updatedRole) {
       setUserRoles(userRoles.map(role => 

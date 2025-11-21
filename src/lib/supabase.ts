@@ -168,7 +168,6 @@ export interface UserRole {
   name: string
   colour: string
   icon?: string
-  glossy_icon?: string
   internal?: boolean
   created_at: string
   updated_at: string
