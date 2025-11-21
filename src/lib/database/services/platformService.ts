@@ -62,9 +62,7 @@ export const getPlatforms = async (): Promise<Platform[]> => {
 
 export const createPlatform = async (
   name: string,
-  colour: string,
-  icon?: string,
-  description?: string,
+  colour: string = '#5A6698',
   logo?: string
 ): Promise<Platform | null> => {
   if (!isSupabaseConfigured || !supabase) {
@@ -76,8 +74,6 @@ export const createPlatform = async (
         workspace_id: 'default-workspace',
         name,
         colour,
-        icon: icon || 'Server',
-        description,
         logo,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -109,8 +105,6 @@ export const createPlatform = async (
         workspace_id: workspaces?.workspace_id || null,
         name,
         colour,
-        icon: icon || 'Server',
-        description,
         logo
       }])
       .select()

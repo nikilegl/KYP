@@ -1,16 +1,17 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Node } from '@xyflow/react'
 import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import type { Notification } from './DesignSystem/components/UserJourneyNode'
-import type { UserRole, ThirdParty, Platform } from '../lib/supabase'
+import type { UserRole, Platform } from '../lib/supabase'
 import { Plus, Trash2, GripVertical, ChevronDown, Check } from 'lucide-react'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { getPlatforms } from '../lib/database'
 import { EmojiAutocomplete } from './EmojiAutocomplete'
-import { AddThirdPartyModal } from './AddThirdPartyModal'
+import { AddPlatformModal } from './AddPlatformModal'
 
 interface EditNodeModalProps {
   isOpen: boolean
@@ -18,7 +19,6 @@ interface EditNodeModalProps {
   node: Node | null
   isAddingNewNode: boolean
   userRoles: UserRole[]
-  thirdParties: ThirdParty[] // Kept for future validation/suggestions
   availableRegions: Array<{ id: string; label: string }>
   journeyLayout: 'vertical' | 'horizontal'
   existingNodes: Node[] // List of existing nodes to determine default node type
@@ -26,8 +26,6 @@ interface EditNodeModalProps {
   onDelete?: () => void
   userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
   onUpdateEmojiOverride?: (roleId: string, emoji: string) => void // Callback to update emoji override for all nodes
-  workspaceId: string // Workspace ID for creating third parties
-  onThirdPartyCreated?: (thirdParty: ThirdParty) => void // Callback when a third party is created
 }
 
 interface BulletPoint {
@@ -233,7 +231,6 @@ export function EditNodeModal({
   node,
   isAddingNewNode,
   userRoles,
-  thirdParties,
   availableRegions,
   journeyLayout,
   existingNodes,
@@ -241,8 +238,6 @@ export function EditNodeModal({
   onDelete,
   userRoleEmojiOverrides = {},
   onUpdateEmojiOverride,
-  workspaceId,
-  onThirdPartyCreated
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
@@ -260,11 +255,15 @@ export function EditNodeModal({
     { id: `bp-${Date.now()}`, text: '' }
   ])
 
-  // State for third party validation and modal
-  const [showAddThirdPartyModal, setShowAddThirdPartyModal] = useState(false)
-  const [matchedThirdParty, setMatchedThirdParty] = useState<ThirdParty | null>(null)
-  const [isValidatingThirdParty, setIsValidatingThirdParty] = useState(false)
-  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // State for platform search and modal
+  const [platformSearchQuery, setPlatformSearchQuery] = useState('')
+  const [showAddPlatformModal, setShowAddPlatformModal] = useState(false)
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
+  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null)
+  const platformSearchRef = useRef<HTMLDivElement>(null)
+  const platformInputRef = useRef<HTMLInputElement>(null)
 
   // DnD sensors
   const sensors = useSensors(
@@ -299,29 +298,137 @@ export function EditNodeModal({
     loadPlatforms()
   }, [])
 
-  // Sort platforms in the desired order
-  const sortedPlatforms = useMemo(() => {
-    const order = ['Legl', 'Legl End Client Platform', 'Legl Email', 'Back end', 'CMS']
-    const ordered: Platform[] = []
-    const unordered: Platform[] = []
-    
-    // First, add platforms in the specified order
-    order.forEach(name => {
-      const platform = platforms.find(p => p.name === name)
+  // Filter platforms based on search query
+  const filteredPlatforms = useMemo(() => {
+    if (!platformSearchQuery.trim()) {
+      return []
+    }
+    const query = platformSearchQuery.toLowerCase().trim()
+    return platforms.filter(platform => 
+      platform.name.toLowerCase().includes(query)
+    )
+  }, [platforms, platformSearchQuery])
+
+  // Reset highlighted index when filtered platforms change
+  useEffect(() => {
+    setHighlightedIndex(-1)
+  }, [filteredPlatforms])
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightedIndex >= 0) {
+      const dropdown = document.querySelector('.platform-dropdown')
+      const highlightedItem = dropdown?.children[highlightedIndex] as HTMLElement
+      if (highlightedItem) {
+        highlightedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      }
+    }
+  }, [highlightedIndex])
+
+  // Handle keyboard navigation
+  const handlePlatformSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showPlatformDropdown || !platformSearchQuery.trim()) {
+      return
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const maxIndex = filteredPlatforms.length > 0 ? filteredPlatforms.length - 1 : 0
+      setHighlightedIndex(prev => (prev < maxIndex ? prev + 1 : 0))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      const maxIndex = filteredPlatforms.length > 0 ? filteredPlatforms.length - 1 : 0
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : maxIndex))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlightedIndex >= 0 && highlightedIndex < filteredPlatforms.length) {
+        const platform = filteredPlatforms[highlightedIndex]
+        setSelectedPlatform(platform)
+        setPlatformSearchQuery(platform.name)
+        setFormData(prev => ({ 
+          ...prev, 
+          variant: platform.name as NodeFormData['variant'],
+          customPlatformName: ''
+        }))
+        setShowPlatformDropdown(false)
+        setHighlightedIndex(-1)
+      } else if (filteredPlatforms.length === 0 && platformSearchQuery.trim()) {
+        // If no results, open add platform modal
+        setShowAddPlatformModal(true)
+        setShowPlatformDropdown(false)
+      }
+    } else if (e.key === 'Escape') {
+      setShowPlatformDropdown(false)
+      setHighlightedIndex(-1)
+    }
+  }
+
+  // Find selected platform
+  useEffect(() => {
+    if (formData.variant && formData.variant !== 'Custom') {
+      const platform = platforms.find(p => p.name === formData.variant)
+      setSelectedPlatform(platform || null)
       if (platform) {
-        ordered.push(platform)
+        setPlatformSearchQuery(platform.name)
       }
-    })
-    
-    // Then add any remaining platforms that aren't in the order list
-    platforms.forEach(platform => {
-      if (!order.includes(platform.name)) {
-        unordered.push(platform)
+    } else {
+      setSelectedPlatform(null)
+      if (!showPlatformDropdown) {
+        setPlatformSearchQuery('')
       }
-    })
-    
-    return [...ordered, ...unordered]
-  }, [platforms])
+    }
+  }, [formData.variant, platforms, showPlatformDropdown])
+
+  // Update dropdown position when it opens
+  useEffect(() => {
+    if (showPlatformDropdown && platformInputRef.current) {
+      const updatePosition = () => {
+        if (platformInputRef.current) {
+          const rect = platformInputRef.current.getBoundingClientRect()
+          setDropdownPosition({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width
+          })
+        }
+      }
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    } else {
+      setDropdownPosition(null)
+    }
+  }, [showPlatformDropdown, platformSearchQuery])
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      const dropdown = document.querySelector('.platform-dropdown')
+      if (
+        platformSearchRef.current && 
+        !platformSearchRef.current.contains(target) &&
+        dropdown &&
+        !dropdown.contains(target)
+      ) {
+        setShowPlatformDropdown(false)
+      }
+    }
+
+    if (showPlatformDropdown) {
+      // Use a small delay to avoid closing immediately on open
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside)
+      }, 0)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showPlatformDropdown])
 
   // Update form when node changes
   useEffect(() => {
@@ -360,12 +467,13 @@ export function EditNodeModal({
           customUserRoleEmoji = (nodeWithEmoji.data?.customUserRoleEmoji as string) || ''
         }
       }
+      const initialCustomPlatformNameValue = (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || ''
       setFormData({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
         variant: resolvedVariant,
         thirdPartyName: (node.data?.thirdPartyName as string) || '',
-        customPlatformName: (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || '',
+        customPlatformName: initialCustomPlatformNameValue,
         userRole: (node.data?.userRole as UserRole | null) || null,
         customUserRoleName: customUserRoleName,
         customUserRoleEmoji: customUserRoleEmoji,
@@ -374,6 +482,9 @@ export function EditNodeModal({
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
         swimLane: (node as any).parentId || null
       })
+      // Reset platform search
+      setPlatformSearchQuery('')
+      setSelectedPlatform(null)
       // Set custom user role selected state if customUserRoleName exists
       setIsCustomUserRoleSelected(!!customUserRoleName)
     } else if (isAddingNewNode && isOpen) {
@@ -400,28 +511,13 @@ export function EditNodeModal({
         swimLane: null
       })
       
+      // Reset platform search for new node
+      setPlatformSearchQuery('')
+      setSelectedPlatform(null)
       setIsCustomUserRoleSelected(false)
     }
     
-    // Cleanup validation timeout on unmount or close
-    return () => {
-      if (validationTimeoutRef.current) {
-        clearTimeout(validationTimeoutRef.current)
-      }
-    }
   }, [node, isOpen, isAddingNewNode, existingNodes])
-  
-  // Cleanup validation timeout when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      if (validationTimeoutRef.current) {
-        clearTimeout(validationTimeoutRef.current)
-      }
-      setMatchedThirdParty(null)
-      setIsValidatingThirdParty(false)
-      setShowAddThirdPartyModal(false)
-    }
-  }, [isOpen])
 
   // Sync emoji input value when user role changes (but not when override changes to allow editing)
   useEffect(() => {
@@ -463,12 +559,20 @@ export function EditNodeModal({
         const isTextarea = activeElement?.tagName === 'TEXTAREA'
         const isSelect = activeElement?.tagName === 'SELECT'
         
+        // Check if platform search input is focused
+        const isPlatformSearchInput = platformInputRef.current === activeElement
+        
         // Check if emoji picker is open (look for the picker dropdown in the DOM)
         const emojiPicker = document.querySelector('.emoji-picker-dropdown')
         const isEmojiPickerOpen = emojiPicker !== null
         
         // Don't trigger Save if emoji picker is open - let the picker handle Enter key
         if (isEmojiPickerOpen) {
+          return
+        }
+        
+        // Don't trigger Save if platform search is focused - let the search handle Enter key
+        if (isPlatformSearchInput) {
           return
         }
         
@@ -928,24 +1032,92 @@ export function EditNodeModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Platform
             </label>
-            <select
-              value={formData.variant}
-              onChange={(e) => setFormData(prev => ({ 
-                ...prev, 
-                variant: e.target.value as NodeFormData['variant']
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a platform...</option>
-              {/* Custom option */}
-              <option value="Custom">*Custom</option>
-              {/* Database platforms */}
-              {sortedPlatforms.map(platform => (
-                <option key={platform.id} value={platform.name}>
-                  {platform.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative" ref={platformSearchRef}>
+              <input
+                ref={platformInputRef}
+                type="text"
+                value={platformSearchQuery}
+                onChange={(e) => {
+                  setPlatformSearchQuery(e.target.value)
+                  setShowPlatformDropdown(true)
+                  setHighlightedIndex(-1)
+                  if (e.target.value.trim() === '') {
+                    setFormData(prev => ({ ...prev, variant: '', customPlatformName: '' }))
+                    setSelectedPlatform(null)
+                  }
+                }}
+                onKeyDown={handlePlatformSearchKeyDown}
+                onFocus={() => {
+                  setShowPlatformDropdown(true)
+                }}
+                placeholder="Search for a platform..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {showPlatformDropdown && platformSearchQuery.trim() && dropdownPosition && createPortal(
+                <div 
+                  className="platform-dropdown fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                  style={{
+                    top: `${dropdownPosition.top}px`,
+                    left: `${dropdownPosition.left}px`,
+                    width: `${dropdownPosition.width}px`
+                  }}
+                >
+                  {filteredPlatforms.length > 0 ? (
+                    filteredPlatforms.map((platform, index) => (
+                      <button
+                        key={platform.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPlatform(platform)
+                          setPlatformSearchQuery(platform.name)
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            variant: platform.name as NodeFormData['variant'],
+                            customPlatformName: ''
+                          }))
+                          setShowPlatformDropdown(false)
+                          setHighlightedIndex(-1)
+                        }}
+                        onMouseEnter={() => setHighlightedIndex(index)}
+                        className={`w-full text-left px-3 py-2 flex items-center gap-2 ${
+                          highlightedIndex === index 
+                            ? 'bg-blue-50 text-blue-900' 
+                            : 'hover:bg-gray-100'
+                        }`}
+                      >
+                        {platform.logo && (
+                          <div className="w-6 h-6 flex-shrink-0">
+                            {platform.logo.startsWith('<svg') || platform.logo.startsWith('<?xml') ? (
+                              <div 
+                                className="w-full h-full"
+                                dangerouslySetInnerHTML={{ __html: platform.logo }}
+                              />
+                            ) : (
+                              <img src={platform.logo} alt={platform.name} className="w-full h-full object-contain" />
+                            )}
+                          </div>
+                        )}
+                        <span>{platform.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddPlatformModal(true)
+                          setShowPlatformDropdown(false)
+                        }}
+                        className="w-full text-left text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        + Add platform "{platformSearchQuery}"
+                      </button>
+                    </div>
+                  )}
+                </div>,
+                document.body
+              )}
+            </div>
           </div>
         </div>
 
@@ -983,97 +1155,33 @@ export function EditNodeModal({
           </div>
         )}
 
-        {/* Custom Platform Name (conditionally shown) */}
-        {formData.variant === 'Custom' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Custom Platform Name <span className="text-xs text-gray-500 font-normal">(Type : for emojis)</span>
-            </label>
-            <div className="relative">
-              <EmojiAutocomplete
-                value={formData.customPlatformName}
-                onChange={(value) => {
-                  setFormData(prev => ({ ...prev, customPlatformName: value }))
-                  
-                  // Clear previous timeout
-                  if (validationTimeoutRef.current) {
-                    clearTimeout(validationTimeoutRef.current)
-                  }
-                  
-                  // Reset validation state
-                  setMatchedThirdParty(null)
-                  setIsValidatingThirdParty(false)
-                  
-                  // If empty, don't validate
-                  if (!value.trim()) {
-                    return
-                  }
-                  
-                  // Set validating state
-                  setIsValidatingThirdParty(true)
-                  
-                  // Debounce validation - wait 1 second after user stops typing
-                  validationTimeoutRef.current = setTimeout(() => {
-                    // Check if platform name matches any existing third party (case-insensitive)
-                    const trimmedValue = value.trim()
-                    const matched = thirdParties.find(
-                      tp => tp.name.toLowerCase().trim() === trimmedValue.toLowerCase()
-                    )
-                    
-                    setMatchedThirdParty(matched || null)
-                    setIsValidatingThirdParty(false)
-                  }, 1000)
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-                placeholder="e.g., Stripe, Mailchimp, Twilio..."
-              />
-              {/* Validation indicator */}
-              {formData.customPlatformName.trim() && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {isValidatingThirdParty ? (
-                    <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                  ) : matchedThirdParty ? (
-                    <Check className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="small"
-                      onClick={() => setShowAddThirdPartyModal(true)}
-                      className="text-xs px-2 py-1 h-auto"
-                    >
-                      Add logo
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              {matchedThirdParty 
-                ? `Matches existing third party: ${matchedThirdParty.name}`
-                : "Enter a custom platform name. If it matches a known third party, we'll show its logo."}
-            </p>
-          </div>
-        )}
 
       </div>
 
-      {/* Add Third Party Modal */}
-      <AddThirdPartyModal
-        isOpen={showAddThirdPartyModal}
-        onClose={() => setShowAddThirdPartyModal(false)}
-        onSuccess={(thirdParty) => {
-          // Update matched third party
-          setMatchedThirdParty(thirdParty)
-          // Notify parent component if callback provided
-          if (onThirdPartyCreated) {
-            onThirdPartyCreated(thirdParty)
-          }
-          // Close modal
-          setShowAddThirdPartyModal(false)
+      {/* Add Platform Modal */}
+      <AddPlatformModal
+        isOpen={showAddPlatformModal}
+        onClose={() => {
+          setShowAddPlatformModal(false)
         }}
-        workspaceId={workspaceId}
-        initialName={formData.customPlatformName.trim()}
+        onSuccess={(platform) => {
+          // Reload platforms
+          const loadPlatforms = async () => {
+            const platformsData = await getPlatforms()
+            setPlatforms(platformsData)
+            // Select the newly created platform
+            setSelectedPlatform(platform)
+            setPlatformSearchQuery(platform.name)
+            setFormData(prev => ({ 
+              ...prev, 
+              variant: platform.name as NodeFormData['variant'],
+              customPlatformName: ''
+            }))
+          }
+          loadPlatforms()
+          setShowAddPlatformModal(false)
+        }}
+        initialName={platformSearchQuery.trim()}
       />
     </Modal>
   )

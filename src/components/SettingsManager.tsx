@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
-import { Settings, Shield, UserCheck, FileText, UserPlus, Package, Server } from 'lucide-react'
+import { Settings, Shield, UserCheck, FileText, UserPlus, Server } from 'lucide-react'
 import { UserPermissionManager } from './UserPermissionManager'
 import { UserRoleManager } from './UserRoleManager'
 import { PlatformManager } from './PlatformManager'
 import { NoteTemplateManager } from './NoteTemplateManager'
 import { TeamManager } from './TeamManager'
-import { ThirdPartyManager } from './ThirdPartyManager'
 import type { 
   WorkspaceUser,
   UserRole,
@@ -38,8 +37,8 @@ interface SettingsManagerProps {
   onNavigateToStakeholdersWithFilter: (userRoleId: string) => void
   
   // Platform handlers
-  onCreatePlatform: (name: string, colour: string, icon?: string, description?: string, logo?: string) => Promise<void>
-  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string; logo?: string }) => Promise<boolean>
+  onCreatePlatform: (name: string, colour: string, logo?: string) => Promise<void>
+  onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; logo?: string }) => Promise<boolean>
   onDeletePlatform: (platformId: string) => Promise<void>
   
   // User permission handlers
@@ -89,7 +88,6 @@ export function SettingsManager({
     { id: 'user-permissions', label: 'User Permissions', icon: Shield },
     { id: 'user-roles', label: 'User Roles', icon: UserCheck },
     { id: 'platforms', label: 'Platforms', icon: Server },
-    { id: 'third-parties', label: 'Third Parties', icon: Package },
     { id: 'note-templates', label: 'Note Templates', icon: FileText },
     { id: 'team', label: 'KYP Team', icon: UserPlus },
   ]
@@ -127,8 +125,6 @@ export function SettingsManager({
             onDeletePlatform={onDeletePlatform}
           />
         )
-      case 'third-parties':
-        return <ThirdPartyManager workspaceId={workspaceId} />
       case 'note-templates':
         return (
           <NoteTemplateManager 

@@ -4294,7 +4294,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           nodesFocusable={true}
           elementsSelectable={true}
           selectNodesOnDrag={!isSpacePressed}
-          panOnSpace={true}
           multiSelectionKeyCode="Shift"
           deleteKeyCode={null}
           edgesReconnectable={true}
@@ -4399,7 +4398,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         node={configuringNode}
         isAddingNewNode={isAddingNewNode}
         userRoles={userRoles}
-        thirdParties={thirdParties}
         availableRegions={nodes
           .filter((n) => n.type === 'highlightRegion')
           .map((n) => ({
@@ -4416,7 +4414,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         } : undefined}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         onUpdateEmojiOverride={handleUpdateEmojiOverride}
-        workspaceId={workspaceId}
         onThirdPartyCreated={async (thirdParty) => {
           // Refresh third parties list
           if (workspaceId) {

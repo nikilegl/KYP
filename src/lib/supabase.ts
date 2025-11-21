@@ -178,9 +178,7 @@ export interface Platform {
   id: string
   workspace_id: string
   name: string
-  description?: string
   colour: string
-  icon?: string
   logo?: string
   created_at: string
   updated_at: string

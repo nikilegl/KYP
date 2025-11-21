@@ -787,14 +787,24 @@ export function WorkspaceDataFetcher({
   }
 
   // Platform handlers
-  const handleCreatePlatform = async (name: string, colour: string, icon?: string, description?: string, logo?: string) => {
-    const platform = await createPlatform(name, colour, icon, description, logo)
+  const handleCreatePlatform = async (name: string, colour: string, logo?: string) => {
+    // Check if platform with same name already exists (might have been created by AddPlatformModal)
+    const existingPlatform = platforms.find(p => p.name.toLowerCase() === name.toLowerCase())
+    if (existingPlatform) {
+      // Platform already exists (likely created by AddPlatformModal), refresh the list to get latest data
+      const refreshedPlatforms = await getPlatforms()
+      setPlatforms(refreshedPlatforms)
+      return
+    }
+    
+    // Platform doesn't exist, create it
+    const platform = await createPlatform(name, colour, logo)
     if (platform) {
       setPlatforms([platform, ...platforms])
     }
   }
 
-  const handleUpdatePlatform = async (platformId: string, updates: { name?: string; colour?: string; icon?: string; description?: string; logo?: string }): Promise<boolean> => {
+  const handleUpdatePlatform = async (platformId: string, updates: { name?: string; colour?: string; logo?: string }): Promise<boolean> => {
     const updatedPlatform = await updatePlatform(platformId, updates)
     if (updatedPlatform) {
       setPlatforms(platforms.map(platform => 
