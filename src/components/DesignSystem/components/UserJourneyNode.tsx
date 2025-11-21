@@ -334,8 +334,8 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                   borderRight: '6px solid transparent',
                   borderBottom: '10px solid',
                   borderBottomColor: isHoveredHandle && isConnected ? '#3b82f6' : (isVisible ? '#9ca3af' : '#9ca3af'),
-                  pointerEvents: 'none',
-                  zIndex: 11,
+                  pointerEvents: 'none', // Ensure arrow doesn't block handle clicks
+                  zIndex: 10, // Lower than handle's z-index (12) so handles capture events
                   opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
                   transition: 'border-bottom-color 0.2s ease-in-out, opacity 0.2s ease-in-out',
                 }}

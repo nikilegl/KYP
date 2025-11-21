@@ -337,11 +337,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Undo handler for Tidy Up and AI Edit operations
   const handleUndo = useCallback(() => {
     if (!undoSnapshot) {
-      console.log('No undo snapshot available')
       return
     }
-
-    console.log(`Undoing ${undoSnapshot.action}...`)
     
     // Restore the snapshot
     setNodes(undoSnapshot.nodes)
@@ -351,10 +348,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     
     // Clear the snapshot after using it
     setUndoSnapshot(null)
-    
-    // Show feedback
-    const actionName = undoSnapshot.action === 'tidyUp' ? 'Tidy Up' : 'AI Edit'
-    console.log(`✓ Undid ${actionName}`)
   }, [undoSnapshot, setNodes, setEdges])
 
   // Load projects and journey on mount
@@ -378,7 +371,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Update all nodes when layout changes
   const prevLayoutRef = useRef(journeyLayout)
   useEffect(() => {
-    console.log('🔄 Layout changed to:', journeyLayout)
     setNodes((nds) => {
       const updated = nds.map((node) => ({
         ...node,
@@ -387,7 +379,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           journeyLayout
         }
       }))
-      console.log('✅ Updated nodes with new layout:', updated.map(n => ({ id: n.id, layout: n.data.journeyLayout })))
       return updated
     })
   }, [journeyLayout, setNodes])
@@ -522,18 +513,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // Migrate old edge handle IDs to new format if needed
           // Old format: 'top', 'bottom', 'left', 'right' (simple side names) or null/undefined
           // New format: 'source-top', 'target-top', etc. (with type prefix)
-          console.log('🔍 Checking edges for migration:', {
-            totalEdges: journey.flow_data.edges.length,
-            sampleEdges: journey.flow_data.edges.slice(0, 5).map(e => ({
-              id: e.id,
-              source: e.source,
-              sourceHandle: e.sourceHandle,
-              target: e.target,
-              targetHandle: e.targetHandle,
-              sourceHandleType: typeof e.sourceHandle,
-              targetHandleType: typeof e.targetHandle
-            }))
-          })
           
           // Determine default handle side based on journey layout
           // For vertical layouts: source-bottom, target-top
@@ -586,11 +565,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             
             // Always return migrated edge if migration was needed
             if (needsMigration) {
-              console.log('🔄 Migrating edge handles:', {
-                edgeId: edge.id,
-                old: { sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle },
-                new: { sourceHandle: newSourceHandle, targetHandle: newTargetHandle }
-              })
               return {
                 ...edge,
                 sourceHandle: newSourceHandle,
@@ -605,18 +579,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             const original = journey.flow_data.edges[i]
             return e.sourceHandle !== original.sourceHandle || e.targetHandle !== original.targetHandle
           }).length
-          
-          console.log('📊 Edge migration complete:', {
-            totalEdges: migratedEdges.length,
-            migratedCount,
-            sampleEdges: migratedEdges.slice(0, 3).map(e => ({
-              id: e.id,
-              source: e.source,
-              sourceHandle: e.sourceHandle,
-              target: e.target,
-              targetHandle: e.targetHandle
-            }))
-          })
           
           setEdges(migratedEdges)
         }
@@ -680,11 +642,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Undo functionality
   const undo = useCallback(() => {
-    console.log('Undo called. Current historyIndex:', historyIndex, 'History length:', history.length)
     if (historyIndex >= 0 && history[historyIndex]) {
       isUndoing.current = true
       const previousState = history[historyIndex]
-      console.log('Undoing to index:', historyIndex - 1, 'Restoring state with nodes:', previousState.nodes.length, 'edges:', previousState.edges.length)
       setNodes(JSON.parse(JSON.stringify(previousState.nodes)))
       setEdges(JSON.parse(JSON.stringify(previousState.edges)))
       setHistoryIndex((prev) => prev - 1)
@@ -692,22 +652,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Reset the flag after state updates
       setTimeout(() => {
         isUndoing.current = false
-        console.log('Undo complete. New historyIndex:', historyIndex - 1)
       }, 50)
-    } else {
-      console.log('Cannot undo: no history available')
     }
   }, [historyIndex, history, setNodes, setEdges])
 
   // Redo functionality
   const redo = useCallback(() => {
-    console.log('Redo called. Current historyIndex:', historyIndex, 'History length:', history.length)
     // Check if there are states ahead to redo
     if (historyIndex < history.length - 1) {
       isUndoing.current = true
       const nextIndex = historyIndex + 1
       const nextState = history[nextIndex]
-      console.log('Redoing to index:', nextIndex, 'Nodes:', nextState?.nodes?.length, 'Edges:', nextState?.edges?.length)
       
       if (nextState) {
         setNodes(JSON.parse(JSON.stringify(nextState.nodes)))
@@ -717,11 +672,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         // Reset the flag after state updates
         setTimeout(() => {
           isUndoing.current = false
-          console.log('Redo complete. New historyIndex:', nextIndex)
         }, 50)
       }
-    } else {
-      console.log('Cannot redo: at end of history')
     }
   }, [historyIndex, history, setNodes, setEdges])
 
@@ -742,14 +694,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
       // Check for Cmd+Shift+Z (Mac) or Ctrl+Shift+Z (Windows/Linux) - REDO
       if ((event.metaKey || event.ctrlKey) && event.shiftKey) {
-        console.log('Redo triggered. historyIndex:', historyIndex, 'history.length:', history.length)
         // Only works with node history (no redo for AI/TidyUp snapshots)
         if (historyIndex < history.length - 1) {
           event.preventDefault()
-          console.log('Redoing to state at index:', historyIndex + 2)
           redo()
-        } else {
-          console.log('Cannot redo: no forward states available')
         }
       }
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO
@@ -833,7 +781,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     // Copy to clipboard as JSON (works across browser tabs)
     try {
       await navigator.clipboard.writeText(JSON.stringify(copyData, null, 2))
-      console.log(`Copied ${selectedNodes.length} node(s) and ${relevantEdges.length} edge(s) to clipboard`)
     } catch (error) {
       console.error('Failed to copy to clipboard:', error)
     }
@@ -848,13 +795,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         const clipboardItems = await navigator.clipboard.read()
         for (const item of clipboardItems) {
           if (item.types.some(type => type.startsWith('image/'))) {
-            console.log('Clipboard contains image, skipping node paste')
             return // Let image handlers deal with it
           }
         }
       } catch (clipboardReadError) {
         // If clipboard.read() is not supported or fails, continue with text-based paste
-        console.log('Clipboard.read() not available, trying text-based paste')
       }
 
       // Try to read from clipboard as text
@@ -876,7 +821,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       } catch (clipboardError) {
         // Fallback to state if clipboard read fails
-        console.log('Clipboard read failed, using fallback state')
         if (copiedNodes.length > 0) {
           copyData = {
             nodes: copiedNodes,
@@ -886,7 +830,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
 
       if (!copyData || !copyData.nodes || copyData.nodes.length === 0) {
-        console.log('No nodes to paste')
         return
       }
 
@@ -978,7 +921,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // Add new edges
       setEdges(prevEdges => [...prevEdges, ...newEdges])
 
-      console.log(`Pasted ${newNodes.length} node(s) and ${newEdges.length} edge(s)`)
     } catch (error) {
       console.error('Failed to paste nodes:', error)
     }
@@ -1169,39 +1111,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Handle connection start (when user starts dragging from a handle)
   const onConnectStart = useCallback((_event: any, params: any) => {
     setIsConnecting(true)
-    console.log('🎯 Connection START - User dragging from handle:', {
-      nodeId: params.nodeId,
-      handleId: params.handleId,
-      handleType: params.handleType,
-      currentLayout: journeyLayout
-    })
-    
-    // Check if the handle exists on the node
-    const node = nodes.find(n => n.id === params.nodeId)
-    if (node) {
-      console.log('  📍 Source node data:', {
-        id: node.id,
-        type: node.data?.type,
-        journeyLayout: node.data?.journeyLayout
-      })
-    }
   }, [journeyLayout, nodes])
 
   // Handle connection end (when user releases the drag)
   const onConnectEnd = useCallback((_event: any, params?: any) => {
     setIsConnecting(false)
-    console.log('🛑 Connection END - User released drag', params)
-    
-    // Log current edges to see if edge was created
-    setTimeout(() => {
-      console.log('📊 Current edges after connection end:', edges.map(e => ({
-        id: e.id,
-        source: e.source,
-        sourceHandle: e.sourceHandle,
-        target: e.target,
-        targetHandle: e.targetHandle
-      })))
-    }, 100)
   }, [edges])
 
   // Monitor cursor state changes by checking document classes
@@ -1214,13 +1128,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         const computedStyle = window.getComputedStyle(reactFlowElement)
         const cursor = computedStyle.cursor
         
-        if (cursor === 'crosshair') {
-          console.log('➕ CROSSHAIR CURSOR - hovering over valid target')
-        } else if (cursor === 'grabbing' || cursor === 'grab') {
-          console.log('👆 GRAB CURSOR - dragging')
-        } else {
-          console.log('🖱️ Cursor:', cursor)
-        }
       }
     }
 
@@ -1233,13 +1140,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Handle new connections
   const onConnect = useCallback(
     (params: Connection) => {
-      console.log('✅ Connection SUCCESS:', {
-        source: params.source,
-        sourceHandle: params.sourceHandle,
-        target: params.target,
-        targetHandle: params.targetHandle
-      })
-      
       // Fix handle IDs if React Flow picked the wrong handle type
       // React Flow might pick target handles when dragging from source handles
       // because we have both source and target handles at the same position
@@ -1249,13 +1149,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // If sourceHandle starts with 'target-', convert it to 'source-'
       if (fixedSourceHandle && fixedSourceHandle.startsWith('target-')) {
         fixedSourceHandle = fixedSourceHandle.replace(/^target-/, 'source-')
-        console.log('🔧 Fixed sourceHandle:', params.sourceHandle, '->', fixedSourceHandle)
       }
       
       // If targetHandle starts with 'source-', convert it to 'target-'
       if (fixedTargetHandle && fixedTargetHandle.startsWith('source-')) {
         fixedTargetHandle = fixedTargetHandle.replace(/^source-/, 'target-')
-        console.log('🔧 Fixed targetHandle:', params.targetHandle, '->', fixedTargetHandle)
       }
       
       const edgeParams = {
@@ -1265,16 +1163,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         data: {}
       }
       
-      console.log('📝 Creating edge with handle IDs:', {
-        sourceHandle: edgeParams.sourceHandle,
-        targetHandle: edgeParams.targetHandle
-      })
-      
       setEdges((eds) => {
-        const newEdges = addEdge(edgeParams, eds)
-        console.log('🔗 Edge added. Total edges:', newEdges.length)
-        console.log('🔗 New edge:', newEdges[newEdges.length - 1])
-        return newEdges
+        return addEdge(edgeParams, eds)
       })
     },
     [setEdges]
@@ -1282,39 +1172,22 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   // Validate connections (optional - can be enhanced with more logic)
   const isValidConnection = useCallback((connection: Edge | Connection) => {
-    console.log('🔍 Validating connection:', {
-      source: connection.source,
-      sourceHandle: connection.sourceHandle,
-      target: connection.target,
-      targetHandle: connection.targetHandle
-    })
     
     // Check if source and target nodes exist
     const sourceNode = nodes.find(n => n.id === connection.source)
     const targetNode = nodes.find(n => n.id === connection.target)
     
     if (!sourceNode || !targetNode) {
-      console.log('  ❌ Validation FAILED: Node not found', {
-        sourceFound: !!sourceNode,
-        targetFound: !!targetNode
-      })
       return false
     }
     
     // Don't allow connections to label nodes
     if (sourceNode.data?.type === 'label' || targetNode.data?.type === 'label') {
-      console.log('  ❌ Validation FAILED: Cannot connect to/from label nodes')
       return false
     }
     
-    console.log('  ℹ️ Node info:', {
-      source: { id: sourceNode.id, type: sourceNode.data?.type, layout: sourceNode.data?.journeyLayout },
-      target: { id: targetNode.id, type: targetNode.data?.type, layout: targetNode.data?.journeyLayout }
-    })
-    
     // Basic validation - can't connect to self
     const isValid = connection.source !== connection.target
-    console.log(`  ${isValid ? '✅' : '❌'} Validation result: ${isValid}`)
     
     // Always return true for valid node-to-node connections (all sides are allowed now)
     return isValid
@@ -1425,7 +1298,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // Save law firm associations
           await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
           
-          console.log('Journey updated successfully:', updated)
           setJustSaved(true)
           setHasUnsavedChanges(false) // Clear unsaved changes flag
           setTimeout(() => setJustSaved(false), 3000)
@@ -1449,7 +1321,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             await assignUserJourneysToFolder([created.id], selectedFolderId)
           }
           
-          console.log('Journey created successfully:', created)
           setCurrentJourneyId(created.id)
           setJustSaved(true)
           setHasUnsavedChanges(false) // Clear unsaved changes flag
@@ -1511,9 +1382,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       }
       
-      // Debug: Log the first 100 characters to help diagnose issues
-      console.log('Attempting to parse JSON. First 100 chars:', cleanedText.substring(0, 100))
-      console.log('Character codes of first 10 chars:', cleanedText.substring(0, 10).split('').map(c => c.charCodeAt(0)))
       
       const journeyData = JSON.parse(cleanedText)
       
@@ -1546,19 +1414,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             userRoleObj = userRoles.find(
               role => role.name.toLowerCase().trim() === userRoleName.toLowerCase()
             ) || null
-            
-            // Debug logging
-            if (!userRoleObj) {
-              console.warn(`Could not find user role: "${userRoleName}"`)
-              console.log('Available user roles:', userRoles.map(r => `"${r.name}"`).join(', '))
-              console.log('Checking exact matches:')
-              userRoles.forEach(role => {
-                const match = role.name.toLowerCase().trim() === userRoleName.toLowerCase()
-                console.log(`  "${role.name}" (${role.name.length} chars) vs "${userRoleName}" (${userRoleName.length} chars): ${match}`)
-              })
-            } else {
-              console.log(`Successfully mapped "${userRoleName}" to user role:`, userRoleObj.name)
-            }
           } else if (typeof node.data.userRole === 'object' && node.data.userRole.id) {
             // Already a UserRole object
             userRoleObj = node.data.userRole
@@ -1619,7 +1474,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }))
         
         xOffset = rightmostX + IMPORT_HORIZONTAL_GAP
-        console.log(`Existing content detected. Placing imported journey at x offset: ${xOffset}px`)
       }
 
       // Set journey metadata (only if no existing content)
@@ -1794,15 +1648,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }))
         
         xOffset = rightmostX + IMPORT_HORIZONTAL_GAP
-        console.log(`Existing content detected. Placing imported journey at x offset: ${xOffset}px`)
       }
 
       // Generate prompt with actual user roles from database
       const userRoleNames = userRoles.map(role => role.name)
       const dynamicPrompt = generateTranscriptToJourneyPrompt(userRoleNames)
       
-      console.log('Using user roles:', userRoleNames)
-      console.log('Selected layout:', importTranscriptLayout)
 
       // Call OpenAI API to convert transcript to journey JSON (content only, no positions)
       const journeyData = await convertTranscriptToJourney(
@@ -1964,7 +1815,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const selectedNodeIds = selectedNodes.map(n => n.id)
       const hasSelection = selectedNodes.length > 0
 
-      console.log('Selected nodes:', selectedNodeIds)
 
       // Prepare current journey data for AI (send only essential data)
       const currentJourney = {
@@ -1995,9 +1845,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }))
       }
 
-      console.log('Sending journey to AI for editing...')
-      console.log('Current nodes:', currentJourney.nodes.length)
-      console.log('Instruction:', editInstruction)
 
       // Call OpenAI API to edit the journey (with progress updates)
       const updatedJourney = await editJourneyWithAI(
@@ -3270,7 +3117,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // Account for zoom level by using the transform scale
           const zoom = reactFlowInstanceRef.current?.getZoom() || 1
           const height = rect.height / zoom
-          console.log(`Node ${nodeId} height:`, height, `px (zoom: ${zoom})`)
           return height
         }
         console.warn(`Node ${nodeId} not found in DOM, using default height`)
@@ -3371,7 +3217,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     // Post-process: Ensure convergent nodes are at max(parent levels) + 1
     // This also cascades to their children
-    console.log('=== Post-processing: Fix convergent node levels ===')
     let levelChanged = true
     let iterations = 0
     const maxIterations = 10 // Prevent infinite loops
@@ -3392,7 +3237,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           
           if (currentLevel !== correctLevel) {
             const nodeLabel = (node.data as any)?.label || node.id
-            console.log(`  Convergent node ${nodeLabel}: updating level from ${currentLevel} to ${correctLevel} (max parent level: ${maxParentLevel})`)
             levels.set(node.id, correctLevel)
             levelChanged = true
           }
@@ -3405,7 +3249,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           
           if (currentLevel !== correctLevel) {
             const nodeLabel = (node.data as any)?.label || node.id
-            console.log(`  Node ${nodeLabel}: updating level from ${currentLevel} to ${correctLevel} (parent level: ${parentLevel})`)
             levels.set(node.id, correctLevel)
             levelChanged = true
           }
@@ -3466,11 +3309,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           if (parentHasDirectConvergentChild) {
             nodeLayout.set(node.id, 'Divergent node')
             const nodeLabel = (node.data as any)?.label || node.id
-            console.log(`Node ${nodeLabel} is Divergent: parent has direct edge to convergent node(s)`, 
-              convergentSiblings.map(id => {
-                const sibling = nodes.find(n => n.id === id)
-                return (sibling?.data as any)?.label || id
-              }))
           } else {
             // Branch-child: parent is branch node, but parent does not directly connect to convergent node
             nodeLayout.set(node.id, 'Branch-child node')
@@ -3487,7 +3325,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     })
     
     // Apply branching layout
-    console.log('=== Branching Layout ===')
     
     // First, identify branch nodes and check if they have divergent children
     const branchesWithLayout = new Map<string, boolean>() // branch node id -> should use branching layout
@@ -3505,13 +3342,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         })
         
         branchesWithLayout.set(node.id, !hasDivergentChild)
-        const nodeLabel = (node.data as any)?.label || node.id
-        
-        if (hasDivergentChild) {
-          console.log(`Branch node ${nodeLabel}: has divergent child, NOT using branching layout`)
-        } else {
-          console.log(`Branch node ${nodeLabel}: using branching layout`)
-        }
       }
     })
     
@@ -3528,7 +3358,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     
     // STEP 1: Position branch nodes first so convergent nodes can reference them
     // Process level by level to ensure parents are positioned before children
-    console.log('=== STEP 1: Positioning Branch Nodes and Children First ===')
     const maxLevelForBranching = Math.max(...Array.from(levels.values()), 0)
     for (let level = 0; level <= maxLevelForBranching; level++) {
       const nodesAtLevel = Array.from(levels.entries())
@@ -3558,17 +3387,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 ? branchingXPositions.get(parentId)!
                 : getNodeXPosition(parentId)
               const parentLabel = nodes.find(n => n.id === parentId)
-              console.log(`  Branch node ${nodeLabel}: aligning with parent ${(parentLabel?.data as any)?.label || parentId} at x=${branchNodeX}`)
             } else if (parentCount === 0) {
               branchNodeX = 288 // Default center position for root
-              console.log(`  Branch node ${nodeLabel}: root node, using default x=${branchNodeX}`)
             } else {
               branchNodeX = 288 // Default if multiple parents
-              console.log(`  Branch node ${nodeLabel}: multiple parents, using default x=${branchNodeX}`)
             }
             branchingXPositions.set(nodeId, branchNodeX)
-          } else {
-            console.log(`  Branch node ${nodeLabel}: using pre-set position x=${branchNodeX}`)
           }
           
           // Position children centered around the branch node, 384px apart
@@ -3581,14 +3405,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             const childX = Math.round((branchNodeX + (offsetIndex * 384)) / 8) * 8
             branchingXPositions.set(childId, childX)
             const childLabel = nodes.find(n => n.id === childId)
-            console.log(`  Branch child ${(childLabel?.data as any)?.label || childId}: positioned at x=${childX} (offset ${offsetIndex * 384} from parent x=${branchNodeX})`)
           })
         }
       })
     }
     
     // STEP 2: Now position convergent nodes - they can reference branch positions
-    console.log('=== STEP 2: Aligning Convergent Nodes with Branch Ancestors ===')
     nodes.forEach(node => {
       const parentCount = nodeParentCount.get(node.id) || 0
       
@@ -3619,7 +3441,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             branchingXPositions.set(node.id, branchNodeX)
             const divergentLabel = nodes.find(n => n.id === divergentParent)
             const branchLabel = nodes.find(n => n.id === branchNodeId)
-            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchNodeId} (parent of divergent ${(divergentLabel?.data as any)?.label || divergentParent}) at x=${branchNodeX}`)
           }
         } else {
           // Find the branch node that these parents branch from
@@ -3659,9 +3480,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             const branchX = branchingXPositions.get(branchAncestor)!
             branchingXPositions.set(node.id, branchX)
             const branchLabel = nodes.find(n => n.id === branchAncestor)
-            console.log(`  Convergent node ${nodeLabel}: aligned with branch node ${(branchLabel?.data as any)?.label || branchAncestor} at x=${branchX}`)
-          } else {
-            console.log(`  Convergent node ${nodeLabel}: No branch ancestor found (branchAncestor=${branchAncestor}, hasPosition=${branchAncestor ? branchingXPositions.has(branchAncestor) : 'N/A'})`)
           }
         }
       }
@@ -3669,7 +3487,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     
     // STEP 3: Default: All nodes inherit their parent's X position
     // Only branch children, convergent nodes, and divergent nodes get different positions
-    console.log('=== STEP 3: Setting Default X Positions (inherit from parent) ===')
     
     // Process nodes level by level to ensure parents are positioned before children
     const maxLevel = Math.max(...Array.from(levels.values()), 0)
@@ -3696,22 +3513,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           branchingXPositions.set(nodeId, parentX)
           const nodeLabel = (nodes.find(n => n.id === nodeId)?.data as any)?.label || nodeId
           const parentLabel = (nodes.find(n => n.id === parentId)?.data as any)?.label || parentId
-          console.log(`  ${nodeLabel}: inheriting parent ${parentLabel}'s x=${parentX}`)
         }
         // If no parents (root node), use default or existing horizontal position
         else if (parents.length === 0) {
           const defaultX = getNodeXPosition(nodeId)
           branchingXPositions.set(nodeId, defaultX)
           const nodeLabel = (nodes.find(n => n.id === nodeId)?.data as any)?.label || nodeId
-          console.log(`  ${nodeLabel}: root node at x=${defaultX}`)
         }
         // Convergent nodes already handled above
       })
     }
 
     // Debug: Log all branching X positions
-    console.log('=== All Branching X Positions ===')
-    console.log(`Total nodes: ${nodes.length}, Nodes with branching X: ${branchingXPositions.size}`)
     nodes.forEach(node => {
       const hasPos = branchingXPositions.has(node.id)
       const xPos = hasPos ? branchingXPositions.get(node.id) : 'MISSING'
@@ -3750,7 +3563,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             // Multiply gap by number of children
             branchGapMultiplier = Math.max(branchGapMultiplier, childCount)
             const parentLabel = (nodes.find(n => n.id === parentId)?.data as any)?.label || parentId
-            console.log(`Branch node ${parentLabel} has ${childCount} children: multiplying vertical gap by ${childCount}`)
           }
         })
       }
@@ -3759,7 +3571,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       if (branchGapMultiplier > 1) {
         const extraBranchGap = VERTICAL_GAP * (branchGapMultiplier - 1)
         cumulativeY += extraBranchGap
-        console.log(`  Adding extra branch gap: ${extraBranchGap}px (${VERTICAL_GAP} × ${branchGapMultiplier - 1})`)
       }
       
       // For each node at this level, calculate its Y position
@@ -3811,7 +3622,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       // If this is a divergent node, add 200px offset to the right
       if (layout === 'Divergent node') {
         xPosition += 200
-        console.log(`Divergent node ${(node.data as any)?.label || node.id}: adding 200px offset (x: ${xPosition - 200} -> ${xPosition})`)
       }
 
       return {
@@ -3829,18 +3639,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     
     // Combine tidied regular nodes with unchanged label nodes
     const updatedNodes = [...labelNodes, ...tidiedRegularNodes]
-    
-    // Log layout classifications and final positions for debugging
-    console.log('=== Node Layout Classifications & Final Positions ===')
-    updatedNodes.forEach(node => {
-      const layout = (node.data as any).nodeLayout || 'Unknown'
-      const label = (node.data as any).label || node.id
-      const xPos = node.position.x
-      const yPos = node.position.y
-      console.log(`${label}: ${layout} @ (${xPos}, ${yPos})`)
-    })
 
-      setNodes(updatedNodes)
+    setNodes(updatedNodes)
 
       // Save to database if journey exists
       if (currentJourneyId) {
@@ -4636,7 +4436,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               // Save law firm associations
               await setUserJourneyLawFirms(currentJourneyId, selectedLawFirmIds)
               
-              console.log('Journey updated successfully')
               setHasUnsavedChanges(false)
             } else {
               // Create new journey
@@ -4657,7 +4456,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   await assignUserJourneysToFolder([created.id], selectedFolderId)
                 }
                 
-                console.log('Journey created successfully:', created)
                 setCurrentJourneyId(created.id)
                 setHasUnsavedChanges(false)
               }
