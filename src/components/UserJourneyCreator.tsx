@@ -293,6 +293,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [showShareModal, setShowShareModal] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [userRoleEmojiOverrides, setUserRoleEmojiOverrides] = useState<Record<string, string>>({})
+  // Store handle arrow states: { [nodeId]: [handleId1, handleId2, ...] }
+  const [handleArrowStates, setHandleArrowStates] = useState<Record<string, string[]>>({})
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<Comment[]>([])
   const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([])
@@ -505,6 +507,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           // Extract userRoleEmojiOverrides from flow_data if it exists
           const overrides = (journey.flow_data as any).userRoleEmojiOverrides || {}
           setUserRoleEmojiOverrides(overrides)
+          
+          // Extract handleArrowStates from flow_data if it exists
+          const arrowStates = (journey.flow_data as any).handleArrowStates || {}
+          setHandleArrowStates(arrowStates)
           
           // Ensure nodes are selectable
           const nodesWithSelection = journey.flow_data.nodes.map(node => ({
@@ -1400,7 +1406,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const flowData = { 
         nodes: sortedNodes, 
         edges,
-        userRoleEmojiOverrides 
+        userRoleEmojiOverrides,
+        handleArrowStates
       }
       
       if (currentJourneyId) {
@@ -2568,6 +2575,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             isConnecting: false,
             connectedEdges: edgesInRegion,
             userRoleEmojiOverrides: userRoleEmojiOverrides,
+            handleArrowStates: handleArrowStates[props.id] || [],
           })
         ),
         process: (props: any) => (
@@ -2579,6 +2587,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             isConnecting: false,
             connectedEdges: edgesInRegion,
             userRoleEmojiOverrides: userRoleEmojiOverrides,
+            handleArrowStates: handleArrowStates[props.id] || [],
           })
         ),
         decision: (props: any) => (
@@ -2590,6 +2599,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             isConnecting: false,
             connectedEdges: edgesInRegion,
             userRoleEmojiOverrides: userRoleEmojiOverrides,
+            handleArrowStates: handleArrowStates[props.id] || [],
           })
         ),
         end: (props: any) => (
@@ -2601,6 +2611,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             isConnecting: false,
             connectedEdges: edgesInRegion,
             userRoleEmojiOverrides: userRoleEmojiOverrides,
+            handleArrowStates: handleArrowStates[props.id] || [],
           })
         ),
         label: (props: any) => (
@@ -2612,6 +2623,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             isConnecting: false,
             connectedEdges: edgesInRegion,
             userRoleEmojiOverrides: userRoleEmojiOverrides,
+            handleArrowStates: handleArrowStates[props.id] || [],
           })
         ),
       }
@@ -3912,6 +3924,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     ),
   }), [handleEdgeLabelClick])
 
+  // Handler to update handle arrow state
+  const handleHandleArrowToggle = useCallback((nodeId: string, handleId: string) => {
+    setHandleArrowStates(prev => {
+      const nodeHandles = prev[nodeId] || []
+      const newHandles = nodeHandles.includes(handleId)
+        ? nodeHandles.filter(h => h !== handleId) // Remove if exists
+        : [...nodeHandles, handleId] // Add if doesn't exist
+      return {
+        ...prev,
+        [nodeId]: newHandles
+      }
+    })
+  }, [])
+
   // Define node types with handlers
   const nodeTypes: NodeTypes = useMemo(() => ({
     start: (props: any) => (
@@ -3924,6 +3950,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edges}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
+        handleArrowStates={handleArrowStates[props.id] || []}
+        onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
     process: (props: any) => (
@@ -3936,6 +3964,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edges}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
+        handleArrowStates={handleArrowStates[props.id] || []}
+        onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
     decision: (props: any) => (
@@ -3948,6 +3978,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edges}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
+        handleArrowStates={handleArrowStates[props.id] || []}
+        onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
     end: (props: any) => (
@@ -3960,6 +3992,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edges}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
+        handleArrowStates={handleArrowStates[props.id] || []}
+        onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
     label: (props: any) => (
@@ -3972,6 +4006,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edges}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
+        handleArrowStates={handleArrowStates[props.id] || []}
+        onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
     highlightRegion: (props: any) => (
@@ -3984,7 +4020,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
       />
     ),
-  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges, userRoleEmojiOverrides, handleExportRegion])
+  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges, userRoleEmojiOverrides, handleArrowStates, handleHandleArrowToggle, handleExportRegion])
 
   // Comment handlers
   const handleAddComment = useCallback(async (commentText: string) => {
@@ -4579,7 +4615,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           try {
             // Sort nodes to ensure parents come before children
             const sortedNodes = sortNodesForSaving(nodes)
-            const flowData = { nodes: sortedNodes, edges }
+            const flowData = { 
+              nodes: sortedNodes, 
+              edges,
+              userRoleEmojiOverrides,
+              handleArrowStates
+            }
 
             if (currentJourneyId) {
               // Update existing journey

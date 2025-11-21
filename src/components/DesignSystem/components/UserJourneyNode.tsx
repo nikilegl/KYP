@@ -43,9 +43,11 @@ interface UserJourneyNodeProps {
   isConnecting?: boolean
   connectedEdges?: Array<{ sourceHandle?: string | null; targetHandle?: string | null; source: string; target: string }>
   userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
+  handleArrowStates?: string[] // Array of handle IDs that should be arrows for this node
+  onHandleArrowToggle?: (nodeId: string, handleId: string) => void // Callback to update handle arrow state
 }
 
-export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit, isConnecting = false, connectedEdges = [], userRoleEmojiOverrides = {} }: UserJourneyNodeProps) {
+export function UserJourneyNode({ id, data, selected, showHandles = false, thirdParties = [], platforms = [], onEdit, isConnecting = false, connectedEdges = [], userRoleEmojiOverrides = {}, handleArrowStates = [], onHandleArrowToggle }: UserJourneyNodeProps) {
   const nodeData = data as UserJourneyNodeData
   const {
     label = '',
@@ -130,6 +132,22 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
 
   // Track hover state for showing connectors
   const [isHovered, setIsHovered] = React.useState(false)
+  
+  // Track which handles are arrows (Set of handle IDs)
+  const arrowHandles = React.useMemo(() => new Set(handleArrowStates), [handleArrowStates.join(',')])
+  
+  // Track hover state for individual handles
+  const [hoveredHandleId, setHoveredHandleId] = React.useState<string | null>(null)
+  
+  // Toggle arrow state for a handle
+  const toggleHandleArrow = (handleId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (onHandleArrowToggle) {
+      onHandleArrowToggle(id, handleId)
+    }
+  }
+  
 
   // Get all handle positions - all nodes can connect from any side
   const getAllHandlePositions = () => {
@@ -265,28 +283,65 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
       {type !== 'label' && getAllHandlePositions().map((handle, index) => {
         const isVisible = shouldShowHandle(handle.id, handle.type)
         const hasEdge = hasEdgeOnHandle(handle.id, handle.type)
+        const isConnected = hasEdge
+        const isHoveredHandle = hoveredHandleId === handle.id
+        const shouldBeArrow = arrowHandles.has(handle.id)
         
         return (
-          <Handle
-            key={`${handle.type}-${handle.id}-${index}`}
-            type={handle.type}
-            position={handle.position}
-            id={handle.id}
-            isConnectable={true}
-            style={{
-              width: '16px', // Always full size so React Flow can properly calculate positions
-              height: '16px',
-              background: isVisible ? '#9ca3af' : 'transparent',
-              border: isVisible ? '2px solid white' : 'none',
-              zIndex: 10,
-              // CRITICAL: Handles with edges MUST be visible (opacity 1) so React Flow can calculate edge paths
-              // Even if handle is "invisible", if it has an edge, make it slightly visible so React Flow can find it
-              opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
-              pointerEvents: isVisible || hasEdge ? 'all' : 'none', // Allow interaction if visible or has edge
-              transition: 'opacity 0.2s ease-in-out',
-              cursor: isVisible ? 'crosshair' : 'default'
-            }}
-          />
+          <React.Fragment key={`${handle.type}-${handle.id}-${index}`}>
+            <Handle
+              type={handle.type}
+              position={handle.position}
+              id={handle.id}
+              isConnectable={true}
+              onMouseEnter={() => setHoveredHandleId(handle.id)}
+              onMouseLeave={() => setHoveredHandleId(null)}
+              onMouseDown={(e) => {
+                if (isConnected) {
+                  e.stopPropagation()
+                }
+              }}
+              onClick={(e) => {
+                if (isConnected) {
+                  toggleHandleArrow(handle.id, e)
+                }
+              }}
+              style={{
+                width: '16px',
+                height: '16px',
+                background: shouldBeArrow ? 'transparent' : (isHoveredHandle && isConnected ? '#3b82f6' : (isVisible ? '#9ca3af' : 'transparent')),
+                border: shouldBeArrow ? 'none' : (isVisible ? '2px solid white' : 'none'),
+                borderRadius: '50%',
+                zIndex: 10,
+                opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
+                pointerEvents: isVisible || hasEdge ? 'all' : 'none',
+                transition: 'background 0.2s ease-in-out, border 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                cursor: isConnected ? 'pointer' : (isVisible ? 'crosshair' : 'default'),
+              }}
+            />
+            {/* Arrow shape overlay when handle is arrow */}
+            {shouldBeArrow && (
+              <div
+                style={{
+                  position: 'absolute',
+                  ...(handle.position === Position.Top && { top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(180deg)' }),
+                  ...(handle.position === Position.Right && { right: '-8px', top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }),
+                  ...(handle.position === Position.Bottom && { bottom: '-8px', left: '50%', transform: 'translateX(-50%) rotate(0deg)' }),
+                  ...(handle.position === Position.Left && { left: '-8px', top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
+                  width: 0,
+                  height: 0,
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
+                  borderBottom: '10px solid',
+                  borderBottomColor: isHoveredHandle && isConnected ? '#3b82f6' : (isVisible ? '#9ca3af' : '#9ca3af'),
+                  pointerEvents: 'none',
+                  zIndex: 11,
+                  opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
+                  transition: 'border-bottom-color 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                }}
+              />
+            )}
+          </React.Fragment>
         )
       })}
 
