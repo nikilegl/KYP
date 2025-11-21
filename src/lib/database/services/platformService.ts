@@ -6,7 +6,6 @@ export const getPlatforms = async (): Promise<Platform[]> => {
     // Local storage fallback
     try {
       const stored = localStorage.getItem('kyp_platforms')
-      console.log('📦 Loading platforms from localStorage:', stored ? JSON.parse(stored).length : 0)
       return stored ? JSON.parse(stored) : []
     } catch {
       return []
@@ -14,30 +13,8 @@ export const getPlatforms = async (): Promise<Platform[]> => {
   }
 
   try {
-    console.log('🔍 Fetching platforms from database...')
-    
     // Check current user
     const { data: { user } } = await supabase.auth.getUser()
-    console.log('👤 Current user:', user?.id)
-    
-    // Check user's workspace
-    if (user) {
-      const { data: workspaceData, error: workspaceError } = await supabase
-        .from('workspace_users')
-        .select('workspace_id')
-        .eq('user_id', user.id)
-        .single()
-      
-      console.log('🏢 User workspace:', workspaceData?.workspace_id, workspaceError ? `Error: ${workspaceError.message}` : '')
-      
-      // Check if there are any platforms in this workspace
-      const { count } = await supabase
-        .from('platforms')
-        .select('*', { count: 'exact', head: true })
-        .eq('workspace_id', workspaceData?.workspace_id)
-      
-      console.log('📊 Total platforms in workspace:', count)
-    }
     
     const { data, error } = await supabase
       .from('platforms')
@@ -45,13 +22,8 @@ export const getPlatforms = async (): Promise<Platform[]> => {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('❌ Error fetching platforms:', error)
+      console.error('Error fetching platforms:', error)
       throw error
-    }
-    
-    console.log('✅ Platforms fetched successfully:', data?.length || 0, 'platforms')
-    if (data && data.length > 0) {
-      console.log('📝 First platform:', data[0])
     }
     return data || []
   } catch (error) {

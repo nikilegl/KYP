@@ -45,12 +45,6 @@ export function CustomEdge(props: CustomEdgeProps) {
   const hasLabel = data?.label && data.label.trim() !== ''
   const isHighlighted = selected || isHovered || data?.highlighted
 
-  // Debug log
-  React.useEffect(() => {
-    if (selected || data?.highlighted) {
-      console.log('Edge highlighted:', id, 'selected:', selected, 'highlighted:', data?.highlighted)
-    }
-  }, [selected, data?.highlighted, id])
 
   const handleLabelClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -82,7 +76,7 @@ export function CustomEdge(props: CustomEdgeProps) {
       <path
         d={edgePath}
         fill="none"
-        strokeWidth={isHighlighted ? 4 : 3}
+        strokeWidth={isHighlighted ? 3 : 2}
         stroke={data?.highlighted ? '#10b981' : (isHighlighted ? '#3b82f6' : '#9ca3af')}
         className={`react-flow__edge-path ${selected ? 'selected' : ''} ${data?.highlighted ? 'highlighted' : ''}`}
         style={{ 
