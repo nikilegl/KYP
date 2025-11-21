@@ -1956,13 +1956,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [nodes, configureNode])
 
   // Update emoji override for a user role and update all nodes
-  const handleUpdateEmojiOverride = useCallback((roleId: string, emoji: string) => {
+  const handleUpdateEmojiOverride = useCallback((roleId: string, emoji: string | null) => {
     // Update the overrides state
     const newOverrides = { ...userRoleEmojiOverrides }
-    if (emoji) {
-      newOverrides[roleId] = emoji
-    } else {
+    if (emoji === null) {
+      // null means delete override and use global emoji
       delete newOverrides[roleId]
+    } else if (emoji.trim() === '') {
+      // Empty string means remove emoji - set override to empty string
+      newOverrides[roleId] = ''
+    } else {
+      // Set the override to the provided emoji
+      newOverrides[roleId] = emoji
     }
     setUserRoleEmojiOverrides(newOverrides)
     setHasUnsavedChanges(true)
