@@ -723,6 +723,9 @@ export function EditNodeModal({
         // Check if platform search input is focused
         const isPlatformSearchInput = platformInputRef.current === activeElement
         
+        // Check if user role search input is focused
+        const isUserRoleSearchInput = userRoleInputRef.current === activeElement
+        
         // Check if emoji picker is open (look for the picker dropdown in the DOM)
         const emojiPicker = document.querySelector('.emoji-picker-dropdown')
         const isEmojiPickerOpen = emojiPicker !== null
@@ -734,6 +737,11 @@ export function EditNodeModal({
         
         // Don't trigger Save if platform search is focused - let the search handle Enter key
         if (isPlatformSearchInput) {
+          return
+        }
+        
+        // Don't trigger Save if user role search is focused - let the search handle Enter key
+        if (isUserRoleSearchInput) {
           return
         }
         

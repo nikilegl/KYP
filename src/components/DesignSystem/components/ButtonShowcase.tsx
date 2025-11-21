@@ -155,29 +155,7 @@ export function ButtonShowcase() {
         </div>
       </div>
 
-      {/* Specialized Buttons */}
-      <div className="space-y-8">
-        <h3 className="text-2xl font-semibold text-gray-900">Specialized Buttons</h3>
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Full Width</h4>
-            <div className="space-y-4">
-              <Button variant="primary" fullWidth>Full Width Primary Button</Button>
-              <Button variant="outline" fullWidth>Full Width Outline Button</Button>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Rounded Variants</h4>
-            <div className="flex items-center gap-6 flex-wrap">
-              <Button variant="primary" rounded="sm">Small Rounded</Button>
-              <Button variant="primary" rounded="md">Medium Rounded</Button>
-              <Button variant="primary" rounded="lg">Large Rounded</Button>
-              <Button variant="primary" rounded="xl">Extra Large Rounded</Button>
-              <Button variant="primary" rounded="full">Full Rounded</Button>
-            </div>
-          </div>
-        </div>
-      </div>
+     
     </div>
   )
 }

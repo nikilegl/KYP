@@ -21,8 +21,8 @@ interface HighlightRegionNodeProps {
 export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightRegionNodeProps) {
   const {
     label = 'Highlight Region',
-    backgroundColor = '#fef3c7', // Yellow by default
-    borderColor = '#fbbf24',
+    backgroundColor = '#ccfbf1', // Turquoise (Teal) by default
+    borderColor = '#14b8a6',
     onExportRegion
   } = data || {}
 
@@ -232,7 +232,7 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
         `}
         style={{
           backgroundColor: hexToRgba(backgroundColor, 0.4),
-          border: `2px dashed ${borderColor}`,
+          border: `1px dashed ${borderColor}`,
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => {
@@ -253,7 +253,7 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
             className="px-3 py-1 rounded text-sm font-semibold shadow-sm pointer-events-auto"
             style={{
               backgroundColor: borderColor,
-              color: '#000',
+              color: '#ffffff',
             }}
           >
             {convertEmojis(label)}

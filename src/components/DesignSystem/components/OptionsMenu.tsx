@@ -8,6 +8,7 @@ export interface MenuItem {
   onClick: () => void
   disabled?: boolean
   divider?: boolean
+  helperText?: string
 }
 
 export interface OptionsMenuProps {
@@ -43,7 +44,6 @@ export function OptionsMenu({ items, align = 'right', className = '', buttonClas
         variant="outline"
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-2 whitespace-nowrap ${buttonClassName}`}
-        title="More options"
       >
         <MoreVertical size={16} />
       </Button>
@@ -57,21 +57,30 @@ export function OptionsMenu({ items, align = 'right', className = '', buttonClas
               {item.divider && index > 0 && (
                 <div className="border-t border-gray-200 my-1" />
               )}
-              <button
-                onClick={() => {
-                  item.onClick()
-                  setIsOpen(false)
-                }}
-                disabled={item.disabled}
-                className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors ${
-                  item.disabled 
-                    ? 'text-gray-400 cursor-not-allowed' 
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {item.icon && <item.icon size={16} />}
-                <span>{item.label}</span>
-              </button>
+              {!item.divider && (
+                <div>
+                  <button
+                    onClick={() => {
+                      item.onClick()
+                      setIsOpen(false)
+                    }}
+                    disabled={item.disabled}
+                    className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-colors ${
+                      item.disabled 
+                        ? 'text-gray-400 cursor-not-allowed' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {item.icon && <item.icon size={16} />}
+                    <span>{item.label}</span>
+                  </button>
+                  {item.disabled && item.helperText && (
+                    <div className="px-4 pb-2">
+                      <p className="text-xs text-gray-400">{item.helperText}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </React.Fragment>
           ))}
         </div>
