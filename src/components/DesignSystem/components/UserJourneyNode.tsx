@@ -411,9 +411,10 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
               <>
                 {userRole && (() => {
                   // Use journey-specific emoji override if available, otherwise use global emoji
+                  // If override is empty string, use empty string (removes emoji)
                   const emojiOverride = userRoleEmojiOverrides[userRole.id]
                   const userRoleWithOverride = emojiOverride !== undefined
-                    ? { ...userRole, icon: emojiOverride || userRole.icon }
+                    ? { ...userRole, icon: emojiOverride }
                     : userRole
                   
                   return (

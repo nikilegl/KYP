@@ -26,7 +26,7 @@ interface EditNodeModalProps {
   onSave: (formData: NodeFormData) => void
   onDelete?: () => void
   userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
-  onUpdateEmojiOverride?: (roleId: string, emoji: string) => void // Callback to update emoji override for all nodes
+  onUpdateEmojiOverride?: (roleId: string, emoji: string | null) => void // Callback to update emoji override for all nodes. Pass null to delete override and use global emoji.
   onCreateUserRole?: (name: string, colour: string, icon?: string) => Promise<UserRole | null> // Callback to create a new user role
 }
 
@@ -1029,7 +1029,9 @@ export function EditNodeModal({
 
         {/* Bullet Points with Drag and Drop */}
         <div>
-    
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Bullet points
+          </label>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -1062,6 +1064,9 @@ export function EditNodeModal({
 
         {/* Notifications */}
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Notifications
+          </label>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -1233,8 +1238,8 @@ export function EditNodeModal({
                         type="button"
                         onClick={() => {
                           if (formData.userRole && onUpdateEmojiOverride) {
-                            // Remove override to use global emoji
-                            onUpdateEmojiOverride(roleId, '')
+                            // Delete override to use global emoji
+                            onUpdateEmojiOverride(roleId, null)
                             // Reset local input value to global emoji
                             setEmojiInputValue(prev => ({
                               ...prev,
