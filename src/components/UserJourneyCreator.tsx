@@ -324,8 +324,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [configuringRegion, setConfiguringRegion] = useState<Node | null>(null)
   const [regionConfigForm, setRegionConfigForm] = useState({
     label: '',
-    backgroundColor: '#fef3c7',
-    borderColor: '#fbbf24'
+    backgroundColor: '#ccfbf1',
+    borderColor: '#14b8a6'
   })
 
 
@@ -2304,8 +2304,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       },
       data: {
         label: 'New Region',
-        backgroundColor: '#fef3c7',
-        borderColor: '#fbbf24',
+        backgroundColor: '#ccfbf1',
+        borderColor: '#14b8a6',
       },
       draggable: true,
       selectable: true,
@@ -2321,8 +2321,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setConfiguringRegion(region)
       setRegionConfigForm({
         label: (region.data?.label as string) || 'New Region',
-        backgroundColor: (region.data?.backgroundColor as string) || '#fef3c7',
-        borderColor: (region.data?.borderColor as string) || '#fbbf24',
+        backgroundColor: (region.data?.backgroundColor as string) || '#ccfbf1',
+        borderColor: (region.data?.borderColor as string) || '#14b8a6',
       })
       setShowRegionConfigModal(true)
     }
@@ -2688,23 +2688,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
     
     // If Alt is pressed, create duplicate immediately
-    if (isAltPressedRef.current && node.type !== 'highlightRegion') {
+    if (isAltPressedRef.current) {
       const originalPosition = dragStartPositionsRef.current.get(node.id)
       if (originalPosition) {
         const timestamp = Date.now()
-        const newNodeId = `node-${timestamp}`
+        const newNodeId = node.type === 'highlightRegion' ? `region-${timestamp}` : `node-${timestamp}`
         duplicateNodeIdRef.current = newNodeId
         
         // Create duplicate at original position (will follow mouse during drag)
         const duplicateNode: Node = {
           ...node,
           id: newNodeId,
-          type: 'process',
           position: { ...node.position },
-          data: {
-            ...node.data,
-            type: 'process'
-          },
           selected: false,
           draggable: true,
           zIndex: 1000 // High z-index to ensure it appears on top
@@ -4083,14 +4078,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <OptionsMenu
               items={[
                 {
+                  label: 'Import JSON',
+                  icon: Upload,
+                  onClick: () => setShowImportJsonModal(true)
+                },
+                {
                   label: 'Export as JSON',
                   icon: Download,
                   onClick: exportJourney
                 },
                 {
-                  label: 'Import JSON',
-                  icon: Upload,
-                  onClick: () => setShowImportJsonModal(true)
+                  label: 'Export to JPG',
+                  icon: ImageIcon,
+                  onClick: () => {
+                    const selectedRegion = nodes.find((node) => node.selected && node.type === 'highlightRegion')
+                    if (selectedRegion) {
+                      handleExportRegion(selectedRegion.id)
+                    }
+                  },
+                  disabled: !nodes.some((node) => node.selected && node.type === 'highlightRegion'),
+                  helperText: 'Select a region to export'
                 }
               ]}
             />
@@ -4176,15 +4183,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={tidyUpNodes}
-                className="flex items-center gap-2"
-                disabled={nodes.length === 0}
-              >
-                
-                Tidy Up
-              </Button>
-              <Button
-                variant="outline"
                 onClick={() => setShowEditWithAIModal(true)}
                 className="flex items-center gap-2"
                 disabled={nodes.length === 0}
@@ -4193,20 +4191,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 Edit
               </Button>
               <Button
-                variant="secondary"
-                onClick={smartAddNode}
-                className="flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Add Node
-              </Button>
-              <Button
                 variant="outline"
                 onClick={addHighlightRegion}
                 className="flex items-center gap-2"
               >
                 <Plus size={16} />
                 Add Region
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={smartAddNode}
+                className="flex items-center gap-2"
+              >
+                <Plus size={16} />
+                Add Node
               </Button>
             </div>
           </Panel>
