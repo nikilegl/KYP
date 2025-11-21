@@ -258,6 +258,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
+  const [workspaceId, setWorkspaceId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [showImportImageModal, setShowImportImageModal] = useState(false)
   const [showImportJsonModal, setShowImportJsonModal] = useState(false)
@@ -413,6 +414,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               .single()
             
             if (workspaceUser) {
+              setWorkspaceId(workspaceUser.workspace_id)
               const thirdPartiesData = await getThirdParties(workspaceUser.workspace_id)
               setThirdParties(thirdPartiesData)
             }
@@ -4170,6 +4172,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         } : undefined}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         onUpdateEmojiOverride={handleUpdateEmojiOverride}
+        workspaceId={workspaceId}
+        onThirdPartyCreated={async (thirdParty) => {
+          // Refresh third parties list
+          if (workspaceId) {
+            const updatedThirdParties = await getThirdParties(workspaceId)
+            setThirdParties(updatedThirdParties)
+          }
+        }}
       />
 
       {/* Delete Confirmation Modal */}
