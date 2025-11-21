@@ -4276,6 +4276,29 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onNodeDragStart={onNodeDragStart}
           onNodeDrag={onNodeDrag}
           onNodeDragStop={handleNodeDragStop}
+          onPaneClick={(event) => {
+            // Only close menus if clicking directly on the pane (not on a node or button)
+            const target = event.target as HTMLElement
+            // Check if click is on a node, button, or other interactive element
+            const isNode = target.closest('.react-flow__node')
+            const isButton = target.closest('button') || target.tagName === 'BUTTON'
+            const isInteractive = target.closest('[role="button"]') || target.closest('a')
+            
+            // Only close if clicking directly on the pane background
+            if (!isNode && !isButton && !isInteractive) {
+              const customEvent = new CustomEvent('reactflow-pane-click')
+              document.dispatchEvent(customEvent)
+            }
+          }}
+          onMoveStart={(event, viewport) => {
+            // Only close menus if panning started from the pane (not from a node drag)
+            // Check if any node is currently being dragged
+            const isDraggingNode = nodes.some(node => node.dragging === true)
+            if (!isDraggingNode) {
+              const customEvent = new CustomEvent('reactflow-pan-start')
+              document.dispatchEvent(customEvent)
+            }
+          }}
           onInit={(instance) => {
             reactFlowInstanceRef.current = instance
           }}
