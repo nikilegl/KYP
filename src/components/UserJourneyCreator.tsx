@@ -4343,7 +4343,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{
-            style: { strokeWidth: 3, stroke: '#9ca3af' },
+            style: { strokeWidth: 2, stroke: '#9ca3af' },
             interactionWidth: 50
           }}
           connectionMode={ConnectionMode.Loose}
