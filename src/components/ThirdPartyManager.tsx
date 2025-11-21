@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, Upload } from 'lucide-react'
+import { Plus, Edit2, Trash2 } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
+import { AddThirdPartyModal } from './AddThirdPartyModal'
 import type { ThirdParty } from '../lib/supabase'
 import {
   getThirdParties,
-  createThirdParty,
-  updateThirdParty,
   deleteThirdParty
 } from '../lib/database/services/thirdPartyService'
 
@@ -21,11 +20,7 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedThirdParty, setSelectedThirdParty] = useState<ThirdParty | null>(null)
-  const [formData, setFormData] = useState({ name: '', logo: '' })
-  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [saving, setSaving] = useState(false)
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const editFileInputRef = React.useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadThirdParties()
@@ -43,106 +38,13 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
     }
   }
 
-  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    // Validate file type (SVG preferred, but allow images)
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
-      return
-    }
-
-    // Validate file size (2MB limit)
-    if (file.size > 2 * 1024 * 1024) {
-      alert('File size must be less than 2MB')
-      return
-    }
-
-    setUploadingLogo(true)
-
-    try {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        
-        // If it's an SVG, store as text, otherwise as base64
-        if (file.type === 'image/svg+xml') {
-          // Read as text for SVG
-          const textReader = new FileReader()
-          textReader.onload = (evt) => {
-            const svgText = evt.target?.result as string
-            setFormData(prev => ({ ...prev, logo: svgText }))
-            setUploadingLogo(false)
-          }
-          textReader.readAsText(file)
-        } else {
-          setFormData(prev => ({ ...prev, logo: result }))
-          setUploadingLogo(false)
-        }
-      }
-      reader.readAsDataURL(file)
-    } catch (error) {
-      console.error('Error uploading logo:', error)
-      setUploadingLogo(false)
-      alert('Failed to upload logo')
-    }
-  }
-
-  const handleCreate = async () => {
-    if (!formData.name.trim()) {
-      alert('Please enter a name')
-      return
-    }
-
-    setSaving(true)
-    try {
-      const result = await createThirdParty(workspaceId, {
-        name: formData.name.trim(),
-        logo: formData.logo || undefined
-      })
-      
-      if (result) {
-        await loadThirdParties()
-        setShowCreateModal(false)
-        setFormData({ name: '', logo: '' })
-      } else {
-        alert('Failed to create third party')
-      }
-    } catch (error) {
-      console.error('Error creating third party:', error)
-      alert('Failed to create third party')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleEdit = async () => {
-    if (!selectedThirdParty || !formData.name.trim()) {
-      alert('Please enter a name')
-      return
-    }
-
-    setSaving(true)
-    try {
-      const result = await updateThirdParty(selectedThirdParty.id, {
-        name: formData.name.trim(),
-        logo: formData.logo || undefined
-      })
-      
-      if (result) {
-        await loadThirdParties()
-        setShowEditModal(false)
-        setSelectedThirdParty(null)
-        setFormData({ name: '', logo: '' })
-      } else {
-        alert('Failed to update third party')
-      }
-    } catch (error) {
-      console.error('Error updating third party:', error)
-      alert('Failed to update third party')
-    } finally {
-      setSaving(false)
+  const handleThirdPartySuccess = async (thirdParty: ThirdParty) => {
+    await loadThirdParties()
+    if (showEditModal) {
+      setShowEditModal(false)
+      setSelectedThirdParty(null)
+    } else {
+      setShowCreateModal(false)
     }
   }
 
@@ -170,7 +72,6 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
 
   const openEditModal = (thirdParty: ThirdParty) => {
     setSelectedThirdParty(thirdParty)
-    setFormData({ name: thirdParty.name, logo: thirdParty.logo || '' })
     setShowEditModal(true)
   }
 
@@ -214,7 +115,6 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
         <Button
           variant="primary"
           onClick={() => {
-            setFormData({ name: '', logo: '' })
             setShowCreateModal(true)
           }}
           className="flex items-center gap-2"
@@ -230,7 +130,6 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
           <Button
             variant="primary"
             onClick={() => {
-              setFormData({ name: '', logo: '' })
               setShowCreateModal(true)
             }}
             className="flex items-center gap-2"
@@ -290,162 +189,26 @@ export function ThirdPartyManager({ workspaceId }: ThirdPartyManagerProps) {
       )}
 
       {/* Create Modal */}
-      <Modal
+      <AddThirdPartyModal
         isOpen={showCreateModal}
         onClose={() => {
           setShowCreateModal(false)
-          setFormData({ name: '', logo: '' })
         }}
-        title="Add Third Party"
-        size="md"
-        footerContent={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowCreateModal(false)
-                setFormData({ name: '', logo: '' })
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreate}
-              disabled={saving || !formData.name.trim()}
-            >
-              {saving ? 'Creating...' : 'Create'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Name *
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Stripe, Auth0, Mailchimp"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Logo
-            </label>
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                {renderLogo(formData.logo)}
-              </div>
-              <div className="flex-1">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingLogo}
-                  className="flex items-center gap-2"
-                >
-                  <Upload size={16} />
-                  {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
-                </Button>
-                <p className="mt-1 text-xs text-gray-500">
-                  SVG, PNG, or JPG. Max 2MB.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
+        onSuccess={handleThirdPartySuccess}
+        workspaceId={workspaceId}
+      />
 
       {/* Edit Modal */}
-      <Modal
+      <AddThirdPartyModal
         isOpen={showEditModal}
         onClose={() => {
           setShowEditModal(false)
           setSelectedThirdParty(null)
-          setFormData({ name: '', logo: '' })
         }}
-        title="Edit Third Party"
-        size="md"
-        footerContent={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowEditModal(false)
-                setSelectedThirdParty(null)
-                setFormData({ name: '', logo: '' })
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleEdit}
-              disabled={saving || !formData.name.trim()}
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Name *
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Stripe, Auth0, Mailchimp"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Logo
-            </label>
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                {renderLogo(formData.logo)}
-              </div>
-              <div className="flex-1">
-                <input
-                  ref={editFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => editFileInputRef.current?.click()}
-                  disabled={uploadingLogo}
-                  className="flex items-center gap-2"
-                >
-                  <Upload size={16} />
-                  {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
-                </Button>
-                <p className="mt-1 text-xs text-gray-500">
-                  SVG, PNG, or JPG. Max 2MB.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
+        onSuccess={handleThirdPartySuccess}
+        workspaceId={workspaceId}
+        editingThirdParty={selectedThirdParty}
+      />
 
       {/* Delete Modal */}
       <Modal

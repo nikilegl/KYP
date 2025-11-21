@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Upload, Check, X } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
-import { createThirdParty } from '../lib/database/services/thirdPartyService'
+import { createThirdParty, updateThirdParty } from '../lib/database/services/thirdPartyService'
 import type { ThirdParty } from '../lib/supabase'
 
 interface AddThirdPartyModalProps {
@@ -11,6 +11,7 @@ interface AddThirdPartyModalProps {
   onSuccess: (thirdParty: ThirdParty) => void
   workspaceId: string
   initialName?: string
+  editingThirdParty?: ThirdParty | null // If provided, modal is in edit mode
 }
 
 interface CropArea {
@@ -25,8 +26,10 @@ export function AddThirdPartyModal({
   onClose,
   onSuccess,
   workspaceId,
-  initialName = ''
+  initialName = '',
+  editingThirdParty = null
 }: AddThirdPartyModalProps) {
+  const isEditing = !!editingThirdParty
   const [formData, setFormData] = useState({ name: initialName, logo: '' })
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -45,10 +48,16 @@ export function AddThirdPartyModal({
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
   const [imageDisplaySize, setImageDisplaySize] = useState({ width: 0, height: 0, offsetX: 0, offsetY: 0 })
 
-  // Reset form when modal opens/closes or initialName changes
+  // Reset form when modal opens/closes or initialName/editingThirdParty changes
   useEffect(() => {
     if (isOpen) {
-      setFormData({ name: initialName, logo: '' })
+      if (editingThirdParty) {
+        // Edit mode: populate with existing data
+        setFormData({ name: editingThirdParty.name, logo: editingThirdParty.logo || '' })
+      } else {
+        // Create mode: use initialName or empty
+        setFormData({ name: initialName, logo: '' })
+      }
       setShowCrop(false)
       setImageSrc('')
       setZoom(1)
@@ -59,7 +68,7 @@ export function AddThirdPartyModal({
       setIsDragging(false)
       setResizeHandle(null)
     }
-  }, [isOpen, initialName])
+  }, [isOpen, initialName, editingThirdParty])
 
   // Calculate image display size when image loads or container resizes
   useEffect(() => {
@@ -467,7 +476,7 @@ export function AddThirdPartyModal({
     await processImageFile(file)
   }
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     if (!formData.name.trim()) {
       alert('Please enter a name')
       return
@@ -475,21 +484,40 @@ export function AddThirdPartyModal({
 
     setSaving(true)
     try {
-      const result = await createThirdParty(workspaceId, {
-        name: formData.name.trim(),
-        logo: formData.logo || undefined
-      })
+      let result: ThirdParty | null = null
       
-      if (result) {
-        onSuccess(result)
-        setFormData({ name: '', logo: '' })
-        onClose()
+      if (isEditing && editingThirdParty) {
+        // Update existing third party
+        result = await updateThirdParty(editingThirdParty.id, {
+          name: formData.name.trim(),
+          logo: formData.logo || undefined
+        })
+        
+        if (result) {
+          onSuccess(result)
+          setFormData({ name: '', logo: '' })
+          onClose()
+        } else {
+          alert('Failed to update third party')
+        }
       } else {
-        alert('Failed to create third party')
+        // Create new third party
+        result = await createThirdParty(workspaceId, {
+          name: formData.name.trim(),
+          logo: formData.logo || undefined
+        })
+        
+        if (result) {
+          onSuccess(result)
+          setFormData({ name: '', logo: '' })
+          onClose()
+        } else {
+          alert('Failed to create third party')
+        }
       }
     } catch (error) {
-      console.error('Error creating third party:', error)
-      alert('Failed to create third party')
+      console.error(`Error ${isEditing ? 'updating' : 'creating'} third party:`, error)
+      alert(`Failed to ${isEditing ? 'update' : 'create'} third party`)
     } finally {
       setSaving(false)
     }
@@ -533,7 +561,7 @@ export function AddThirdPartyModal({
     <Modal
       isOpen={isOpen}
       onClose={handleCancel}
-      title="Add Third Party"
+      title={isEditing ? 'Edit Third Party' : 'Add Third Party'}
       size="md"
       footerContent={
         <div className="flex items-center justify-end gap-3">
@@ -545,10 +573,10 @@ export function AddThirdPartyModal({
           </Button>
           <Button
             variant="primary"
-            onClick={handleCreate}
+            onClick={handleSubmit}
             disabled={saving || !formData.name.trim()}
           >
-            {saving ? 'Creating...' : 'Create'}
+            {saving ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save' : 'Create')}
           </Button>
         </div>
       }

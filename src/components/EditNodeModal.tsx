@@ -264,6 +264,8 @@ export function EditNodeModal({
   const [showAddThirdPartyModal, setShowAddThirdPartyModal] = useState(false)
   const [matchedThirdParty, setMatchedThirdParty] = useState<ThirdParty | null>(null)
   const [isValidatingThirdParty, setIsValidatingThirdParty] = useState(false)
+  const [initialCustomPlatformName, setInitialCustomPlatformName] = useState<string>('')
+  const [hasModifiedCustomPlatformName, setHasModifiedCustomPlatformName] = useState(false)
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // DnD sensors
@@ -360,12 +362,13 @@ export function EditNodeModal({
           customUserRoleEmoji = (nodeWithEmoji.data?.customUserRoleEmoji as string) || ''
         }
       }
+      const initialCustomPlatformNameValue = (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || ''
       setFormData({
         label: (node.data?.label as string) || '',
         type: (node.data?.type as 'start' | 'process' | 'decision' | 'end') || 'process',
         variant: resolvedVariant,
         thirdPartyName: (node.data?.thirdPartyName as string) || '',
-        customPlatformName: (node.data?.customPlatformName as string) || (node.data?.thirdPartyName as string) || '',
+        customPlatformName: initialCustomPlatformNameValue,
         userRole: (node.data?.userRole as UserRole | null) || null,
         customUserRoleName: customUserRoleName,
         customUserRoleEmoji: customUserRoleEmoji,
@@ -374,6 +377,11 @@ export function EditNodeModal({
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
         swimLane: (node as any).parentId || null
       })
+      // Store initial custom platform name and reset modification tracking
+      setInitialCustomPlatformName(initialCustomPlatformNameValue)
+      setHasModifiedCustomPlatformName(false)
+      setMatchedThirdParty(null)
+      setIsValidatingThirdParty(false)
       // Set custom user role selected state if customUserRoleName exists
       setIsCustomUserRoleSelected(!!customUserRoleName)
     } else if (isAddingNewNode && isOpen) {
@@ -400,6 +408,11 @@ export function EditNodeModal({
         swimLane: null
       })
       
+      // Reset initial custom platform name and modification tracking for new node
+      setInitialCustomPlatformName('')
+      setHasModifiedCustomPlatformName(false)
+      setMatchedThirdParty(null)
+      setIsValidatingThirdParty(false)
       setIsCustomUserRoleSelected(false)
     }
     
@@ -995,6 +1008,10 @@ export function EditNodeModal({
                 onChange={(value) => {
                   setFormData(prev => ({ ...prev, customPlatformName: value }))
                   
+                  // Track if user has modified from initial value
+                  const hasChanged = value !== initialCustomPlatformName
+                  setHasModifiedCustomPlatformName(hasChanged)
+                  
                   // Clear previous timeout
                   if (validationTimeoutRef.current) {
                     clearTimeout(validationTimeoutRef.current)
@@ -1004,8 +1021,8 @@ export function EditNodeModal({
                   setMatchedThirdParty(null)
                   setIsValidatingThirdParty(false)
                   
-                  // If empty, don't validate
-                  if (!value.trim()) {
+                  // If empty or hasn't changed, don't validate
+                  if (!value.trim() || !hasChanged) {
                     return
                   }
                   
@@ -1027,12 +1044,10 @@ export function EditNodeModal({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
                 placeholder="e.g., Stripe, Mailchimp, Twilio..."
               />
-              {/* Validation indicator */}
-              {formData.customPlatformName.trim() && (
+              {/* Validation indicator - only show if user has modified the text */}
+              {hasModifiedCustomPlatformName && formData.customPlatformName.trim() && !isValidatingThirdParty && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {isValidatingThirdParty ? (
-                    <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                  ) : matchedThirdParty ? (
+                  {matchedThirdParty ? (
                     <Check className="w-5 h-5 text-green-500" />
                   ) : (
                     <Button
@@ -1045,6 +1060,12 @@ export function EditNodeModal({
                       Add logo
                     </Button>
                   )}
+                </div>
+              )}
+              {/* Loading spinner - show while validating and user has modified */}
+              {hasModifiedCustomPlatformName && formData.customPlatformName.trim() && isValidatingThirdParty && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
                 </div>
               )}
             </div>
