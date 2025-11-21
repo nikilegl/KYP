@@ -23,6 +23,7 @@ import { Button } from './DesignSystem/components/Button'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
+import { getNodesInRegion, getEdgesForNodes, shiftNodesToOrigin, type RegionBounds } from '../utils/exportUtils'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { Modal } from './DesignSystem/components/Modal'
@@ -323,6 +324,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     backgroundColor: '#fef3c7',
     borderColor: '#fbbf24'
   })
+
 
   // Helper function to snap coordinates to multiples of 8
   const snapToGrid = useCallback((value: number): number => {
@@ -2493,6 +2495,212 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setConfiguringRegion(null)
   }, [configuringRegion, regionConfigForm, setNodes])
 
+  // Handle export region - Create off-screen ReactFlow instance for reliable export
+  const handleExportRegion = useCallback(async (regionNodeId: string) => {
+    const regionNode = nodes.find((n) => n.id === regionNodeId && n.type === 'highlightRegion')
+    if (!regionNode) {
+      console.error('Region node not found:', regionNodeId)
+      return
+    }
+
+    // Get region bounds in flow coordinates
+    const regionWidth = (regionNode.width as number) || (regionNode.style?.width as number) || 600
+    const regionHeight = (regionNode.height as number) || (regionNode.style?.height as number) || 400
+    
+    const regionBounds: RegionBounds = {
+      x: regionNode.position.x,
+      y: regionNode.position.y,
+      width: regionWidth,
+      height: regionHeight,
+    }
+
+    // Add padding
+    const padding = 20
+    const paddedBounds: RegionBounds = {
+      x: regionBounds.x - padding,
+      y: regionBounds.y - padding,
+      width: regionBounds.width + padding * 2,
+      height: regionBounds.height + padding * 2,
+    }
+
+    // Get nodes and edges in region
+    const nodesInRegion = getNodesInRegion(nodes, paddedBounds, regionNodeId)
+    const nodeIds = new Set(nodesInRegion.map((n) => n.id))
+    const edgesInRegion = getEdgesForNodes(edges, nodeIds)
+
+    // Shift nodes to origin (0,0) for the export
+    const shiftedNodes = shiftNodesToOrigin(nodesInRegion, paddedBounds)
+
+    // Calculate export dimensions (high resolution)
+    const exportWidth = Math.round(paddedBounds.width * 3) // 3x resolution
+    const exportHeight = Math.round(paddedBounds.height * 3)
+    const zoom = exportWidth / paddedBounds.width
+
+    try {
+      // Create a temporary container off-screen
+      const tempContainer = document.createElement('div')
+      tempContainer.id = 'react-flow-export-temp'
+      tempContainer.style.position = 'fixed'
+      tempContainer.style.top = '-10000px'
+      tempContainer.style.left = '-10000px'
+      tempContainer.style.width = `${exportWidth}px`
+      tempContainer.style.height = `${exportHeight}px`
+      tempContainer.style.backgroundColor = '#efefef'
+      document.body.appendChild(tempContainer)
+
+      // Create ReactFlow instance in the temp container
+      const { createRoot } = await import('react-dom/client')
+      const React = await import('react')
+      const { ReactFlow, ReactFlowProvider } = await import('@xyflow/react')
+      
+      const root = createRoot(tempContainer)
+      
+      // Create nodeTypes and edgeTypes inline for the export
+      // Note: showHandles: true to display connectors in the export
+      const exportNodeTypes: NodeTypes = {
+        start: (props: any) => (
+          React.createElement(UserJourneyNode, { 
+            ...props, 
+            showHandles: true,
+            thirdParties: thirdParties,
+            platforms: platforms,
+            isConnecting: false,
+            connectedEdges: edgesInRegion,
+            userRoleEmojiOverrides: userRoleEmojiOverrides,
+          })
+        ),
+        process: (props: any) => (
+          React.createElement(UserJourneyNode, { 
+            ...props, 
+            showHandles: true,
+            thirdParties: thirdParties,
+            platforms: platforms,
+            isConnecting: false,
+            connectedEdges: edgesInRegion,
+            userRoleEmojiOverrides: userRoleEmojiOverrides,
+          })
+        ),
+        decision: (props: any) => (
+          React.createElement(UserJourneyNode, { 
+            ...props, 
+            showHandles: true,
+            thirdParties: thirdParties,
+            platforms: platforms,
+            isConnecting: false,
+            connectedEdges: edgesInRegion,
+            userRoleEmojiOverrides: userRoleEmojiOverrides,
+          })
+        ),
+        end: (props: any) => (
+          React.createElement(UserJourneyNode, { 
+            ...props, 
+            showHandles: true,
+            thirdParties: thirdParties,
+            platforms: platforms,
+            isConnecting: false,
+            connectedEdges: edgesInRegion,
+            userRoleEmojiOverrides: userRoleEmojiOverrides,
+          })
+        ),
+        label: (props: any) => (
+          React.createElement(UserJourneyNode, { 
+            ...props, 
+            showHandles: false, // Labels typically don't have handles
+            thirdParties: thirdParties,
+            platforms: platforms,
+            isConnecting: false,
+            connectedEdges: edgesInRegion,
+            userRoleEmojiOverrides: userRoleEmojiOverrides,
+          })
+        ),
+      }
+      
+      const exportEdgeTypes: EdgeTypes = {
+        default: (props: any) => React.createElement(CustomEdge, props),
+      }
+      
+      // Render ReactFlow off-screen
+      root.render(
+        React.createElement(ReactFlowProvider, {},
+          React.createElement(ReactFlow, {
+            nodes: shiftedNodes,
+            edges: edgesInRegion,
+            nodeTypes: exportNodeTypes,
+            edgeTypes: exportEdgeTypes,
+            fitView: false,
+            defaultViewport: {
+              x: 0,
+              y: 0,
+              zoom,
+            },
+            proOptions: { hideAttribution: true },
+            nodesDraggable: false,
+            nodesConnectable: false,
+            elementsSelectable: false,
+            panOnDrag: false,
+            zoomOnScroll: false,
+            zoomOnPinch: false,
+            zoomOnDoubleClick: false,
+            style: { width: '100%', height: '100%' },
+          })
+        )
+      )
+
+      // Wait for ReactFlow to render
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Find the ReactFlow viewport in the temp container
+      const tempReactFlow = tempContainer.querySelector('.react-flow') as HTMLElement
+      if (!tempReactFlow) {
+        console.error('Temporary ReactFlow not rendered')
+        root.unmount()
+        document.body.removeChild(tempContainer)
+        return
+      }
+
+      // Use html-to-image to capture
+      const { toJpeg } = await import('html-to-image')
+      
+      const dataUrl = await toJpeg(tempReactFlow, {
+        quality: 0.95,
+        pixelRatio: 1, // Already scaled via zoom
+        backgroundColor: '#efefef',
+        filter: (node) => {
+          // Exclude UI elements - handle className safely
+          if (!node || typeof node !== 'object') return true
+          const element = node as HTMLElement
+          const className = typeof element.className === 'string' ? element.className : ''
+          return !className.includes('react-flow__controls') &&
+                 !className.includes('react-flow__minimap') &&
+                 !className.includes('react-flow__attribution') &&
+                 !className.includes('react-flow__background')
+        },
+      })
+
+      // Download
+      const link = document.createElement('a')
+      link.href = dataUrl
+      link.download = `region-export-${Date.now()}.jpg`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // Cleanup
+      root.unmount()
+      document.body.removeChild(tempContainer)
+    } catch (error) {
+      console.error('Error exporting region:', error)
+      alert('Failed to export region.')
+      
+      // Cleanup on error
+      const tempContainer = document.getElementById('react-flow-export-temp')
+      if (tempContainer) {
+        document.body.removeChild(tempContainer)
+      }
+    }
+  }, [nodes, edges, thirdParties, platforms, userRoleEmojiOverrides])
+
+
   // Monitor Alt key state
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -3769,9 +3977,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       <HighlightRegionNode
         {...props}
         onEdit={() => configureRegion(props.id)}
+        data={{
+          ...props.data,
+          onExportRegion: handleExportRegion,
+        }}
       />
     ),
-  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges, userRoleEmojiOverrides])
+  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges, userRoleEmojiOverrides, handleExportRegion])
 
   // Comment handlers
   const handleAddComment = useCallback(async (commentText: string) => {
@@ -4931,6 +5143,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           </div>
         </Modal>
       )}
+
     </div>
   )
 }
