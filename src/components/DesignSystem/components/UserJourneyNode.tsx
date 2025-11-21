@@ -403,7 +403,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                 </div>
               ) : matchingPlatform?.logo ? (
                 // Show platform logo if available (prioritize platforms over third parties)
-                <div className="flex items-center justify-center h-5">
+                <div className="flex items-center justify-center h-6">
                   {matchingPlatform.logo.includes('<svg') || matchingPlatform.logo.startsWith('<?xml') ? (
                     <div 
                       className="h-5 flex items-center"
@@ -413,7 +413,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
                     <img 
                       src={matchingPlatform.logo} 
                       alt={matchingPlatform.name}
-                      className="h-5 object-contain"
+                      className="h-4 object-contain"
                     />
                   )}
                 </div>
