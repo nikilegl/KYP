@@ -8,6 +8,9 @@ export default defineConfig({
     port: 5173, // Preferred port
     strictPort: false, // Automatically use next available port if 5173 is busy
   },
+  optimizeDeps: {
+    include: ['html2canvas'],
+  },
   resolve: {
     dedupe: [
       'react',
