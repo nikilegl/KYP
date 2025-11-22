@@ -6,10 +6,9 @@ import { htmlToBlockNoteBlocks, blockNoteBlocksToHtml, type BlockNoteBlock } fro
 import { StakeholderAvatar } from '../common/StakeholderAvatar'
 import { AddStakeholdersModal } from '../common/AddStakeholdersModal'
 import { AddLinkModal } from '../common/AddLinkModal'
-import { TagThemeCard } from '../common/TagThemeCard'
 import { TaskForm, type TaskData } from '../common/TaskForm'
 import { NoteTemplateSelectionModal } from './NoteTemplateSelectionModal'
-import type { Stakeholder, UserRole, Theme, WorkspaceUser, UserPermission, LawFirm, NoteTemplate, Design } from '../../lib/supabase'
+import type { Stakeholder, UserRole, WorkspaceUser, UserPermission, LawFirm, NoteTemplate, Design } from '../../lib/supabase'
 
 interface NoteLink {
   name: string
@@ -26,12 +25,10 @@ interface NoteCreateFormProps {
   userRoles?: UserRole[]
   userPermissions?: UserPermission[]
   lawFirms?: LawFirm[]
-  themes: Theme[]
   availableUsers?: WorkspaceUser[]
   noteTemplates: NoteTemplate[]
   onBack: () => void
   onAssignStakeholderToProject: (stakeholderId: string) => Promise<void>
-  onThemeCreate: (theme: Theme) => void
   onCreate: (noteData: {
     name: string
     summary: string
@@ -41,7 +38,6 @@ interface NoteCreateFormProps {
     decision_text: string[]
     links: NoteLink[]
     tasks: TaskData[]
-    themeIds: string[]
     summaryBlocks?: BlockNoteBlock[]
   }) => Promise<void>
 }
@@ -52,11 +48,9 @@ export function NoteCreateForm({
   userRoles, 
   userPermissions = [],
   lawFirms = [],
-  themes,
   availableUsers = [],
   noteTemplates,
   onBack, 
-  onThemeCreate,
   onCreate 
 }: NoteCreateFormProps) {
   const [name, setName] = useState('')
@@ -70,12 +64,10 @@ export function NoteCreateForm({
   const [showAddLinkModal, setShowAddLinkModal] = useState(false)
   const [tasks, setTasks] = useState<TaskData[]>([])
   const [showAddStakeholderModal, setShowAddStakeholderModal] = useState(false)
-  const [selectedThemes, setSelectedThemes] = useState<Theme[]>([])
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   
   // Modal states
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false)
-  const [showTagThemeModal, setShowTagThemeModal] = useState(false)
   const [showAddDesignLinkModal, setShowAddDesignLinkModal] = useState(false)
   
   // Linked designs state
@@ -105,7 +97,6 @@ export function NoteCreateForm({
         decision_text: decisionTexts.filter(decision => decision.trim() !== ''),
         links: links,
         tasks: tasks,
-        themeIds: selectedThemes.map(theme => theme.id),
         summaryBlocks: summaryBlocks || undefined
       })
       // After successful creation, go back to the notes dashboard
@@ -117,15 +108,6 @@ export function NoteCreateForm({
     }
   }
 
-  const handleThemeAdd = (theme: Theme) => {
-    if (!selectedThemes.some(t => t.id === theme.id)) {
-      setSelectedThemes([...selectedThemes, theme])
-    }
-  }
-
-  const handleThemeRemove = (themeId: string) => {
-    setSelectedThemes(selectedThemes.filter(theme => theme.id !== themeId))
-  }
 
   const handleTemplateSelected = (templateBody: string) => {
     if (templateBody.trim()) {
@@ -476,7 +458,7 @@ export function NoteCreateForm({
         )}
 
         {/* Unified Action Buttons Row */}
-        {(links.length === 0 || tasks.length === 0 || linkedDesigns.length === 0 || selectedThemes.length === 0) && (
+        {(links.length === 0 || tasks.length === 0 || linkedDesigns.length === 0) && (
          
             
             <div className="flex items-center gap-4 flex-wrap">
@@ -510,17 +492,6 @@ export function NoteCreateForm({
                   disabled={saving}
                 >
                   Add Design Link
-                </Button>
-              )}
-
-              {selectedThemes.length === 0 && (
-                <Button
-                  variant="primary"
-                  icon={Tag}
-                  onClick={() => setShowTagThemeModal(true)}
-                  disabled={saving}
-                >
-                  Tag Theme
                 </Button>
               )}
             </div>
@@ -605,53 +576,6 @@ export function NoteCreateForm({
         </div>
       )}
 
-      {/* Tag Theme Modal */}
-      {showTagThemeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Tag Theme</h3>
-              <IconButton
-                icon={X}
-                variant="ghost"
-                onClick={() => setShowTagThemeModal(false)}
-                className="text-gray-500 hover:bg-gray-100"
-              />
-            </div>
-            
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
-              <TagThemeCard
-                availableThemes={themes}
-                selectedThemes={selectedThemes}
-                onThemeAdd={handleThemeAdd}
-                onThemeRemove={handleThemeRemove}
-                onThemeCreate={onThemeCreate}
-                className="border-0 shadow-none p-0"
-              />
-            </div>
-            
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-              <Button
-                variant="ghost"
-                onClick={() => setShowTagThemeModal(false)}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => setShowTagThemeModal(false)}
-                disabled={saving}
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Add Design Link Modal - Placeholder for now */}
       {showAddDesignLinkModal && (

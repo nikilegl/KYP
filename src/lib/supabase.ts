@@ -357,40 +357,6 @@ export interface Task {
   updated_at: string
 }
 
-export interface Theme {
-  id: string
-  workspace_id: string
-  name: string
-  description?: string
-  color?: string
-  short_id?: number
-  created_at: string
-  updated_at: string
-}
-
-
-
-export interface ThemeUserStory {
-  id: string
-  theme_id: string
-  user_story_id: string
-  created_at: string
-}
-
-export interface ThemeUserJourney {
-  id: string
-  theme_id: string
-  user_journey_id: string
-  created_at: string
-}
-
-export interface ThemeResearchNote {
-  id: string
-  theme_id: string
-  research_note_id: string
-  created_at: string
-}
-
 export interface NoteTemplate {
   id: string
   workspace_id: string

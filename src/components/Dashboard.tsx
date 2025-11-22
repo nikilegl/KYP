@@ -28,8 +28,6 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
       setCurrentDashboardView('user-journey-creator')
     } else if (pathname === '/law-firms') {
       setCurrentDashboardView('law-firms')
-    } else if (pathname === '/themes') {
-      setCurrentDashboardView('themes')
     } else if (pathname === '/stakeholders') {
       setCurrentDashboardView('stakeholders')
     } else if (pathname === '/settings') {
@@ -42,8 +40,7 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
                pathname.startsWith('/user-journey/') || 
                pathname.startsWith('/design/') || 
                pathname.startsWith('/stakeholder/') || 
-               pathname.startsWith('/law-firm/') || 
-               pathname.startsWith('/theme/')) {
+               pathname.startsWith('/law-firm/')) {
       // For entity detail pages, we don't need to set a specific view
       // The WorkspaceDataFetcher will handle the routing
       console.log('🔵 Dashboard: Entity detail route detected')
@@ -68,9 +65,6 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
         break
       case 'law-firms':
         navigate('/law-firms')
-        break
-      case 'themes':
-        navigate('/themes')
         break
       case 'stakeholders':
         navigate('/stakeholders')

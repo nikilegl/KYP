@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'lucide-react'
 
 interface CopyLinkButtonProps {
-  entityType: 'project' | 'stakeholder' | 'note' | 'user-journey' | 'user-story' | 'theme' | 'design' | 'law-firm'
+  entityType: 'project' | 'stakeholder' | 'note' | 'user-journey' | 'user-story' | 'design' | 'law-firm'
   shortId: number
   className?: string
 }

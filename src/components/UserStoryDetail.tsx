@@ -5,15 +5,12 @@ import { UserRoleTag } from './common/UserRoleTag'
 import { PriorityTag } from '../utils/priorityTagStyles'
 import { CopyLinkButton } from './common/CopyLinkButton'
 import { updateUserStory, getUserStoryRoles } from '../lib/database'
-import { getThemesForUserStory, linkThemeToUserStory, unlinkThemeFromUserStory } from '../lib/database'
 import { CKEditorComponent } from './CKEditorComponent'
 import { LinkedDesigns } from './UserStoryDetail/LinkedAssets'
 import { UserStoryEditDetailsModal } from './UserStoryDetail/UserStoryEditDetailsModal'
 import { TasksSection } from './TasksSection'
-import { TagThemeCard } from './common/TagThemeCard'
 import { HistorySection } from './common/HistorySection'
 import type { UserStory, Stakeholder, UserRole, LawFirm, UserPermission, Task } from '../lib/supabase'
-import type { Theme } from '../lib/supabase'
 import type { WorkspaceUser } from '../lib/supabase'
 import type { UserStoryComment } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -44,7 +41,6 @@ interface UserStoryDetailProps {
   userRoles: UserRole[]
   userPermissions: UserPermission[]
   lawFirms: LawFirm[]
-  themes: Theme[]
   availableUsers: WorkspaceUser[]
   initialSelectedRoleIds: string[]
   userStoryComments: UserStoryComment[]
@@ -53,7 +49,6 @@ interface UserStoryDetailProps {
   onUpdateTask?: (taskId: string, updates: { name?: string; description?: string; status?: string; user_story_id?: string }) => Promise<void>
   onDeleteTask?: (taskId: string) => Promise<void>
   onBack: () => void
-  onThemeCreate: (theme: Theme) => void
   onUpdate: (storyId: string, updates: Partial<UserStory>, updatedRoleIds: string[]) => void
   onAddComment: (commentText: string) => Promise<void>
   onEditComment: (commentId: string, commentText: string) => Promise<void>
@@ -67,7 +62,6 @@ export function UserStoryDetail({
   userRoles, 
   userPermissions,
   lawFirms, 
-  themes,
   availableUsers,
   initialSelectedRoleIds,
   userStoryComments,
@@ -76,7 +70,6 @@ export function UserStoryDetail({
   onUpdateTask,
   onDeleteTask,
   onBack, 
-  onThemeCreate,
   onUpdate,
   onAddComment,
   onEditComment,
@@ -93,7 +86,6 @@ export function UserStoryDetail({
   const [editingComplexity, setEditingComplexity] = useState(false)
   const [complexity, setComplexity] = useState(userStory.estimated_complexity)
   const [showEditDetailsModal, setShowEditDetailsModal] = useState(false)
-  const [userStoryThemes, setUserStoryThemes] = useState<Theme[]>([])
   const [assignedUser, setAssignedUser] = useState<WorkspaceUser | null>(null)
   const [showComments, setShowComments] = useState(true)
   const [userStoryTasks, setUserStoryTasks] = useState<Task[]>([])
@@ -104,9 +96,7 @@ export function UserStoryDetail({
     setStoryRoleIds(initialSelectedRoleIds)
   }, [initialSelectedRoleIds])
 
-  // Load themes for this user story
   useEffect(() => {
-    loadUserStoryThemes()
     loadAssignedUser()
     loadUserStoryTasks()
   }, [userStory.id])
@@ -115,17 +105,6 @@ export function UserStoryDetail({
   useEffect(() => {
     loadAssignedUser()
   }, [userStory.assigned_to_user_id, availableUsers])
-
-  const loadUserStoryThemes = async () => {
-    if (!userStory.id) return
-    
-    try {
-      const themes = await getThemesForUserStory(userStory.id)
-      setUserStoryThemes(themes)
-    } catch (error) {
-      console.error('Error loading user story themes:', error)
-    }
-  }
 
   const loadAssignedUser = () => {
     if (userStory.assigned_to_user_id) {
@@ -213,24 +192,6 @@ export function UserStoryDetail({
         ? prev.filter(id => id !== roleId)
         : [...prev, roleId]
     )
-  }
-
-  const handleThemeAdd = async (theme: Theme) => {
-    try {
-      await linkThemeToUserStory(theme.id, userStory.id)
-      setUserStoryThemes([...userStoryThemes, theme])
-    } catch (error) {
-      console.error('Error linking theme to user story:', error)
-    }
-  }
-
-  const handleThemeRemove = async (themeId: string) => {
-    try {
-      await unlinkThemeFromUserStory(themeId, userStory.id)
-      setUserStoryThemes(userStoryThemes.filter(theme => theme.id !== themeId))
-    } catch (error) {
-      console.error('Error unlinking theme from user story:', error)
-    }
   }
 
   const handleAssignUser = async (user: WorkspaceUser) => {
@@ -562,14 +523,6 @@ export function UserStoryDetail({
           <LinkedDesigns 
             userStoryId={userStory.id}
             projectId={userStory.project_id}
-          />
-
-  <TagThemeCard
-            availableThemes={themes}
-            selectedThemes={userStoryThemes}
-            onThemeAdd={handleThemeAdd}
-            onThemeRemove={handleThemeRemove}
-            onThemeCreate={onThemeCreate}
           />
 
           {/* Tasks Section - only show if task management handlers are available */}

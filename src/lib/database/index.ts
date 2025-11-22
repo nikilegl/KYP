@@ -11,7 +11,6 @@ export * from './services/userStoryService'
 export * from './services/assetService'
 export * from './services/userPermissionService'
 export * from './services/taskService'
-export * from './services/themeService'
 
 export * from './services/noteTemplateService'
 export * from './services/projectProgressService'

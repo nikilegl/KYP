@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, X, Tag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks, getThemesForResearchNote, linkThemeToResearchNote, unlinkThemeFromResearchNote } from '../lib/database'
+import { updateResearchNote, getResearchNoteStakeholders, getNoteLinks, saveNoteLinks } from '../lib/database'
 import { NoteHeader } from './NoteDetail/NoteHeader'
 import { NoteStakeholdersSection } from './NoteDetail/NoteStakeholdersSection'
 import { NoteEditModal } from './NoteDetail/NoteEditModal'
@@ -10,13 +10,12 @@ import { NoteContentTabs } from './NoteDetail/NoteContentTabs'
 import { LinksSection } from './common/LinksSection'
 import { NoteLinkedDesigns } from './NoteDetail/NoteLinkedAssets'
 import { TasksSection } from './TasksSection'
-import { TagThemeCard } from './common/TagThemeCard'
 import { HistorySection } from './common/HistorySection'
 import { TaskForm, type TaskData } from './common/TaskForm'
 import { AddLinkModal } from './common/AddLinkModal'
 import { getTasks, createTask, updateTask, deleteTask, getAssetsForResearchNote as getDesignsForResearchNote } from '../lib/database'
 import { getResearchNoteComments, createResearchNoteComment, updateResearchNoteComment, deleteResearchNoteComment, type ResearchNoteComment } from '../lib/database/services/researchNoteCommentService'
-import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, Theme, WorkspaceUser, UserPermission, NoteTemplate, Task, Design } from '../lib/supabase'
+import type { ResearchNote, Stakeholder, UserRole, LawFirm, NoteLink, WorkspaceUser, UserPermission, NoteTemplate, Task, Design } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
 interface NoteDetailProps {
@@ -27,7 +26,6 @@ interface NoteDetailProps {
   userRoles: UserRole[]
   lawFirms: LawFirm[]
   userPermissions: UserPermission[]
-  themes: Theme[]
   noteTemplates?: NoteTemplate[]
   availableUsers?: WorkspaceUser[]
   currentUser?: User | null
@@ -36,7 +34,6 @@ interface NoteDetailProps {
   onUpdate: (updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => void
   onAssignStakeholderToProject: (stakeholderId: string) => Promise<void>
   onRemoveStakeholderFromNoteAndConditionallyProject: (stakeholderId: string, noteId: string) => Promise<void>
-  onThemeCreate: (theme: Theme) => void
   onCreateNote?: (noteData: {
     name: string
     summary: string
@@ -51,7 +48,6 @@ interface NoteDetailProps {
       status: 'not_complete' | 'complete' | 'no_longer_required'
       assignedToUserId?: string
     }>
-    themeIds: string[]
   }) => Promise<void>
   isCreating?: boolean
 }
@@ -64,7 +60,6 @@ export function NoteDetail({
   userRoles, 
   lawFirms, 
   userPermissions,
-  themes,
   noteTemplates = [],
   availableUsers = [],
   currentUser,
@@ -73,7 +68,6 @@ export function NoteDetail({
   onUpdate,
   onAssignStakeholderToProject,
   onRemoveStakeholderFromNoteAndConditionallyProject,
-  onThemeCreate,
   onCreateNote,
   isCreating = false
 }: NoteDetailProps) {
@@ -83,7 +77,6 @@ export function NoteDetail({
   const [localNote, setLocalNote] = useState<ResearchNote | null>(note)
   const [noteLinks, setNoteLinks] = useState<NoteLink[]>([])
   const [noteTasks, setNoteTasks] = useState<Task[]>([])
-  const [noteThemes, setNoteThemes] = useState<Theme[]>([])
   const [linkedDesigns, setLinkedDesigns] = useState<Design[]>([])
   const [sharingToSlack, setSharingToSlack] = useState(false)
   const [slackShareStatus, setSlackShareStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
@@ -100,16 +93,12 @@ export function NoteDetail({
   
   // Add design link modal state  
   const [showAddDesignLinkModal, setShowAddDesignLinkModal] = useState(false)
-  
-  // Tag theme modal state
-  const [showTagThemeModal, setShowTagThemeModal] = useState(false)
 
   useEffect(() => {
     if (note && !isCreating) {
       loadNoteStakeholders()
       loadNoteLinks()
       loadNoteTasks()
-      loadNoteThemes()
       loadNoteComments()
       loadLinkedDesigns()
     }
@@ -138,17 +127,6 @@ export function NoteDetail({
       setNoteLinks(links)
     } catch (error) {
       console.error('Error loading note links:', error)
-    }
-  }
-
-  const loadNoteThemes = async () => {
-    if (!note) return
-    
-    try {
-      const themes = await getThemesForResearchNote(note.id)
-      setNoteThemes(themes)
-    } catch (error) {
-      console.error('Error loading note themes:', error)
     }
   }
 
@@ -197,7 +175,7 @@ export function NoteDetail({
         note.id,
         updates,
         noteStakeholderIds,
-        noteThemes.map(t => t.id)
+        []
       )
       
       console.log('🔵 NoteDetail: updateResearchNote returned:', updatedNote)
@@ -253,7 +231,7 @@ export function NoteDetail({
         note.id,
         {},
         stakeholderIds,
-        noteThemes.map(t => t.id)
+        []
       )
       
       console.log('🔵 NoteDetail: updateResearchNote returned:', updatedNote)
@@ -376,28 +354,6 @@ export function NoteDetail({
       throw error
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleThemeAdd = async (theme: Theme) => {
-    if (!note) return
-    
-    try {
-      await linkThemeToResearchNote(theme.id, note.id)
-      setNoteThemes([...noteThemes, theme])
-    } catch (error) {
-      console.error('Error linking theme to note:', error)
-    }
-  }
-
-  const handleThemeRemove = async (themeId: string) => {
-    if (!note) return
-    
-    try {
-      await unlinkThemeFromResearchNote(themeId, note.id)
-      setNoteThemes(noteThemes.filter(theme => theme.id !== themeId))
-    } catch (error) {
-      console.error('Error unlinking theme from note:', error)
     }
   }
 
@@ -606,12 +562,10 @@ export function NoteDetail({
             userRoles={userRoles}
             userPermissions={userPermissions}
             lawFirms={lawFirms}
-            themes={themes}
             noteTemplates={noteTemplates}
             availableUsers={availableUsers}
             onBack={onBack}
             onAssignStakeholderToProject={onAssignStakeholderToProject}
-            onThemeCreate={onThemeCreate}
             onCreate={onCreateNote!}
           />
         </div>
@@ -664,16 +618,6 @@ export function NoteDetail({
             saving={saving}
           />
 
-          {noteThemes.length > 0 && (
-            <TagThemeCard
-              availableThemes={themes}
-              selectedThemes={noteThemes}
-              onThemeAdd={handleThemeAdd}
-              onThemeRemove={handleThemeRemove}
-              onThemeCreate={onThemeCreate}
-            />
-          )}
-
           <NoteStakeholdersSection
             assignedStakeholders={assignedStakeholders}
             allWorkspaceStakeholders={allWorkspaceStakeholders}
@@ -721,7 +665,7 @@ export function NoteDetail({
           )}
 
           {/* Unified Action Buttons Row */}
-          {(noteLinks.length === 0 || noteTasks.length === 0 || linkedDesigns.length === 0 || noteThemes.length === 0) && (
+          {(noteLinks.length === 0 || noteTasks.length === 0 || linkedDesigns.length === 0) && (
             <div className="flex items-center gap-4">
               {noteLinks.length === 0 && (
                 <button
@@ -756,16 +700,6 @@ export function NoteDetail({
                 </button>
               )}
 
-              {noteThemes.length === 0 && (
-                <button
-                  onClick={() => setShowTagThemeModal(true)}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-                >
-                  <Tag size={16} />
-                  Tag Theme
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -855,53 +789,6 @@ export function NoteDetail({
         onSaveLink={handleAddNewLink}
       />
 
-      {/* Tag Theme Modal */}
-      {showTagThemeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Tag Theme</h3>
-              <button
-                onClick={() => setShowTagThemeModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-            
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
-              <TagThemeCard
-                availableThemes={themes}
-                selectedThemes={noteThemes}
-                onThemeAdd={handleThemeAdd}
-                onThemeRemove={handleThemeRemove}
-                onThemeCreate={onThemeCreate}
-                className="border-0 shadow-none p-0"
-              />
-            </div>
-            
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={() => setShowTagThemeModal(false)}
-                disabled={saving}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setShowTagThemeModal(false)}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

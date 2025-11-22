@@ -3,7 +3,6 @@ import { ArrowLeft, Palette, Edit } from 'lucide-react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { CopyLinkButton } from './common/CopyLinkButton'
-import { TagThemeCard } from './common/TagThemeCard'
 import { EditDesignModal } from './DesignsSection/EditDesignModal'
 import { HistorySection } from './common/HistorySection'
 import { DesignLinkedContentSection } from './DesignDetail/DesignLinkedContentSection'
@@ -17,13 +16,10 @@ import {
   updateAssetComment as updateDesignComment,
   deleteAssetComment as deleteDesignComment,
   getUserStoriesForAsset as getUserStoriesForDesign,
-  getResearchNotesForAsset as getResearchNotesForDesign,
-  getThemesForAsset as getThemesForDesign,
-  linkThemeToAsset as linkThemeToDesign,
-  unlinkThemeFromAsset as unlinkThemeFromDesign
+  getResearchNotesForAsset as getResearchNotesForDesign
 } from '../lib/database'
-import { getUserStories, getResearchNotes, getThemes } from '../lib/database'
-import type { Design, DesignComment, UserStory, ResearchNote, Theme, WorkspaceUser } from '../lib/supabase'
+import { getUserStories, getResearchNotes } from '../lib/database'
+import type { Design, DesignComment, UserStory, ResearchNote, WorkspaceUser } from '../lib/supabase'
 
 interface DesignDetailProps {
   designShortId: number
@@ -37,8 +33,6 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
   const [comments, setComments] = useState<DesignComment[]>([])
   const [linkedUserStories, setLinkedUserStories] = useState<UserStory[]>([])
   const [linkedResearchNotes, setLinkedResearchNotes] = useState<ResearchNote[]>([])
-  const [designThemes, setDesignThemes] = useState<Theme[]>([])
-  const [allThemes, setAllThemes] = useState<Theme[]>([])
   const [allUserStories, setAllUserStories] = useState<UserStory[]>([])
   const [allResearchNotes, setAllResearchNotes] = useState<ResearchNote[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,10 +50,7 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
     try {
       setLoading(true)
       
-      const [designData, themesData] = await Promise.all([
-        getDesignByShortId(designShortId),
-        getThemes()
-      ])
+      const designData = await getDesignByShortId(designShortId)
       
       if (!designData) {
         console.error('Design not found')
@@ -67,21 +58,18 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
       }
       
       setDesign(designData)
-      setAllThemes(themesData)
       
       // Load related data
       const [
         commentsData,
         userStoriesData,
         researchNotesData,
-        designThemesData,
         allUserStoriesData,
         allResearchNotesData
       ] = await Promise.all([
         getDesignComments(designData.id),
         getUserStoriesForDesign(designData.id),
         getResearchNotesForDesign(designData.id),
-        getThemesForDesign(designData.id),
         getUserStories(designData.project_id),
         getResearchNotes()
       ])
@@ -89,7 +77,6 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
       setComments(commentsData)
       setLinkedUserStories(userStoriesData)
       setLinkedResearchNotes(researchNotesData.filter(note => note.project_id === designData.project_id))
-      setDesignThemes(designThemesData)
       setAllUserStories(allUserStoriesData)
       setAllResearchNotes(allResearchNotesData.filter(note => note.project_id === designData.project_id))
     } catch (error) {
@@ -261,32 +248,6 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
     }
   }
 
-  const handleThemeAdd = async (theme: Theme) => {
-    if (!design) return
-    
-    try {
-      await linkThemeToDesign(theme.id, design.id)
-      setDesignThemes([...designThemes, theme])
-    } catch (error) {
-      console.error('Error linking theme to design:', error)
-    }
-  }
-
-  const handleThemeRemove = async (themeId: string) => {
-    if (!design) return
-    
-    try {
-      await unlinkThemeFromDesign(themeId, design.id)
-      setDesignThemes(designThemes.filter(theme => theme.id !== themeId))
-    } catch (error) {
-      console.error('Error unlinking theme from design:', error)
-    }
-  }
-
-  const handleThemeCreate = (newTheme: Theme) => {
-    setAllThemes([newTheme, ...allThemes])
-  }
-
   const handleImageClick = () => {
     if (design?.snapshot_image_url) {
       setShowLightbox(true)
@@ -366,15 +327,6 @@ export function DesignDetail({ designShortId, availableUsers = [], onBack }: Des
           <DesignPreviewSection 
             design={design}
             onImageClick={handleImageClick}
-          />
-
-          {/* Theme Tagging */}
-          <TagThemeCard
-            availableThemes={allThemes}
-            selectedThemes={designThemes}
-            onThemeAdd={handleThemeAdd}
-            onThemeRemove={handleThemeRemove}
-            onThemeCreate={handleThemeCreate}
           />
 
           {/* Linked Content */}

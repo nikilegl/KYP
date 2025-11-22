@@ -53,9 +53,6 @@ import {
   updateUserStory,
   getAllResearchNoteStakeholders,
   getAllProjectProgressStatus,
-  getThemes,
-  getThemesWithContentCounts,
-  getThemeByShortId,
   getNoteTemplates,
   createNoteTemplate,
   updateNoteTemplate,
@@ -73,7 +70,6 @@ import type {
   LawFirm,
   UserPermission,
   UserStory,
-  Theme,
   NoteTemplate,
   ProjectProgressStatus,
   Design,
@@ -109,8 +105,6 @@ export function WorkspaceDataFetcher({
   const [stakeholderDetailOrigin, setStakeholderDetailOrigin] = useState<'project' | 'manager' | 'law-firm'>('manager')
   const [originLawFirm, setOriginLawFirm] = useState<LawFirm | null>(null)
   const [isNavigatingBack, setIsNavigatingBack] = useState(false)
-  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null)
-  const [themesWithCounts, setThemesWithCounts] = useState<Array<Theme & { contentCounts: { userStories: number; userJourneys: number; researchNotes: number; assets: number } }>>([])
   const [selectedNoteTemplate, setSelectedNoteTemplate] = useState<NoteTemplate | null>(null)
   const [selectedDesignForProject, setSelectedDesignForProject] = useState<Design | null>(null)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null)
@@ -127,7 +121,6 @@ export function WorkspaceDataFetcher({
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [userPermissions, setUserPermissions] = useState<UserPermission[]>([])
   const [stakeholderNotesCountMap, setStakeholderNotesCountMap] = useState<Record<string, number>>({})
-  const [themes, setThemes] = useState<Theme[]>([])
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([])
   const [allProjectProgressStatus, setAllProjectProgressStatus] = useState<ProjectProgressStatus[]>([])
   const [allUserStories, setAllUserStories] = useState<UserStory[]>([])
@@ -186,18 +179,6 @@ export function WorkspaceDataFetcher({
       if (pathname === '/law-firms') {
         setCurrentView('law-firms')
         onViewChange('law-firms')
-        setSelectedProject(null)
-        setSelectedStakeholder(null)
-        setSelectedNote(null)
-        setSelectedUserStory(null)
-        setSelectedDesignForProject(null)
-        setSelectedLawFirm(null)
-        return
-      }
-
-      if (pathname === '/themes') {
-        setCurrentView('themes')
-        onViewChange('themes')
         setSelectedProject(null)
         setSelectedStakeholder(null)
         setSelectedNote(null)
@@ -358,9 +339,6 @@ export function WorkspaceDataFetcher({
         } else {
           navigate('/')
         }
-      } else if (pathname.startsWith('/theme/')) {
-        setSelectedTheme({ short_id: shortId } as Theme)
-        setCurrentView('theme-detail')
       } else if (pathname.startsWith('/design/')) {
         console.log('🔵 WorkspaceDataFetcher: Processing design route with shortId:', shortId)
         const { getAssetByShortId: getDesignByShortId, getProjectById } = await import('../../lib/database')
@@ -446,7 +424,6 @@ export function WorkspaceDataFetcher({
         lawFirmsData,
         userPermissionsData,
         allNoteStakeholders,
-        themesWithCountsData,
         noteTemplatesData,
         allProjectProgressStatusData,
         allUserStoriesData,
@@ -462,7 +439,6 @@ export function WorkspaceDataFetcher({
         getLawFirms(),
         getUserPermissions(),
         getAllResearchNoteStakeholders(),
-        getThemesWithContentCounts(),
         getNoteTemplates(),
         getAllProjectProgressStatus(),
         getUserStories(),
@@ -478,8 +454,6 @@ export function WorkspaceDataFetcher({
       setPlatforms(platformsData)
       setLawFirms(lawFirmsData)
       setUserPermissions(userPermissionsData)
-      setThemesWithCounts(themesWithCountsData)
-      setThemes(themesWithCountsData.map(t => ({ ...t, contentCounts: undefined })))
       setNoteTemplates(noteTemplatesData)
       setAllProjectProgressStatus(allProjectProgressStatusData)
       setAllUserStories(allUserStoriesData)
@@ -529,38 +503,6 @@ export function WorkspaceDataFetcher({
     } catch (error) {
       console.error('Error loading user story comments:', error)
     }
-  }
-
-  const handleThemeCreate = (newTheme: Theme) => {
-    const themeWithCounts = { ...newTheme, contentCounts: { userStories: 0, researchNotes: 0, assets: 0 } }
-    setThemesWithCounts([themeWithCounts, ...themesWithCounts])
-    setThemes([newTheme, ...themes])
-  }
-
-  const handleThemeUpdate = async (themeId: string, updates: { name?: string; description?: string; color?: string }) => {
-    const { updateTheme } = await import('../../lib/database')
-    const updatedTheme = await updateTheme(themeId, updates)
-    if (updatedTheme) {
-      setThemesWithCounts(themesWithCounts.map(t => 
-        t.id === themeId ? { ...t, ...updates } : t
-      ))
-      setThemes(themes.map(t => 
-        t.id === themeId ? { ...t, ...updates } : t
-      ))
-    }
-  }
-
-  const handleThemeDelete = async (themeId: string) => {
-    const { deleteTheme } = await import('../../lib/database')
-    const success = await deleteTheme(themeId)
-    if (success) {
-      setThemesWithCounts(themesWithCounts.filter(t => t.id !== themeId))
-      setThemes(themes.filter(t => t.id !== themeId))
-    }
-  }
-
-  const handleSelectTheme = (theme: Theme) => {
-    navigate(`/theme/${theme.short_id}`)
   }
 
   // Note template handlers
@@ -1022,8 +964,6 @@ export function WorkspaceDataFetcher({
       lawFirms={lawFirms}
       userPermissions={userPermissions}
       stakeholderNotesCountMap={stakeholderNotesCountMap}
-      themesWithCounts={themesWithCounts}
-      themes={themes}
       noteTemplates={noteTemplates}
       selectedProject={selectedProject}
       selectedStakeholder={selectedStakeholder}
@@ -1033,7 +973,6 @@ export function WorkspaceDataFetcher({
       userStoryRoleIds={userStoryRoleIds}
       stakeholderDetailOrigin={stakeholderDetailOrigin}
       originLawFirm={originLawFirm}
-      selectedTheme={selectedTheme}
       selectedNoteTemplate={selectedNoteTemplate}
       selectedDesignForProject={selectedDesignForProject}
       selectedDesign={selectedDesign}
@@ -1075,10 +1014,6 @@ export function WorkspaceDataFetcher({
       onImportLawFirmsCSV={handleImportLawFirmsCSV}
       onDeleteAllLawFirms={handleDeleteAllLawFirms}
       onImportStakeholdersCSV={handleImportStakeholdersCSV}
-      onThemeCreate={handleThemeCreate}
-      onThemeUpdate={handleThemeUpdate}
-      onThemeDelete={handleThemeDelete}
-      onSelectTheme={handleSelectTheme}
       onCreateNoteTemplate={handleCreateNoteTemplate}
       onUpdateNoteTemplate={handleUpdateNoteTemplate}
       onDeleteNoteTemplate={handleDeleteNoteTemplate}
