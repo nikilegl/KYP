@@ -235,7 +235,7 @@ export function DataTable<T>({
                   </th>
                 ))}
                 {(onEdit || onDelete) && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '80px' }}>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: '70px' }}>
                     Actions
                   </th>
                 )}
@@ -342,8 +342,8 @@ export function DataTable<T>({
                       </td>
                     ))}
                     {(onEdit || onDelete) && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" style={{ width: '80px' }}>
-                        <div className="flex items-center gap-2">
+                      <td className="px-3 py-4 whitespace-nowrap text-sm font-medium" style={{ width: '70px' }}>
+                        <div className="flex items-center gap-1">
                           {onEdit && (
                             <Button
                               variant="ghost"

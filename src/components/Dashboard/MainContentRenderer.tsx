@@ -109,8 +109,8 @@ interface MainContentRendererProps {
   onNavigateToStakeholdersWithPermissionFilter: (userPermissionId: string) => void
   
   // Law firm handlers
-  onCreateLawFirm: (name: string, structure: 'centralised' | 'decentralised', status: 'active' | 'inactive') => Promise<void>
-  onUpdateLawFirm: (id: string, updates: Partial<Omit<LawFirm, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>) => Promise<void>
+  onCreateLawFirm: (name: string, structure: 'centralised' | 'decentralised', status: 'active' | 'inactive') => Promise<LawFirm | null>
+  onUpdateLawFirm: (id: string, updates: Partial<Omit<LawFirm, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>) => Promise<LawFirm | null>
   onDeleteLawFirm: (id: string) => Promise<void>
   onImportLawFirmsCSV: (csvData: string) => Promise<{ success: number, errors: string[] }>
   onDeleteAllLawFirms: () => Promise<void>
