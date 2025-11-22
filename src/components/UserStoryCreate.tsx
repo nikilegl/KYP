@@ -2,20 +2,16 @@ import React, { useState } from 'react'
 import { ArrowLeft, Check } from 'lucide-react'
 import { getPriorityTagStyles } from '../utils/priorityTagStyles.tsx'
 import { StakeholderAvatar } from './common/StakeholderAvatar'
-import { TagThemeCard } from './common/TagThemeCard'
 import { AssignUserCard } from './common/AssignUserCard'
-import type { UserRole } from '../lib/supabase'
-import type { Theme } from '../lib/supabase'
+import type { UserRole, UserPermission } from '../lib/supabase'
 import type { WorkspaceUser } from '../lib/supabase'
 
 interface UserStoryCreateProps {
   projectId: string
   userRoles: UserRole[]
   userPermissions: UserPermission[]
-  themes: Theme[]
   availableUsers: WorkspaceUser[]
   onBack: () => void
-  onThemeCreate: (theme: Theme) => void
   onCreate: (storyData: {
     name: string
     reason?: string
@@ -25,7 +21,6 @@ interface UserStoryCreateProps {
     userPermissionId?: string
     assignedToUserId?: string
     priorityRating: 'must' | 'should' | 'could' | 'would'
-    themeIds: string[]
   }) => Promise<void>
 }
 
@@ -33,10 +28,8 @@ export function UserStoryCreate({
   projectId, 
   userRoles, 
   userPermissions,
-  themes,
   availableUsers,
   onBack, 
-  onThemeCreate,
   onCreate 
 }: UserStoryCreateProps) {
   const [name, setName] = useState('')
@@ -47,7 +40,6 @@ export function UserStoryCreate({
   const [selectedUserRoleIds, setSelectedUserRoleIds] = useState<string[]>([])
   const [selectedUserPermissionId, setSelectedUserPermissionId] = useState<string>('')
   const [saving, setSaving] = useState(false)
-  const [selectedThemes, setSelectedThemes] = useState<Theme[]>([])
   const [assignedUser, setAssignedUser] = useState<WorkspaceUser | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,9 +57,7 @@ export function UserStoryCreate({
         userRoleIds: selectedUserRoleIds,
         userPermissionId: selectedUserPermissionId || undefined,
         assignedToUserId: assignedUser?.user_id || undefined,
-        priorityRating,
-        status,
-        themeIds: selectedThemes.map(theme => theme.id)
+        priorityRating
       })
       // After successful creation, go back to the user stories dashboard
       onBack()
@@ -96,16 +86,6 @@ export function UserStoryCreate({
       setSelectedUserRoleIds([])
     }
     setSelectedUserPermissionId(permissionId)
-  }
-  
-  const handleThemeAdd = (theme: Theme) => {
-    if (!selectedThemes.some(t => t.id === theme.id)) {
-      setSelectedThemes([...selectedThemes, theme])
-    }
-  }
-
-  const handleThemeRemove = (themeId: string) => {
-    setSelectedThemes(selectedThemes.filter(theme => theme.id !== themeId))
   }
 
   const handleAssignUser = (user: WorkspaceUser) => {
@@ -231,14 +211,6 @@ export function UserStoryCreate({
             />
           </div>
         </div>
-
-        <TagThemeCard
-          availableThemes={themes}
-          selectedThemes={selectedThemes}
-          onThemeAdd={handleThemeAdd}
-          onThemeRemove={handleThemeRemove}
-          onThemeCreate={onThemeCreate}
-        />
 
         <AssignUserCard
           availableUsers={availableUsers}

@@ -3,8 +3,6 @@ import { ProjectManager } from '../ProjectManager'
 import { UserJourneysManager } from '../UserJourneysManager'
 import { UserJourneyCreator } from '../UserJourneyCreator'
 import { LawFirmManager } from '../LawFirmManager'
-import { ThemeManager } from '../ThemeManager'
-import { ThemeDetail } from '../ThemeDetail'
 import { UserRoleManager } from '../UserRoleManager'
 import { UserPermissionManager } from '../UserPermissionManager'
 import { StakeholderManager } from '../StakeholderManager'
@@ -30,7 +28,6 @@ import type {
   LawFirm,
   UserPermission,
   UserStory,
-  Theme,
   NoteTemplate,
   Design,
   ProjectProgressStatus,
@@ -52,8 +49,6 @@ interface MainContentRendererProps {
   lawFirms: LawFirm[]
   userPermissions: UserPermission[]
   stakeholderNotesCountMap: Record<string, number>
-  themesWithCounts: Array<Theme & { contentCounts: { userStories: number; userJourneys: number; researchNotes: number; assets: number } }>
-  themes: Theme[]
   noteTemplates: NoteTemplate[]
   
   // Selected items
@@ -65,7 +60,6 @@ interface MainContentRendererProps {
   userStoryRoleIds: string[]
   stakeholderDetailOrigin: 'project' | 'manager' | 'law-firm'
   originLawFirm: LawFirm | null
-  selectedTheme: Theme | null
   selectedNoteTemplate: NoteTemplate | null
   selectedDesign: Design | null
   selectedDesignForProject: Design | null
@@ -121,12 +115,6 @@ interface MainContentRendererProps {
   onDeleteAllLawFirms: () => Promise<void>
   onImportStakeholdersCSV: (csvData: string) => Promise<{ success: number, errors: string[] }>
   
-  // Theme handlers
-  onThemeCreate: (theme: Theme) => void
-  onThemeUpdate: (themeId: string, updates: { name?: string; description?: string; color?: string }) => Promise<void>
-  onThemeDelete: (themeId: string) => Promise<void>
-  onSelectTheme: (theme: Theme) => void
-  
   // Note template handlers
   onCreateNoteTemplate: (name: string, body?: string) => Promise<void>
   onUpdateNoteTemplate: (templateId: string, updates: { name?: string; body?: string }) => Promise<void>
@@ -160,8 +148,6 @@ export function MainContentRenderer({
   lawFirms,
   userPermissions,
   stakeholderNotesCountMap,
-  themesWithCounts,
-  themes,
   noteTemplates,
   selectedProject,
   selectedStakeholder,
@@ -171,7 +157,6 @@ export function MainContentRenderer({
   userStoryRoleIds,
   stakeholderDetailOrigin,
   originLawFirm,
-  selectedTheme,
   selectedNoteTemplate,
   selectedDesign,
   selectedDesignForProject,
@@ -213,10 +198,6 @@ export function MainContentRenderer({
   onImportLawFirmsCSV,
   onDeleteAllLawFirms,
   onImportStakeholdersCSV,
-  onThemeCreate,
-  onThemeUpdate,
-  onThemeDelete,
-  onSelectTheme,
   onCreateNoteTemplate,
   onUpdateNoteTemplate,
   onDeleteNoteTemplate,
@@ -252,7 +233,6 @@ export function MainContentRenderer({
         initialSelectedDesign={selectedDesign}
         workspaceUsers={workspaceUsers}
         onBack={onBackToWorkspace}
-        onThemeCreate={onThemeCreate}
         onNavigateToWorkspace={(view) => {
           // This would need to be handled by the parent Dashboard component
           console.log('Navigate to workspace view:', view)
@@ -295,7 +275,6 @@ export function MainContentRenderer({
         userRoles={userRoles}
         lawFirms={lawFirms}
         userPermissions={userPermissions}
-        themes={themes}
         availableUsers={workspaceUsers}
         noteTemplates={noteTemplates}
         currentUser={user}
@@ -309,7 +288,6 @@ export function MainContentRenderer({
         onRemoveStakeholderFromNoteAndConditionallyProject={async (stakeholderId, noteId) => {
           console.log('Remove stakeholder from note:', stakeholderId, noteId)
         }}
-        onThemeCreate={onThemeCreate}
       />
     )
   }
@@ -325,12 +303,10 @@ export function MainContentRenderer({
         userRoles={userRoles}
         userPermissions={userPermissions}
         lawFirms={lawFirms}
-        themes={themes}
         availableUsers={workspaceUsers}
         initialSelectedRoleIds={userStoryRoleIds}
         userStoryComments={userStoryComments}
         onBack={onBackToWorkspace}
-        onThemeCreate={onThemeCreate}
         onUpdate={(storyId, updates, updatedRoleIds) => {
           onUpdateUserStory(storyId, updates, updatedRoleIds)
         }}
@@ -350,15 +326,6 @@ export function MainContentRenderer({
         designShortId={selectedDesignForProject?.short_id || 0}
         availableUsers={workspaceUsers}
         onBack={onBackFromDesign}
-      />
-    )
-  }
-
-  if (currentView === 'theme-detail' && selectedTheme) {
-    return (
-      <ThemeDetail
-        themeShortId={selectedTheme.short_id || 0}
-        onBack={() => console.log('Back from theme')}
       />
     )
   }
@@ -426,22 +393,6 @@ export function MainContentRenderer({
           onImportCSV={onImportLawFirmsCSV}
           onDeleteAll={onDeleteAllLawFirms}
           onSelectStakeholder={onSelectStakeholderFromLawFirm}
-        />
-      )
-    case 'themes':
-      return (
-        <ThemeManager 
-          themes={themesWithCounts}
-          onCreateTheme={async (name, description, color) => {
-            const { createTheme } = await import('../../lib/database')
-            const newTheme = await createTheme(name, description, color)
-            if (newTheme) {
-              onThemeCreate(newTheme)
-            }
-          }}
-          onUpdateTheme={onThemeUpdate}
-          onDeleteTheme={onThemeDelete}
-          onSelectTheme={onSelectTheme}
         />
       )
     case 'note-templates':

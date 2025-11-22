@@ -26,7 +26,6 @@ import {
   createUserStoryComment,
   updateUserStoryComment,
   deleteUserStoryComment,
-  getThemes,
   getWorkspaceUsers,
   getNoteTemplates,
   getAllProjectProgressStatus,
@@ -44,14 +43,15 @@ import type {
   UserRole, 
   LawFirm, 
   UserStory, 
-  Theme, 
   WorkspaceUser,
   UserPermission,
   NoteTemplate,
   ProjectProgressStatus,
   Task,
   UserStoryComment,
-  Example
+  Example,
+  Design,
+  UserJourney
 } from '../../lib/supabase'
 
 interface ProjectDataFetcherProps {
@@ -100,7 +100,6 @@ export function ProjectDataFetcher({
   const [examplesCount, setExamplesCount] = useState(0)
   const [userJourneys, setUserJourneys] = useState<UserJourney[]>([])
   const [userJourneyStakeholders, setUserJourneyStakeholders] = useState<Record<string, string[]>>({})
-  const [themes, setThemes] = useState<Theme[]>([])
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([])
   const [problemOverview, setProblemOverview] = useState<ProblemOverview>({
     id: '',
@@ -146,7 +145,6 @@ export function ProjectDataFetcher({
         lawFirmsData,
         researchNotesData,
         userStoriesData,
-        themesData,
         noteTemplatesData,
         examplesData,
         examplesCountData
@@ -157,7 +155,6 @@ export function ProjectDataFetcher({
         getLawFirms(),
         getResearchNotes(),
         getUserStories(project.id),
-        getThemes(),
         getNoteTemplates(),
         getExamples(project.id),
         getExamplesCount(project.id)
@@ -168,7 +165,6 @@ export function ProjectDataFetcher({
       setUserPermissions(userPermissionsData)
       setLawFirms(lawFirmsData)
       setUserStories(userStoriesData)
-      setThemes(themesData)
       setNoteTemplates(noteTemplatesData)
       setExamples(examplesData)
       setExamplesCount(examplesCountData)
@@ -374,7 +370,6 @@ export function ProjectDataFetcher({
       status: 'not_complete' | 'complete' | 'no_longer_required'
       assignedToUserId?: string
     }>
-    themeIds: string[]
     summaryBlocks?: BlockNoteBlock[]
   }) => {
     try {
@@ -388,7 +383,7 @@ export function ProjectDataFetcher({
         noteData.decision_text,
         noteData.note_date,
         noteData.links,
-        noteData.themeIds,
+        [],
         noteData.summaryBlocks
       )
       if (note) {
@@ -441,10 +436,6 @@ export function ProjectDataFetcher({
       console.error('Error creating note:', error)
     }
   }, [notes, project.id, assignedStakeholders])
-
-  const handleThemeCreate = (newTheme: Theme) => {
-    setThemes([newTheme, ...themes])
-  }
 
   const handleUpdateNote = React.useCallback((updatedNote: ResearchNote, updatedStakeholderIds?: string[]) => {
     console.log('�� ProjectDataFetcher: handleUpdateNote called with:', updatedNote)
@@ -513,7 +504,6 @@ export function ProjectDataFetcher({
     user_permission_id?: string
     assignedToUserId?: string
     roleIds?: string[]
-    themeIds?: string[]
     status?: string
   }) => {
     try {
@@ -528,7 +518,7 @@ export function ProjectDataFetcher({
         storyData.assignedToUserId,
         storyData.priorityRating as 'must' | 'should' | 'could' | 'would',
         storyData.status as 'Not planned' | 'Not started' | 'Design in progress' | 'Design complete' | 'Build in progress' | 'Released',
-        storyData.themeIds || []
+        []
       )
       
       if (newStory) {
@@ -711,7 +701,6 @@ export function ProjectDataFetcher({
       notes={notes}
       userStories={userStories}
       storyRoles={storyRoles}
-      themes={themes}
       noteTemplates={noteTemplates}
       problemOverview={problemOverview}
       noteStakeholders={noteStakeholders}
@@ -723,7 +712,6 @@ export function ProjectDataFetcher({
       onRemoveStakeholder={handleRemoveStakeholder}
       onRemoveStakeholderFromNoteAndConditionallyProject={handleRemoveStakeholderFromNoteAndConditionallyProject}
       onCreateNote={handleCreateNote}
-      onThemeCreate={handleThemeCreate}
       onUpdateNote={handleUpdateNote}
       onDeleteNote={handleDeleteNote}
       onAddUserStoryComment={handleAddUserStoryComment}
