@@ -825,20 +825,22 @@ export function WorkspaceDataFetcher({
   }
 
   // Law firm handlers
-  const handleCreateLawFirm = async (name: string, structure: 'centralised' | 'decentralised', status: 'active' | 'inactive') => {
+  const handleCreateLawFirm = async (name: string, structure: 'centralised' | 'decentralised', status: 'active' | 'inactive'): Promise<LawFirm | null> => {
     const lawFirm = await createLawFirm(name, structure, status)
     if (lawFirm) {
       setLawFirms([lawFirm, ...lawFirms])
     }
+    return lawFirm
   }
 
-  const handleUpdateLawFirm = async (id: string, updates: Partial<Omit<LawFirm, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>) => {
+  const handleUpdateLawFirm = async (id: string, updates: Partial<Omit<LawFirm, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>): Promise<LawFirm | null> => {
     const updatedFirm = await updateLawFirm(id, updates)
     if (updatedFirm) {
       setLawFirms(lawFirms.map(firm => 
         firm.id === id ? updatedFirm : firm
       ))
     }
+    return updatedFirm
   }
 
   const handleDeleteLawFirm = async (id: string) => {
