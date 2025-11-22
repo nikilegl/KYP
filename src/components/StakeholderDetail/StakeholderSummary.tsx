@@ -3,12 +3,12 @@ import { FolderOpen, FileText, GitBranch } from 'lucide-react'
 import type { Project, ResearchNote, UserJourney } from '../../lib/supabase'
 
 interface StakeholderSummaryProps {
-  projects: Project[]
-  researchNotes: ResearchNote[]
-  userJourneys: UserJourney[]
+  projects?: Project[]
+  researchNotes?: ResearchNote[]
+  userJourneys?: UserJourney[]
 }
 
-export function StakeholderSummary({ projects, researchNotes, userJourneys }: StakeholderSummaryProps) {
+export function StakeholderSummary({ projects = [], researchNotes = [], userJourneys = [] }: StakeholderSummaryProps) {
   return (
     <div className="bg-white rounded-xl p-6 border border-gray-200">
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Summary</h2>

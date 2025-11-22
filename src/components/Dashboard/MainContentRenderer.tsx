@@ -37,6 +37,7 @@ import type {
 interface MainContentRendererProps {
   currentView: string
   loading: boolean
+  loadingBackgroundData: boolean
   workspaceId: string
   
   // Data states
@@ -138,6 +139,7 @@ interface MainContentRendererProps {
 export function MainContentRenderer({
   currentView,
   loading,
+  loadingBackgroundData,
   workspaceId,
   projects,
   stakeholders,
@@ -387,6 +389,7 @@ export function MainContentRenderer({
           lawFirms={lawFirms}
           stakeholders={stakeholders}
           userRoles={userRoles}
+          loading={loadingBackgroundData}
           onCreateLawFirm={onCreateLawFirm}
           onUpdateLawFirm={onUpdateLawFirm}
           onDeleteLawFirm={onDeleteLawFirm}
@@ -448,6 +451,7 @@ export function MainContentRenderer({
           lawFirms={lawFirms}
           userPermissions={userPermissions}
           stakeholderNotesCountMap={stakeholderNotesCountMap}
+          loading={loadingBackgroundData}
           onCreateStakeholder={onCreateStakeholder}
           onUpdateStakeholder={onUpdateStakeholder}
           onDeleteStakeholder={onDeleteStakeholder}

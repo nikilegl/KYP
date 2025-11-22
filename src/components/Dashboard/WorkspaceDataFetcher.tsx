@@ -129,6 +129,7 @@ export function WorkspaceDataFetcher({
   
   // Loading states
   const [loading, setLoading] = useState(true)
+  const [loadingBackgroundData, setLoadingBackgroundData] = useState(true)
 
   // Load comments when selected user story changes
   useEffect(() => {
@@ -413,12 +414,32 @@ export function WorkspaceDataFetcher({
     try {
       setLoading(true)
       
+      // Phase 1: Load critical data needed for initial render and navigation
       const [
         workspacesData,
         projectsData,
+        workspaceUsersData
+      ] = await Promise.all([
+        getWorkspaces(),
+        getProjects(),
+        getWorkspaceUsers()
+      ])
+      
+      // Set critical data immediately
+      setWorkspaces(workspacesData)
+      setProjects(projectsData)
+      setWorkspaceUsers(workspaceUsersData)
+      
+      // Set loading to false so UI can render
+      setLoading(false)
+      
+      // Phase 2: Load remaining data in background
+      // This runs after the UI has rendered, improving perceived performance
+      setLoadingBackgroundData(true)
+      
+      const [
         stakeholdersData,
         notesData,
-        workspaceUsersData,
         userRolesData,
         platformsData,
         lawFirmsData,
@@ -429,11 +450,8 @@ export function WorkspaceDataFetcher({
         allUserStoriesData,
         allDesignsData
       ] = await Promise.all([
-        getWorkspaces(),
-        getProjects(),
         getStakeholders(),
         getResearchNotes(),
-        getWorkspaceUsers(),
         getUserRoles(),
         getPlatforms(),
         getLawFirms(),
@@ -445,11 +463,9 @@ export function WorkspaceDataFetcher({
         getDesigns()
       ])
       
-      setWorkspaces(workspacesData)
-      setProjects(projectsData)
+      // Update state with background-loaded data
       setStakeholders(stakeholdersData)
       setNotes(notesData)
-      setWorkspaceUsers(workspaceUsersData)
       setUserRoles(userRolesData)
       setPlatforms(platformsData)
       setLawFirms(lawFirmsData)
@@ -484,6 +500,9 @@ export function WorkspaceDataFetcher({
       
       console.log('📊 WorkspaceDataFetcher: Final stakeholder notes count:', stakeholderNotesCount)
       setStakeholderNotesCountMap(stakeholderNotesCount)
+      
+      // Background data loading complete
+      setLoadingBackgroundData(false)
     } catch (error) {
       if (error instanceof SupabaseAuthError) {
         console.warn('Authentication session expired during data fetch, user will be signed out')
@@ -491,7 +510,10 @@ export function WorkspaceDataFetcher({
       } else {
         console.error('Error fetching data:', error)
       }
+      // Ensure loading states are set to false on error
+      setLoadingBackgroundData(false)
     } finally {
+      // Ensure loading is set to false even if background loading fails
       setLoading(false)
     }
   }
@@ -954,6 +976,7 @@ export function WorkspaceDataFetcher({
     <MainContentRenderer
       currentView={currentView}
       loading={loading}
+      loadingBackgroundData={loadingBackgroundData}
       workspaceId={workspaceId}
       projects={projects}
       stakeholders={stakeholders}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Users, Plus, Upload, FileText, X } from 'lucide-react'
 import { Button } from './DesignSystem'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import type { Stakeholder, UserRole, LawFirm } from '../lib/supabase'
 import { StakeholderDetail } from './StakeholderDetail'
 import { StakeholderFilters } from './StakeholderManager/StakeholderFilters'
@@ -13,6 +14,7 @@ interface StakeholderManagerProps {
   lawFirms: LawFirm[]
   userPermissions: UserPermission[]
   stakeholderNotesCountMap: Record<string, number>
+  loading?: boolean
   onCreateStakeholder: (name: string, userRoleId?: string, lawFirmId?: string, userPermissionId?: string, visitorId?: string, department?: string, pendoRole?: string) => Promise<void>
   onUpdateStakeholder: (stakeholderId: string, updates: { name?: string; user_role_id?: string; law_firm_id?: string; user_permission_id?: string; notes?: string; visitor_id?: string; department?: string; pendo_role?: string }) => Promise<void>
   onDeleteStakeholder: (stakeholderId: string) => Promise<void>
@@ -26,6 +28,7 @@ export function StakeholderManager({
   lawFirms = [],
   userPermissions = [],
   stakeholderNotesCountMap,
+  loading = false,
   onCreateStakeholder, 
   onUpdateStakeholder, 
   onDeleteStakeholder,
@@ -225,6 +228,14 @@ export function StakeholderManager({
     if (onSelectStakeholder) {
       onSelectStakeholder(stakeholder)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <LoadingState message="Loading stakeholders..." size="lg" />
+      </div>
+    )
   }
 
   return (

@@ -6,6 +6,7 @@ import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { LawFirmFilters } from './LawFirmManager/LawFirmFilters'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
 import { ConfirmModal } from './DesignSystem/components/Modal'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import type { LawFirm } from '../lib/supabase'
 import { getCurrentUserRole } from '../lib/database'
 import { getStructureTagStyles } from '../utils/structureTagStyles'
@@ -15,6 +16,7 @@ interface LawFirmManagerProps {
   lawFirms: LawFirm[]
   stakeholders?: Stakeholder[]
   userRoles?: UserRole[]
+  loading?: boolean
   onCreateLawFirm: (name: string, structure: 'centralised' | 'decentralised', status: 'active' | 'inactive') => Promise<void>
   onUpdateLawFirm: (id: string, updates: Partial<Omit<LawFirm, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>) => Promise<void>
   onDeleteLawFirm: (id: string) => Promise<void>
@@ -27,6 +29,7 @@ export function LawFirmManager({
   lawFirms, 
   stakeholders = [],
   userRoles = [],
+  loading = false,
   onCreateLawFirm, 
   onUpdateLawFirm, 
   onDeleteLawFirm,
@@ -151,6 +154,14 @@ export function LawFirmManager({
   const totalCount = lawFirms.filter(firm => 
     firm.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).length
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <LoadingState message="Loading law firms..." size="lg" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto">

@@ -10,7 +10,7 @@ import { EditJourneyModal } from './EditJourneyModal'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
-import { getUserJourneyFolders, assignUserJourneysToFolder, moveFolderToParent, countJourneysInFolder, updateUserJourneyFolder, deleteUserJourneyFolder, createUserJourneyFolder, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
+import { getUserJourneyFolders, assignUserJourneysToFolder, moveFolderToParent, updateUserJourneyFolder, deleteUserJourneyFolder, createUserJourneyFolder, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import { convertEmojis } from '../utils/emojiConverter'
@@ -27,11 +27,9 @@ interface WorkspaceUserInfo {
 interface UserJourneyWithProject extends UserJourney {
   project?: Project
   folder?: UserJourneyFolder
-  lawFirms?: LawFirm[]
   createdByUser?: WorkspaceUserInfo
   updatedByUser?: WorkspaceUserInfo
   nodes_count?: number // Computed property for sorting
-  law_firms_text?: string // Computed property for sorting law firms
 }
 
 // Combined type for table rows (folders + journeys)
@@ -184,27 +182,44 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const loadData = async () => {
     try {
       setLoading(true)
-      const projectsData = await getProjects()
+      
+      // Parallelize independent operations
+      const [projectsData, foldersData, lawFirmsData, allJourneys] = await Promise.all([
+        getProjects(),
+        getUserJourneyFolders(),
+        getLawFirms(),
+        getUserJourneys()
+      ])
+      
       setProjects(projectsData)
-
-      // Load all folders
-      const foldersData = await getUserJourneyFolders()
       setFolders(foldersData)
-
-      // Count journeys in each folder
-      const counts: Record<string, number> = {}
-      for (const folder of foldersData) {
-        const count = await countJourneysInFolder(folder.id)
-        counts[folder.id] = count
-      }
-      setFolderJourneyCounts(counts)
-
-      // Load all law firms
-      const lawFirmsData = await getLawFirms()
       setLawFirms(lawFirmsData)
 
-      // Load all journeys (including those without projects)
-      const allJourneys = await getUserJourneys()
+      // Batch fetch folder counts - get all journeys with folder_id in one query
+      const counts: Record<string, number> = {}
+      if (foldersData.length > 0 && supabase) {
+        const folderIds = foldersData.map(f => f.id)
+        // Initialize all folders with 0 count
+        folderIds.forEach(id => {
+          counts[id] = 0
+        })
+        
+        // Fetch all journeys with folder_id in one query
+        const { data: journeysWithFolders, error } = await supabase
+          .from('user_journeys')
+          .select('folder_id')
+          .in('folder_id', folderIds)
+        
+        if (!error && journeysWithFolders) {
+          // Count journeys per folder
+          journeysWithFolders.forEach(journey => {
+            if (journey.folder_id) {
+              counts[journey.folder_id] = (counts[journey.folder_id] || 0) + 1
+            }
+          })
+        }
+      }
+      setFolderJourneyCounts(counts)
       
       // Get unique user IDs from created_by and updated_by (journeys and folders)
       const userIds = new Set<string>()
@@ -248,35 +263,25 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       // Store users map in state for use in table
       setUsersMap(usersMap)
       
-      // Enrich with project data, folder data, law firms, and user information
-      const journeysWithData: UserJourneyWithProject[] = await Promise.all(
-        allJourneys.map(async journey => {
-          const project = journey.project_id 
-            ? projectsData.find(p => p.id === journey.project_id)
-            : undefined
-          
-          const folder = journey.folder_id 
-            ? foldersData.find(f => f.id === journey.folder_id)
-            : undefined
-          
-          // Get law firm IDs for this journey
-          const lawFirmIds = await getUserJourneyLawFirms(journey.id)
-          
-          // Get full law firm objects
-          const lawFirms = lawFirmsData.filter(firm => lawFirmIds.includes(firm.id))
-          
-          return {
-            ...journey,
-            project,
-            folder,
-            lawFirms,
-            createdByUser: journey.created_by ? usersMap.get(journey.created_by) : undefined,
-            updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined,
-            nodes_count: journey.flow_data?.nodes?.length || 0, // Computed property for sorting
-            law_firms_text: lawFirms.map(firm => firm.name).join(', ') || '' // Computed property for sorting law firms
-          }
-        })
-      )
+      // Enrich with project data, folder data, and user information
+      const journeysWithData: UserJourneyWithProject[] = allJourneys.map(journey => {
+        const project = journey.project_id 
+          ? projectsData.find(p => p.id === journey.project_id)
+          : undefined
+        
+        const folder = journey.folder_id 
+          ? foldersData.find(f => f.id === journey.folder_id)
+          : undefined
+        
+        return {
+          ...journey,
+          project,
+          folder,
+          createdByUser: journey.created_by ? usersMap.get(journey.created_by) : undefined,
+          updatedByUser: journey.updated_by ? usersMap.get(journey.updated_by) : undefined,
+          nodes_count: journey.flow_data?.nodes?.length || 0 // Computed property for sorting
+        }
+      })
       
       setUserJourneys(journeysWithData)
     } catch (error) {
@@ -379,7 +384,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   })()
 
   // Handle edit
-  const handleEditClick = (journey: UserJourneyWithProject) => {
+  const handleEditClick = async (journey: UserJourneyWithProject) => {
     setJourneyToEdit(journey)
     setEditForm({
       name: journey.name,
@@ -388,8 +393,16 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       status: journey.status || 'draft',
       project_id: journey.project_id || ''
     })
-    // Set selected law firms
-    setSelectedLawFirmIds(journey.lawFirms?.map(firm => firm.id) || [])
+    
+    // Fetch law firm associations lazily when opening edit modal
+    try {
+      const lawFirmIds = await getUserJourneyLawFirms(journey.id)
+      setSelectedLawFirmIds(lawFirmIds)
+    } catch (error) {
+      console.error('Error fetching law firm associations:', error)
+      setSelectedLawFirmIds([])
+    }
+    
     setLawFirmSearchQuery('')
     setShowEditModal(true)
   }
@@ -409,9 +422,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       // Save law firm associations
       await setUserJourneyLawFirms(journeyToEdit.id, selectedLawFirmIds)
       
-      // Get updated law firms for local state
-      const updatedLawFirms = lawFirms.filter(firm => selectedLawFirmIds.includes(firm.id))
-      
       // Update local state
       setUserJourneys(prev => prev.map(j => 
         j.id === journeyToEdit.id 
@@ -422,8 +432,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               layout: editForm.layout,
               status: editForm.status,
               project_id: editForm.project_id || null,
-              project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined,
-              lawFirms: updatedLawFirms
+              project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined
             }
           : j
       ))
@@ -481,8 +490,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       )
       
       if (duplicated) {
-        // Copy law firm associations
-        const lawFirmIds = journeyToDuplicate.lawFirms?.map(firm => firm.id) || []
+        // Copy law firm associations - fetch them first
+        const lawFirmIds = await getUserJourneyLawFirms(journeyToDuplicate.id)
         await setUserJourneyLawFirms(duplicated.id, lawFirmIds)
         
         // Assign to the same folder as the original journey
