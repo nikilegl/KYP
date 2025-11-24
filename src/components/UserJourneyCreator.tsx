@@ -4298,6 +4298,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             setThirdParties(updatedThirdParties)
           }
         }}
+        onPlatformCreated={async (platform) => {
+          // Refresh platforms list so nodes can display the new logo
+          const updatedPlatforms = await getPlatforms()
+          setPlatforms(updatedPlatforms)
+        }}
       />
 
       {/* Delete Confirmation Modal */}
