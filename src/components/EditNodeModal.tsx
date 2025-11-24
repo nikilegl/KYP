@@ -28,6 +28,7 @@ interface EditNodeModalProps {
   userRoleEmojiOverrides?: Record<string, string> // Journey-specific emoji overrides: { roleId: emoji }
   onUpdateEmojiOverride?: (roleId: string, emoji: string | null) => void // Callback to update emoji override for all nodes. Pass null to delete override and use global emoji.
   onCreateUserRole?: (name: string, colour: string, icon?: string) => Promise<UserRole | null> // Callback to create a new user role
+  onPlatformCreated?: (platform: Platform) => void // Callback when a platform is created to refresh parent's platform list
 }
 
 interface BulletPoint {
@@ -241,6 +242,7 @@ export function EditNodeModal({
   userRoleEmojiOverrides = {},
   onUpdateEmojiOverride,
   onCreateUserRole,
+  onPlatformCreated,
 }: EditNodeModalProps) {
   const bulletInputRefs = useRef<(HTMLInputElement | null)[]>([])
   
@@ -1340,8 +1342,9 @@ export function EditNodeModal({
                       <button
                         type="button"
                         onClick={() => {
-                          setShowAddPlatformModal(true)
                           setShowPlatformDropdown(false)
+                          setHighlightedIndex(-1)
+                          setShowAddPlatformModal(true)
                         }}
                         className="w-full text-left text-blue-600 hover:text-blue-800 font-medium"
                       >
@@ -1399,22 +1402,43 @@ export function EditNodeModal({
         onClose={() => {
           setShowAddPlatformModal(false)
         }}
-        onSuccess={(platform) => {
-          // Reload platforms
-          const loadPlatforms = async () => {
-            const platformsData = await getPlatforms()
-            setPlatforms(platformsData)
-            // Select the newly created platform
-            setSelectedPlatform(platform)
-            setPlatformSearchQuery(platform.name)
-            setFormData(prev => ({ 
-              ...prev, 
-              variant: platform.name as NodeFormData['variant'],
-              customPlatformName: ''
-            }))
-          }
-          loadPlatforms()
+        onSuccess={async (platform) => {
+          // Immediately update UI with the platform we already have (no database fetch needed)
+          // Add the new platform to the local platforms list if it doesn't exist
+          setPlatforms(prev => {
+            const exists = prev.some(p => p.id === platform.id)
+            return exists ? prev : [...prev, platform]
+          })
+          
+          // Select the newly created platform immediately
+          setSelectedPlatform(platform)
+          setPlatformSearchQuery(platform.name)
+          setFormData(prev => ({ 
+            ...prev, 
+            variant: platform.name as NodeFormData['variant'],
+            customPlatformName: ''
+          }))
+          
+          // Close the platform dropdown
+          setShowPlatformDropdown(false)
+          setHighlightedIndex(-1)
+          
+          // Close the Add Platform modal immediately
           setShowAddPlatformModal(false)
+          
+          // Refresh platforms in the background (non-blocking) to ensure sync
+          // Also notify parent component to refresh platforms
+          if (onPlatformCreated) {
+            onPlatformCreated(platform)
+          }
+          
+          // Refresh platforms list in background for consistency
+          getPlatforms().then(platformsData => {
+            setPlatforms(platformsData)
+          }).catch(error => {
+            console.error('Error refreshing platforms:', error)
+            // If refresh fails, we still have the platform in local state, so UI is fine
+          })
         }}
         initialName={platformSearchQuery.trim()}
       />

@@ -486,7 +486,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         journeyToDuplicate.description || '',
         journeyToDuplicate.flow_data || { nodes: [], edges: [] },
         journeyToDuplicate.project_id || null,
-        journeyToDuplicate.layout || 'vertical'
+        journeyToDuplicate.layout || 'vertical',
+        journeyToDuplicate.status || 'personal'
       )
       
       if (duplicated) {

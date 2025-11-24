@@ -110,6 +110,7 @@ export function PublicUserJourneyView() {
         showHandles={true}
         thirdParties={thirdParties}
         platforms={platforms}
+        connectedEdges={edges}
         onEdit={undefined} // No editing in public view
       />
     ),
@@ -119,6 +120,7 @@ export function PublicUserJourneyView() {
         showHandles={true}
         thirdParties={thirdParties}
         platforms={platforms}
+        connectedEdges={edges}
         onEdit={undefined}
       />
     ),
@@ -128,6 +130,7 @@ export function PublicUserJourneyView() {
         showHandles={true}
         thirdParties={thirdParties}
         platforms={platforms}
+        connectedEdges={edges}
         onEdit={undefined}
       />
     ),
@@ -137,6 +140,7 @@ export function PublicUserJourneyView() {
         showHandles={true}
         thirdParties={thirdParties}
         platforms={platforms}
+        connectedEdges={edges}
         onEdit={undefined}
       />
     ),
@@ -146,6 +150,7 @@ export function PublicUserJourneyView() {
         showHandles={false}
         thirdParties={thirdParties}
         platforms={platforms}
+        connectedEdges={edges}
         onEdit={undefined}
       />
     ),
@@ -155,7 +160,7 @@ export function PublicUserJourneyView() {
         onEdit={undefined}
       />
     ),
-  }), [thirdParties, platforms])
+  }), [thirdParties, platforms, edges])
 
   // Define edge types for read-only view
   const edgeTypes: EdgeTypes = React.useMemo(() => ({
