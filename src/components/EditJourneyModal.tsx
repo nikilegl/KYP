@@ -26,6 +26,7 @@ interface EditJourneyModalProps {
   onLawFirmToggle: (firmId: string, checked: boolean) => void
   onAddLawFirmClick: () => void
   saveDisabled?: boolean
+  isCreating?: boolean // If true, shows "Create User Journey" title and "Create Journey" button
 }
 
 export function EditJourneyModal({
@@ -47,7 +48,8 @@ export function EditJourneyModal({
   onLawFirmSearchChange,
   onLawFirmToggle,
   onAddLawFirmClick,
-  saveDisabled = false
+  saveDisabled = false,
+  isCreating = false
 }: EditJourneyModalProps) {
   // Handle Enter key to trigger Save Details
   useEffect(() => {
@@ -78,7 +80,7 @@ export function EditJourneyModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit Journey Details"
+      title={isCreating ? "Create User Journey" : "Edit Journey Details"}
       size="md"
       closeOnOverlayClick={false}
       footerContent={
@@ -91,7 +93,7 @@ export function EditJourneyModal({
             onClick={onSave}
             disabled={saveDisabled || !journeyName.trim()}
           >
-            Save Details
+            {isCreating ? "Create Journey" : "Save Details"}
           </Button>
         </div>
       }

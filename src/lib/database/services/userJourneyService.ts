@@ -210,7 +210,8 @@ export const createUserJourney = async (
   description: string = '',
   flowData: { nodes: Node[]; edges: Edge[] },
   projectId?: string | null,
-  layout: 'vertical' | 'horizontal' = 'vertical'
+  layout: 'vertical' | 'horizontal' = 'vertical',
+  status: 'personal' | 'shared' = 'personal'
 ): Promise<UserJourney | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
@@ -224,6 +225,7 @@ export const createUserJourney = async (
         name,
         description,
         layout,
+        status,
         flow_data: flowData,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -251,6 +253,7 @@ export const createUserJourney = async (
           name,
           description,
           layout,
+          status,
           flow_data: flowData,
           created_by: user?.id || null,
           updated_by: user?.id || null

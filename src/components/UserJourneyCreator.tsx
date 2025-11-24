@@ -363,6 +363,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     // 3. Modal is not already open
     // 4. We haven't auto-opened it before (prevents reopening after user closes it)
     if (!loading && !currentJourneyId && !showNameEditModal && !hasAutoOpenedModal) {
+      // Clear journey name for new journey creation
+      setJourneyName('')
       setShowNameEditModal(true)
       setHasAutoOpenedModal(true)
     }
@@ -1309,7 +1311,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           journeyDescription,
           flowData,
           selectedProjectId || null,
-          journeyLayout
+          journeyLayout,
+          journeyStatus
         )
         
         if (created) {
@@ -3925,7 +3928,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                     journeyDescription,
                     flowData,
                     selectedProjectId || null,
-                    journeyLayout
+                    journeyLayout,
+                    journeyStatus
                   )
                   if (created) {
                     await setUserJourneyLawFirms(created.id, selectedLawFirmIds)
@@ -4410,6 +4414,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       {/* Edit Journey Details Modal */}
       <EditJourneyModal
         isOpen={showNameEditModal}
+        isCreating={!currentJourneyId}
         onClose={() => {
           setShowNameEditModal(false)
           setSelectedLawFirmIds([])
@@ -4452,7 +4457,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 journeyDescription,
                 flowData,
                 selectedProjectId || null,
-                journeyLayout
+                journeyLayout,
+                journeyStatus
               )
               
               if (created) {
