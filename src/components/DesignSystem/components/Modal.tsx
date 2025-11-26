@@ -24,7 +24,7 @@ export function Modal({
   children,
   size = 'md',
   showCloseButton = true,
-  closeOnOverlayClick = true,
+  closeOnOverlayClick = false,
   closeOnEscape = true,
   className = '',
   headerContent,

@@ -12,7 +12,13 @@ export function DesignLightbox({ isOpen, imageUrl, onClose }: DesignLightboxProp
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => {
+        // Prevent closing on overlay click - only close via close button
+        if (e.target === e.currentTarget) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }}
     >
       <div className="relative p-4">
         <button

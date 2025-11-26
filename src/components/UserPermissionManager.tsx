@@ -2,11 +2,13 @@ import React, { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { UserPermissionForm } from './UserPermissionManager/UserPermissionForm'
 import { UserPermissionTable } from './UserPermissionManager/UserPermissionTable'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import type { UserPermission, Stakeholder } from '../lib/supabase'
 
 interface UserPermissionManagerProps {
   userPermissions: UserPermission[]
   stakeholders?: Stakeholder[]
+  loading?: boolean
   onCreateUserPermission: (name: string, description?: string) => Promise<void>
   onUpdateUserPermission: (permissionId: string, updates: { name?: string; description?: string }) => Promise<void>
   onDeleteUserPermission: (permissionId: string) => Promise<void>
@@ -16,6 +18,7 @@ interface UserPermissionManagerProps {
 export function UserPermissionManager({ 
   userPermissions, 
   stakeholders = [],
+  loading = false,
   onCreateUserPermission, 
   onUpdateUserPermission, 
   onDeleteUserPermission,
@@ -59,6 +62,14 @@ export function UserPermissionManager({
     } finally {
       setUpdatingUserPermission(false)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <LoadingState message="Loading user permissions..." size="lg" />
+      </div>
+    )
   }
 
   return (

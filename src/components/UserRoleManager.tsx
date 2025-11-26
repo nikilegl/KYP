@@ -3,11 +3,13 @@ import { Plus } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { UserRoleForm } from './UserRoleManager/UserRoleForm'
 import { UserRoleTable } from './UserRoleManager/UserRoleTable'
-import type { UserRole } from '../lib/supabase'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
+import type { UserRole, Stakeholder } from '../lib/supabase'
 
 interface UserRoleManagerProps {
   userRoles: UserRole[]
   stakeholders?: Stakeholder[]
+  loading?: boolean
   onCreateUserRole: (name: string, colour: string, icon?: string) => Promise<void>
   onUpdateUserRole: (roleId: string, updates: { name?: string; colour?: string; icon?: string }) => Promise<boolean>
   onDeleteUserRole: (roleId: string) => Promise<void>
@@ -17,6 +19,7 @@ interface UserRoleManagerProps {
 export function UserRoleManager({ 
   userRoles, 
   stakeholders = [],
+  loading = false,
   onCreateUserRole, 
   onUpdateUserRole, 
   onDeleteUserRole,
@@ -140,6 +143,13 @@ export function UserRoleManager({
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <LoadingState message="Loading user roles..." size="lg" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-6">

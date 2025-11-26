@@ -418,6 +418,7 @@ export function MainContentRenderer({
           userPermissions={userPermissions}
           stakeholders={stakeholders}
           noteTemplates={noteTemplates}
+          loading={loadingBackgroundData}
           onCreateUser={onCreateUser}
           onUpdateWorkspaceUser={onUpdateWorkspaceUser}
           onUpdateWorkspaceUserRole={onUpdateWorkspaceUserRole}

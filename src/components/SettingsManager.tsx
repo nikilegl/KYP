@@ -23,6 +23,7 @@ interface SettingsManagerProps {
   userPermissions: UserPermission[]
   stakeholders: Stakeholder[]
   noteTemplates: NoteTemplate[]
+  loading?: boolean
   
   // Team management handlers
   onCreateUser: (email: string, role: 'admin' | 'member', fullName?: string, team?: 'Design' | 'Product' | 'Engineering' | 'Other') => Promise<{ user: WorkspaceUser | null, error: string | null }>
@@ -62,6 +63,7 @@ export function SettingsManager({
   userPermissions,
   stakeholders,
   noteTemplates,
+  loading = false,
   onCreateUser,
   onUpdateWorkspaceUser,
   onUpdateWorkspaceUserRole,
@@ -99,6 +101,7 @@ export function SettingsManager({
           <UserPermissionManager 
             userPermissions={userPermissions}
             stakeholders={stakeholders}
+            loading={loading}
             onCreateUserPermission={onCreateUserPermission}
             onUpdateUserPermission={onUpdateUserPermission}
             onDeleteUserPermission={onDeleteUserPermission}
@@ -110,6 +113,7 @@ export function SettingsManager({
           <UserRoleManager 
             userRoles={userRoles}
             stakeholders={stakeholders}
+            loading={loading}
             onCreateUserRole={onCreateUserRole}
             onUpdateUserRole={onUpdateUserRoleDefinition}
             onDeleteUserRole={onDeleteUserRole}
@@ -120,6 +124,7 @@ export function SettingsManager({
         return (
           <PlatformManager 
             platforms={platforms}
+            loading={loading}
             onCreatePlatform={onCreatePlatform}
             onUpdatePlatform={onUpdatePlatform}
             onDeletePlatform={onDeletePlatform}

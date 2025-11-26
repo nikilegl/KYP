@@ -3,10 +3,12 @@ import { Plus, Server, Search } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { DataTable, type Column } from './DesignSystem/components/DataTable'
 import { AddPlatformModal } from './AddPlatformModal'
+import { LoadingState } from './DesignSystem/components/LoadingSpinner'
 import type { Platform } from '../lib/supabase'
 
 interface PlatformManagerProps {
   platforms: Platform[]
+  loading?: boolean
   onCreatePlatform: (name: string, colour: string, logo?: string) => Promise<void>
   onUpdatePlatform: (platformId: string, updates: { name?: string; colour?: string; logo?: string }) => Promise<boolean>
   onDeletePlatform: (platformId: string) => Promise<void>
@@ -14,6 +16,7 @@ interface PlatformManagerProps {
 
 export function PlatformManager({ 
   platforms, 
+  loading = false,
   onCreatePlatform, 
   onUpdatePlatform, 
   onDeletePlatform
@@ -101,6 +104,14 @@ export function PlatformManager({
       return 0
     })
   }, [platforms, searchQuery])
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <LoadingState message="Loading platforms..." size="lg" />
+      </div>
+    )
+  }
 
   // Define columns for DataTable
   const columns: Column<Platform>[] = [
