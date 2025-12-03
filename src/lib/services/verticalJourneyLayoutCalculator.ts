@@ -53,7 +53,7 @@ export function calculateVerticalJourneyLayout(
 ): LayoutResult {
   // Constants for vertical layout
   const GRID_SIZE = 8
-  const VERTICAL_GAP = 36
+  const VERTICAL_GAP = 40 // Minimum 40px vertical gap between nodes
   const HORIZONTAL_GAP = 48
   const NODE_WIDTH = 320
   const DEFAULT_CENTER_X = 288 // Default center position
