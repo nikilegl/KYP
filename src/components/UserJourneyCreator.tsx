@@ -1578,11 +1578,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         return baseNode
       })
 
-      // Convert analyzed edges to React Flow edges with updated node references
+      // Determine layout for handle assignment
+      // If importing into existing journey, use current layout; otherwise use AI-detected layout (default to vertical)
+      const layoutForHandles = nodes.length > 0 
+        ? journeyLayout 
+        : (analyzedJourney.layout || 'vertical')
+      
+      // Assign handles based on layout (default to vertical)
+      // Vertical: connect from bottom to top
+      // Horizontal: connect from right to left
+      const defaultSourceHandle = layoutForHandles === 'horizontal' ? 'source-right' : 'source-bottom'
+      const defaultTargetHandle = layoutForHandles === 'horizontal' ? 'target-left' : 'target-top'
+      
+      // Convert analyzed edges to React Flow edges with updated node references and handle assignments
       const flowEdges: Edge[] = analyzedJourney.edges.map((edge, index) => ({
         id: `edge-${timestamp}-${index}`,
         source: idMapping.get(edge.source) || edge.source,
         target: idMapping.get(edge.target) || edge.target,
+        sourceHandle: edge.sourceHandle || defaultSourceHandle,
+        targetHandle: edge.targetHandle || defaultTargetHandle,
         type: edge.type || 'custom',
         data: edge.data || { label: '' }
       }))
@@ -1730,11 +1744,23 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       })
 
-      // Convert edges with updated node references
+      // Determine layout for handle assignment
+      // If importing into existing journey, use current layout; otherwise use selected layout
+      const layoutForHandles = nodes.length > 0 ? journeyLayout : importTranscriptLayout
+      
+      // Assign handles based on layout (default to vertical)
+      // Vertical: connect from bottom to top
+      // Horizontal: connect from right to left
+      const defaultSourceHandle = layoutForHandles === 'horizontal' ? 'source-right' : 'source-bottom'
+      const defaultTargetHandle = layoutForHandles === 'horizontal' ? 'target-left' : 'target-top'
+      
+      // Convert edges with updated node references and handle assignments
       const importedEdges = (journeyData.edges || []).map((edge: any, index: number) => ({
         id: `edge-${timestamp}-${index}`,
         source: idMapping.get(edge.source) || edge.source,
         target: idMapping.get(edge.target) || edge.target,
+        sourceHandle: edge.sourceHandle || defaultSourceHandle,
+        targetHandle: edge.targetHandle || defaultTargetHandle,
         type: edge.type || 'custom',
         data: edge.data || { label: '' }
       }))
@@ -1899,9 +1925,24 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setJourneyDescription(updatedJourney.description)
       }
       
+      // Assign handles based on current journey layout (default to vertical)
+      // Vertical: connect from bottom to top
+      // Horizontal: connect from right to left
+      const defaultSourceHandle = journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'
+      const defaultTargetHandle = journeyLayout === 'horizontal' ? 'target-left' : 'target-top'
+      
+      // Process edges with handle assignments
+      const updatedEdges = (updatedJourney.edges || []).map((edge: any) => ({
+        ...edge,
+        sourceHandle: edge.sourceHandle || defaultSourceHandle,
+        targetHandle: edge.targetHandle || defaultTargetHandle,
+        type: edge.type || 'custom',
+        data: edge.data || { label: edge.label || '' }
+      }))
+      
       // Apply the updated nodes and edges
       setNodes(updatedNodes)
-      setEdges(updatedJourney.edges || [])
+      setEdges(updatedEdges)
       
       // Close modal and reset state
       setShowEditWithAIModal(false)
