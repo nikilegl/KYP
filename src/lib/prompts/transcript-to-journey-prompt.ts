@@ -24,6 +24,7 @@ CRITICAL RULES - CONTENT EXTRACTION ONLY:
 - Do NOT calculate or output any position fields (x, y, width, height)
 - Do NOT try to replicate layout or spacing - that is handled by a separate system
 - Focus on accuracy of content and connections
+- NOTE: The layout system will automatically position nodes with at least 40px vertical spacing between them for clear readability
 
 DETECTING MULTIPLE JOURNEYS (CRITICAL):
 - A transcript may describe MULTIPLE SEPARATE user journeys that should NOT be connected to each other
