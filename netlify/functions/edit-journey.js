@@ -73,6 +73,8 @@ CRITICAL RULES:
 - When replacing text: update labels, bulletPoints, thirdPartyName, variant
 - When adding nodes: generate unique IDs (e.g., "node-16", "node-17"), position on grid
 - When removing nodes: also remove connected edges
+- IMPORTANT: For edges, ALWAYS preserve sourceHandle and targetHandle properties exactly as provided (e.g., "source-top", "target-bottom", "source-left", "target-right")
+- Do NOT change edge handle positions unless explicitly requested - they control how edges connect to nodes
 - Preserve all properties not mentioned in the instruction
 
 SELECTION-AWARE EDITING:

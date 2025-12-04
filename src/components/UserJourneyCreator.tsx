@@ -25,8 +25,8 @@ import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNo
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { getNodesInRegion, getEdgesForNodes, shiftNodesToOrigin, type RegionBounds } from '../utils/exportUtils'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
-import { Modal } from './DesignSystem/components/Modal'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
+import { Modal, ConfirmModal } from './DesignSystem/components/Modal'
 import { OptionsMenu } from './DesignSystem/components/OptionsMenu'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
@@ -37,7 +37,7 @@ import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/su
 import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
-import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney } from '../lib/database/services/userJourneyService'
 import { assignUserJourneysToFolder, getUserJourneyFolders, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -292,6 +292,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [showDeleteJourneyModal, setShowDeleteJourneyModal] = useState(false)
+  const [deletingJourney, setDeletingJourney] = useState(false)
   const [userRoleEmojiOverrides, setUserRoleEmojiOverrides] = useState<Record<string, string>>({})
   // Store handle arrow states: { [nodeId]: [handleId1, handleId2, ...] }
   const [handleArrowStates, setHandleArrowStates] = useState<Record<string, string[]>>({})
@@ -908,6 +910,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             source: newSourceId,
             target: newTargetId,
+            // Preserve handles when pasting - only assign defaults if truly missing
+            sourceHandle: edge.sourceHandle ?? (journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'),
+            targetHandle: edge.targetHandle ?? (journeyLayout === 'horizontal' ? 'target-left' : 'target-top'),
             data: {
               ...edge.data
             }
@@ -1016,6 +1021,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         id: `edge-${timestamp}-${index}`,
         source: newNodeIdMap.get(edge.source) || edge.source,
         target: newNodeIdMap.get(edge.target) || edge.target,
+        // Preserve handles when duplicating regions - only assign defaults if truly missing
+        sourceHandle: edge.sourceHandle ?? (journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'),
+        targetHandle: edge.targetHandle ?? (journeyLayout === 'horizontal' ? 'target-left' : 'target-top'),
         selected: false
       }))
 
@@ -1036,6 +1044,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [nodes, edges, setNodes, setEdges])
 
   // Keyboard shortcuts for copy/paste/duplicate and comments toggle
+  // Note: saveJourney handler is added later after saveJourney is defined
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isModifierPressed = event.metaKey || event.ctrlKey
@@ -1278,9 +1287,28 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     try {
       // Sort nodes to ensure parents come before children
       const sortedNodes = sortNodesForSaving(nodes)
+      
+      // Ensure all edges have handles before saving (assign defaults if missing)
+      const edgesWithHandles = edges.map(edge => {
+        // If edge already has handles, keep them
+        if (edge.sourceHandle && edge.targetHandle) {
+          return edge
+        }
+        
+        // Assign default handles based on layout if missing
+        const defaultSourceHandle = journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'
+        const defaultTargetHandle = journeyLayout === 'horizontal' ? 'target-left' : 'target-top'
+        
+        return {
+          ...edge,
+          sourceHandle: edge.sourceHandle || defaultSourceHandle,
+          targetHandle: edge.targetHandle || defaultTargetHandle
+        }
+      })
+      
       const flowData = { 
         nodes: sortedNodes, 
-        edges,
+        edges: edgesWithHandles,
         userRoleEmojiOverrides,
         handleArrowStates
       }
@@ -1340,6 +1368,28 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, journeyStatus, selectedLawFirmIds])
 
+  // Keyboard shortcut for save (Cmd/Ctrl+S) - defined after saveJourney
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Handle Command/Ctrl+S to save journey
+      if (isModifierPressed && (event.key === 's' || event.key === 'S')) {
+        event.preventDefault()
+        saveJourney()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [saveJourney])
+
   // Export journey as JSON
   const exportJourney = useCallback(() => {
     const journeyData = {
@@ -1358,6 +1408,28 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     linkElement.setAttribute('download', exportFileDefaultName)
     linkElement.click()
   }, [journeyName, journeyDescription, nodes, edges])
+
+  // Delete user journey
+  const handleDeleteJourney = useCallback(async () => {
+    if (!currentJourneyId) return
+    
+    try {
+      setDeletingJourney(true)
+      const success = await deleteUserJourney(currentJourneyId)
+      
+      if (success) {
+        // Navigate back to user journeys page
+        navigate('/user-journeys')
+      } else {
+        alert('Failed to delete journey')
+        setDeletingJourney(false)
+      }
+    } catch (error) {
+      console.error('Error deleting journey:', error)
+      alert('Failed to delete journey')
+      setDeletingJourney(false)
+    }
+  }, [currentJourneyId, navigate])
 
   // Import journey from pasted JSON text
   const handleImportFromJson = useCallback(() => {
@@ -1441,8 +1513,51 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       setJourneyName(journeyData.name || 'Imported Journey')
       setJourneyDescription(journeyData.description || '')
       
+      // Process edges to ensure handles are properly formatted
+      const importedEdges = (journeyData.edges || []).map((edge: any) => {
+        // Determine default handles based on current journey layout
+        const defaultSourceHandle = journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'
+        const defaultTargetHandle = journeyLayout === 'horizontal' ? 'target-left' : 'target-top'
+        
+        let sourceHandle = edge.sourceHandle
+        let targetHandle = edge.targetHandle
+        
+        // Migrate old format handles if needed
+        if (sourceHandle && typeof sourceHandle === 'string' && 
+            !sourceHandle.startsWith('source-') && !sourceHandle.startsWith('target-')) {
+          const validSides = ['top', 'bottom', 'left', 'right']
+          if (validSides.includes(sourceHandle)) {
+            sourceHandle = `source-${sourceHandle}`
+          } else {
+            sourceHandle = defaultSourceHandle
+          }
+        } else if (!sourceHandle) {
+          sourceHandle = defaultSourceHandle
+        }
+        
+        if (targetHandle && typeof targetHandle === 'string' && 
+            !targetHandle.startsWith('source-') && !targetHandle.startsWith('target-')) {
+          const validSides = ['top', 'bottom', 'left', 'right']
+          if (validSides.includes(targetHandle)) {
+            targetHandle = `target-${targetHandle}`
+          } else {
+            targetHandle = defaultTargetHandle
+          }
+        } else if (!targetHandle) {
+          targetHandle = defaultTargetHandle
+        }
+        
+        return {
+          ...edge,
+          sourceHandle,
+          targetHandle,
+          type: edge.type || 'custom',
+          data: edge.data || { label: edge.label || '' }
+        }
+      })
+      
       setNodes(importedNodes)
-      setEdges(journeyData.edges || [])
+      setEdges(importedEdges)
       
       // Close modal and reset state
       setShowImportJsonModal(false)
@@ -1595,8 +1710,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         id: `edge-${timestamp}-${index}`,
         source: idMapping.get(edge.source) || edge.source,
         target: idMapping.get(edge.target) || edge.target,
-        sourceHandle: edge.sourceHandle || defaultSourceHandle,
-        targetHandle: edge.targetHandle || defaultTargetHandle,
+        // Only assign defaults if handles are truly missing (null/undefined), preserve existing handles
+        sourceHandle: edge.sourceHandle ?? defaultSourceHandle,
+        targetHandle: edge.targetHandle ?? defaultTargetHandle,
         type: edge.type || 'custom',
         data: edge.data || { label: '' }
       }))
@@ -1759,8 +1875,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         id: `edge-${timestamp}-${index}`,
         source: idMapping.get(edge.source) || edge.source,
         target: idMapping.get(edge.target) || edge.target,
-        sourceHandle: edge.sourceHandle || defaultSourceHandle,
-        targetHandle: edge.targetHandle || defaultTargetHandle,
+        // Only assign defaults if handles are truly missing (null/undefined), preserve existing handles
+        sourceHandle: edge.sourceHandle ?? defaultSourceHandle,
+        targetHandle: edge.targetHandle ?? defaultTargetHandle,
         type: edge.type || 'custom',
         data: edge.data || { label: '' }
       }))
@@ -1845,6 +1962,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const hasSelection = selectedNodes.length > 0
 
 
+      // Create a map of original edges by ID to preserve handles
+      const originalEdgesMap = new Map(
+        edges.map(edge => [
+          edge.id,
+          {
+            sourceHandle: edge.sourceHandle,
+            targetHandle: edge.targetHandle,
+            type: edge.type,
+            data: edge.data
+          }
+        ])
+      )
+
       // Prepare current journey data for AI (send only essential data)
       const currentJourney = {
         name: journeyName,
@@ -1869,6 +1999,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           id: edge.id,
           source: edge.source,
           target: edge.target,
+          sourceHandle: edge.sourceHandle, // Include handle information
+          targetHandle: edge.targetHandle, // Include handle information
           label: edge.label || '',
           data: { label: edge.data?.label || '' }
         }))
@@ -1931,14 +2063,27 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       const defaultSourceHandle = journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'
       const defaultTargetHandle = journeyLayout === 'horizontal' ? 'target-left' : 'target-top'
       
-      // Process edges with handle assignments
-      const updatedEdges = (updatedJourney.edges || []).map((edge: any) => ({
-        ...edge,
-        sourceHandle: edge.sourceHandle || defaultSourceHandle,
-        targetHandle: edge.targetHandle || defaultTargetHandle,
-        type: edge.type || 'custom',
-        data: edge.data || { label: edge.label || '' }
-      }))
+      // Process edges with handle assignments, preserving original handles when possible
+      const updatedEdges = (updatedJourney.edges || []).map((edge: any) => {
+        // Try to preserve original handles from the existing edge
+        const originalEdge = originalEdgesMap.get(edge.id)
+        
+        // Priority: AI-provided handles > original handles > defaults
+        const sourceHandle = edge.sourceHandle || originalEdge?.sourceHandle || defaultSourceHandle
+        const targetHandle = edge.targetHandle || originalEdge?.targetHandle || defaultTargetHandle
+        
+        // Preserve original edge type and data if available
+        const edgeType = edge.type || originalEdge?.type || 'custom'
+        const edgeData = edge.data || originalEdge?.data || { label: edge.label || '' }
+        
+        return {
+          ...edge,
+          sourceHandle,
+          targetHandle,
+          type: edgeType,
+          data: edgeData
+        }
+      })
       
       // Apply the updated nodes and edges
       setNodes(updatedNodes)
@@ -4148,6 +4293,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   },
                   disabled: !nodes.some((node) => node.selected && node.type === 'highlightRegion'),
                   helperText: 'Select a region to export'
+                },
+                {
+                  label: '',
+                  onClick: () => {},
+                  divider: true
+                },
+                {
+                  label: 'Delete user journey',
+                  icon: Trash2,
+                  onClick: () => setShowDeleteJourneyModal(true),
+                  disabled: !currentJourneyId
                 }
               ]}
             />
@@ -5072,6 +5228,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           </div>
         </Modal>
       )}
+
+      {/* Delete Journey Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteJourneyModal}
+        onClose={() => setShowDeleteJourneyModal(false)}
+        title="Delete User Journey"
+        message={`Are you sure you want to delete "${journeyName}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteJourney}
+        variant="danger"
+        loading={deletingJourney}
+      />
 
     </div>
   )

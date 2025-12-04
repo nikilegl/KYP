@@ -226,7 +226,13 @@ export function PublicUserJourneyView() {
           zoomOnPinch={true}
           panOnScroll={false}
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <Background 
+            variant={BackgroundVariant.Dots} 
+            gap={12} 
+            size={1}
+            color="#9ca3af"
+            bgColor="#e5e7eb"
+          />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
