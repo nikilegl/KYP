@@ -25,8 +25,8 @@ import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNo
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { getNodesInRegion, getEdgesForNodes, shiftNodesToOrigin, type RegionBounds } from '../utils/exportUtils'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
-import { Modal } from './DesignSystem/components/Modal'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
+import { Modal, ConfirmModal } from './DesignSystem/components/Modal'
 import { OptionsMenu } from './DesignSystem/components/OptionsMenu'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
 import { ImportJourneyTranscriptModal } from './ImportJourneyTranscriptModal'
@@ -37,7 +37,7 @@ import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/su
 import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
-import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney } from '../lib/database/services/userJourneyService'
 import { assignUserJourneysToFolder, getUserJourneyFolders, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -292,6 +292,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [showDeleteJourneyModal, setShowDeleteJourneyModal] = useState(false)
+  const [deletingJourney, setDeletingJourney] = useState(false)
   const [userRoleEmojiOverrides, setUserRoleEmojiOverrides] = useState<Record<string, string>>({})
   // Store handle arrow states: { [nodeId]: [handleId1, handleId2, ...] }
   const [handleArrowStates, setHandleArrowStates] = useState<Record<string, string[]>>({})
@@ -1358,6 +1360,28 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     linkElement.setAttribute('download', exportFileDefaultName)
     linkElement.click()
   }, [journeyName, journeyDescription, nodes, edges])
+
+  // Delete user journey
+  const handleDeleteJourney = useCallback(async () => {
+    if (!currentJourneyId) return
+    
+    try {
+      setDeletingJourney(true)
+      const success = await deleteUserJourney(currentJourneyId)
+      
+      if (success) {
+        // Navigate back to user journeys page
+        navigate('/user-journeys')
+      } else {
+        alert('Failed to delete journey')
+        setDeletingJourney(false)
+      }
+    } catch (error) {
+      console.error('Error deleting journey:', error)
+      alert('Failed to delete journey')
+      setDeletingJourney(false)
+    }
+  }, [currentJourneyId, navigate])
 
   // Import journey from pasted JSON text
   const handleImportFromJson = useCallback(() => {
@@ -4148,6 +4172,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   },
                   disabled: !nodes.some((node) => node.selected && node.type === 'highlightRegion'),
                   helperText: 'Select a region to export'
+                },
+                {
+                  label: '',
+                  onClick: () => {},
+                  divider: true
+                },
+                {
+                  label: 'Delete user journey',
+                  icon: Trash2,
+                  onClick: () => setShowDeleteJourneyModal(true),
+                  disabled: !currentJourneyId
                 }
               ]}
             />
@@ -5072,6 +5107,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           </div>
         </Modal>
       )}
+
+      {/* Delete Journey Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteJourneyModal}
+        onClose={() => setShowDeleteJourneyModal(false)}
+        title="Delete User Journey"
+        message={`Are you sure you want to delete "${journeyName}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteJourney}
+        variant="danger"
+        loading={deletingJourney}
+      />
 
     </div>
   )
