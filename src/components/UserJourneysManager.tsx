@@ -859,7 +859,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   }
 
   // Table columns configuration
-  const columns: Column<TableItem>[] = [
+  // Only show status column at top level (when currentFolderId is null)
+  const baseColumns: Column<TableItem>[] = [
     {
       key: 'name',
       header: 'Name',
@@ -891,47 +892,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             <div className="break-words whitespace-normal">
               <div className="font-medium text-gray-900">{convertEmojis(journey.name)}</div>
             </div>
-          )
-        }
-      }
-    },
-    {
-      key: 'status',
-      header: 'Type / Status',
-      sortable: true,
-      width: '120px',
-      render: (item) => {
-        if (item.type === 'folder') {
-          const status = item.data.status || 'personal'
-          return (
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              status === 'shared' 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {status === 'shared' ? (
-                <>
-                  <Users size={14} className="flex-shrink-0" />
-                  <span>Shared folder</span>
-                </>
-              ) : (
-                'Personal'
-              )}
-            </span>
-          )
-        } else {
-          // Compute status from folder - journeys inherit status from their parent folder
-          const journey = item.data
-          const folder = journey.folder_id ? folders.find(f => f.id === journey.folder_id) : null
-          const status = folder?.status || 'personal'
-          return (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              status === 'shared' 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {status === 'shared' ? 'Shared' : 'Personal'}
-            </span>
           )
         }
       }
@@ -1051,6 +1011,54 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       }
     }
   ]
+
+  // Status column - only show at top level
+  const statusColumn: Column<TableItem> = {
+    key: 'status',
+    header: 'Status',
+    sortable: true,
+    width: '120px',
+    render: (item) => {
+      if (item.type === 'folder') {
+        const status = item.data.status || 'personal'
+        return (
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            status === 'shared' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            {status === 'shared' ? (
+              <>
+                <Users size={14} className="flex-shrink-0" />
+                <span>Shared folder</span>
+              </>
+            ) : (
+              'Personal'
+            )}
+          </span>
+        )
+      } else {
+        // Compute status from folder - journeys inherit status from their parent folder
+        const journey = item.data
+        const folder = journey.folder_id ? folders.find(f => f.id === journey.folder_id) : null
+        const status = folder?.status || 'personal'
+        return (
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            status === 'shared' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            {status === 'shared' ? 'Shared' : 'Personal'}
+          </span>
+        )
+      }
+    }
+  }
+
+  // Build columns array - include status only at top level
+  const columns: Column<TableItem>[] = currentFolderId === null
+    ? [...baseColumns.slice(0, 1), statusColumn, ...baseColumns.slice(1)]
+    : baseColumns
 
   if (loading) {
     return (
@@ -1176,7 +1184,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           data={filteredTableItems}
           getItemId={(item) => item.type === 'folder' ? `folder-${item.data.id}` : item.data.id}
           columns={columns}
-          sortableFields={['name', 'updated_at']}
+          sortableFields={currentFolderId === null ? ['name', 'status', 'updated_at'] : ['name', 'updated_at']}
           onRowClick={(item, e) => {
             // Check for option-click (Mac) or Ctrl+click (Windows/Linux)
             if (e && (e.metaKey || e.altKey || e.ctrlKey)) {

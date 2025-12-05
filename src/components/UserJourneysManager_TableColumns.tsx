@@ -54,7 +54,7 @@ const columns: Column<TableItem>[] = [
   },
   {
     key: 'status',
-    header: 'Type / Status',
+    header: 'Status',
     sortable: true,
     width: '120px',
     render: (item) => {
