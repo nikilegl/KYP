@@ -240,7 +240,9 @@ export interface UserJourney {
   folder_id?: string | null
   name: string
   layout?: 'vertical' | 'horizontal'
-  status?: 'personal' | 'shared'
+  // Status is now computed from folder - journeys inherit status from their parent folder
+  // If folder is shared, journey is shared. If folder is personal, journey is personal.
+  // Journeys without a folder are personal by default.
   short_id: number
   created_at: string
   updated_at: string

@@ -98,7 +98,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     name: '',
     description: '',
     layout: 'vertical' as 'vertical' | 'horizontal',
-    status: 'draft' as 'draft' | 'published',
     project_id: ''
   })
   const [selectedLawFirmIds, setSelectedLawFirmIds] = useState<string[]>([])
@@ -417,7 +416,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       name: journey.name,
       description: journey.description || '',
       layout: journey.layout || 'vertical',
-      status: journey.status || 'draft',
       project_id: journey.project_id || ''
     })
     
@@ -442,7 +440,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         name: editForm.name,
         description: editForm.description,
         layout: editForm.layout,
-        status: editForm.status,
         project_id: editForm.project_id || null
       })
       
@@ -457,7 +454,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               name: editForm.name, 
               description: editForm.description,
               layout: editForm.layout,
-              status: editForm.status,
               project_id: editForm.project_id || null,
               project: editForm.project_id ? projects.find(p => p.id === editForm.project_id) : undefined
             }
@@ -924,7 +920,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             </span>
           )
         } else {
-          const status = item.data.status || 'personal'
+          // Compute status from folder - journeys inherit status from their parent folder
+          const journey = item.data
+          const folder = journey.folder_id ? folders.find(f => f.id === journey.folder_id) : null
+          const status = folder?.status || 'personal'
           return (
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               status === 'shared' 
@@ -1445,15 +1444,22 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             top: `${Math.min(contextMenu.y, window.innerHeight - 100)}px`,
           }}
         >
-          {contextMenu.journey && contextMenu.journey.status === 'published' && (
-            <button
-              onClick={() => handleCopyLink(contextMenu.journey!)}
-              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
-            >
-              <LinkIcon size={16} />
-              <span>Copy link</span>
-            </button>
-          )}
+          {contextMenu.journey && (() => {
+            // Compute status from folder - journeys inherit status from their parent folder
+            const journey = contextMenu.journey!
+            const folder = journey.folder_id ? folders.find(f => f.id === journey.folder_id) : null
+            const isShared = folder?.status === 'shared'
+            // Show copy link for all journeys (both personal and shared can be accessed via public link)
+            return (
+              <button
+                onClick={() => handleCopyLink(journey)}
+                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+              >
+                <LinkIcon size={16} />
+                <span>Copy link</span>
+              </button>
+            )
+          })()}
           {(contextMenu.journey || contextMenu.folder) && (
             <button
               onClick={() => {
@@ -1557,7 +1563,6 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           journeyName={editForm.name}
           journeyDescription={editForm.description}
           journeyLayout={editForm.layout}
-          journeyStatus={editForm.status}
           selectedProjectId={editForm.project_id}
           selectedLawFirmIds={selectedLawFirmIds}
           lawFirmSearchQuery={lawFirmSearchQuery}

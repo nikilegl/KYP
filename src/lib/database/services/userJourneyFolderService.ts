@@ -145,19 +145,8 @@ async function updateNestedItemsStatus(
     throw new Error('Supabase client not initialized')
   }
 
-  // Update all user journeys in this folder
-  const { error: journeysError } = await supabase
-    .from('user_journeys')
-    .update({ 
-      status,
-      updated_at: new Date().toISOString()
-    })
-    .eq('folder_id', folderId)
-
-  if (journeysError) {
-    console.error('Failed to update journeys in folder:', journeysError)
-    // Don't throw - continue with folders
-  }
+  // Note: User journeys no longer have a status column - they inherit status from their folder
+  // So we don't need to update journeys here, just folders
 
   // Get all subfolders
   const { data: subfolders, error: foldersError } = await supabase

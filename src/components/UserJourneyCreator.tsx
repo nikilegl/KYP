@@ -247,7 +247,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [journeyName, setJourneyName] = useState('User Journey 01')
   const [journeyDescription, setJourneyDescription] = useState('')
   const [journeyLayout, setJourneyLayout] = useState<'vertical' | 'horizontal'>('vertical')
-  const [journeyStatus, setJourneyStatus] = useState<'personal' | 'shared'>('personal')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showNameEditModal, setShowNameEditModal] = useState(false)
   const [hasAutoOpenedModal, setHasAutoOpenedModal] = useState(false)
@@ -264,6 +263,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId || '')
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [journeyFolder, setJourneyFolder] = useState<UserJourneyFolder | null>(null)
+  // Status is computed from folder - journeys inherit status from their parent folder
+  const computedJourneyStatus = journeyFolder?.status || 'personal'
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [currentJourneyId, setCurrentJourneyId] = useState<string | null>(journeyId || null)
@@ -470,7 +471,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setJourneyName(journey.name)
         setJourneyDescription(journey.description || '')
         setJourneyLayout(journey.layout || 'vertical')
-        setJourneyStatus(journey.status || 'personal')
         setSelectedProjectId(journey.project_id || '')
         
         // Load folder if journey belongs to one
@@ -1335,7 +1335,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           name: journeyName,
           description: journeyDescription,
           layout: journeyLayout,
-          status: journeyStatus,
           flow_data: flowData,
           project_id: selectedProjectId || null
         })
@@ -1349,14 +1348,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setTimeout(() => setJustSaved(false), 3000)
         }
       } else {
-        // Create new journey (default to draft)
+        // Create new journey
         const created = await createUserJourney(
           journeyName,
           journeyDescription,
           flowData,
           selectedProjectId || null,
           journeyLayout,
-          journeyStatus
+          selectedFolderId || null
         )
         
         if (created) {
@@ -1382,7 +1381,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     } finally {
       setSaving(false)
     }
-  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, journeyStatus, selectedLawFirmIds])
+  }, [journeyName, journeyDescription, nodes, edges, selectedProjectId, currentJourneyId, sortNodesForSaving, journeyLayout, selectedLawFirmIds])
 
   // Keyboard shortcut for save (Cmd/Ctrl+S) - defined after saveJourney
   useEffect(() => {
@@ -4216,7 +4215,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                     flowData,
                     selectedProjectId || null,
                     journeyLayout,
-                    journeyStatus
+                    selectedFolderId || null
                   )
                   if (created) {
                     await setUserJourneyLawFirms(created.id, selectedLawFirmIds)
@@ -4273,11 +4272,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               <h2 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h2>
               
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                journeyStatus === 'shared' 
+                computedJourneyStatus === 'shared' 
                   ? 'bg-green-100 text-green-800' 
                   : 'bg-yellow-100 text-yellow-800'
               }`}>
-                {journeyStatus === 'shared' ? 'Shared' : 'Personal'}
+                {computedJourneyStatus === 'shared' ? 'Shared' : 'Personal'}
               </span>
               
               <button
@@ -4739,7 +4738,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 name: journeyName,
                 description: journeyDescription,
                 layout: journeyLayout,
-                status: journeyStatus,
                 flow_data: flowData,
                 project_id: selectedProjectId || null
               })
@@ -4756,7 +4754,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 flowData,
                 selectedProjectId || null,
                 journeyLayout,
-                journeyStatus
+                selectedFolderId || null
               )
               
               if (created) {
@@ -4782,7 +4780,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
         journeyName={journeyName}
         journeyDescription={journeyDescription}
-        journeyStatus={journeyStatus}
         selectedProjectId={selectedProjectId}
         selectedLawFirmIds={selectedLawFirmIds}
         lawFirmSearchQuery={lawFirmSearchQuery}
@@ -4790,7 +4787,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         lawFirms={lawFirms}
         onNameChange={setJourneyName}
         onDescriptionChange={setJourneyDescription}
-        onStatusChange={setJourneyStatus}
         onProjectChange={setSelectedProjectId}
         onLawFirmSearchChange={setLawFirmSearchQuery}
         onLawFirmToggle={(firmId, checked) => {
@@ -5323,7 +5319,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             </div>
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Anyone with this link can view this journey (no login required). This journey is currently {journeyStatus === 'shared' ? 'shared' : 'personal'}.
+                <strong>Note:</strong> Anyone with this link can view this journey (no login required). This journey is currently {computedJourneyStatus === 'shared' ? 'shared' : 'personal'}.
               </p>
             </div>
           </div>

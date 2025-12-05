@@ -58,13 +58,7 @@ export function PublicUserJourneyView() {
           return
         }
 
-        // Both personal and shared journeys can be viewed via public link
-        if (journey.status !== 'personal' && journey.status !== 'shared') {
-          setError('This journey is not publicly available')
-          setLoading(false)
-          return
-        }
-
+        // Journeys can be viewed via public link regardless of folder status
         setJourneyName(journey.name)
         setJourneyDescription(journey.description || '')
 
