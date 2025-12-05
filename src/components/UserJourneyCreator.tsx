@@ -85,7 +85,14 @@ function KeyboardZoomHandler() {
       const isModifierPressed = event.metaKey || event.ctrlKey
 
       if (isModifierPressed) {
-        if (event.key === '+' || event.key === '=') {
+        // Don't trigger if user is typing in an input field
+        const target = event.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return
+        }
+
+        // Command+Plus (without Shift) zooms in
+        if ((event.key === '+' || event.key === '=') && !event.shiftKey) {
           event.preventDefault()
           zoomIn({ duration: 200 })
         } else if (event.key === '-' || event.key === '_') {
@@ -1068,7 +1075,11 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
 
       if (isModifierPressed) {
-        if (event.key === 'c' || event.key === 'C') {
+        if (event.key === 'e' || event.key === 'E') {
+          // Open Edit Journey with AI modal (Cmd/Ctrl+E)
+          event.preventDefault()
+          setShowEditWithAIModal(true)
+        } else if (event.key === 'c' || event.key === 'C') {
           // Only copy if there are selected nodes/edges
           if (hasSelection) {
             event.preventDefault()
@@ -1097,7 +1108,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, duplicateSelectedRegions, nodes, edges, showComments])
+  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, duplicateSelectedRegions, nodes, edges, showComments, setShowEditWithAIModal])
 
   // Handle clicking outside the import dropdown
   useEffect(() => {
@@ -1212,21 +1223,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }, [])
 
   // Keyboard shortcut for adding a node ('+' key)
+  // Keyboard shortcut for adding node (Cmd/Ctrl+Shift+Plus)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Check if '+' or '=' key is pressed ('+' is usually Shift + '=')
-      // Allow either the plus character or the equals key
-      const isPlusKey = event.key === '+' || (event.key === '=' && event.shiftKey)
+      const isModifierPressed = event.metaKey || event.ctrlKey
       
-      if (isPlusKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        // Don't trigger if user is typing in an input field
-        const target = event.target as HTMLElement
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-          return
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+      
+      // Handle Command/Ctrl+Shift+Plus to add node
+      // Check for '+' key or '=' with Shift (since '+' is usually Shift + '=')
+      if (isModifierPressed && event.shiftKey) {
+        const isPlusKey = event.key === '+' || event.key === '='
+        if (isPlusKey) {
+          event.preventDefault()
+          event.stopPropagation() // Prevent zoom handler from also firing
+          smartAddNode()
         }
-        
-        event.preventDefault()
-        smartAddNode()
       }
     }
 
@@ -2507,6 +2523,28 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     setNodes((nds) => [newRegion, ...nds]) // Add region at the beginning (before other nodes)
   }, [setNodes, snapToGrid])
+
+  // Keyboard shortcut for adding region (Cmd/Ctrl+R) - defined after addHighlightRegion
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Handle Command/Ctrl+R to add highlight region
+      if (isModifierPressed && (event.key === 'r' || event.key === 'R')) {
+        event.preventDefault()
+        addHighlightRegion()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [addHighlightRegion])
 
   // Configure highlight region (for editing)
   const configureRegion = useCallback((regionId: string) => {
