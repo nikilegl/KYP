@@ -55,7 +55,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [folders, setFolders] = useState<UserJourneyFolder[]>([])
   const [lawFirms, setLawFirms] = useState<LawFirm[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [createdByFilter, setCreatedByFilter] = useState<string>('all')
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [folderPath, setFolderPath] = useState<UserJourneyFolder[]>([])
   const [draggedItem, setDraggedItem] = useState<{ type: 'journey' | 'folder', id: string } | null>(null)
@@ -340,43 +340,53 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
 
   // Filter and combine folders + journeys for table display
   const filteredTableItems: TableItem[] = (() => {
-    // If searching, show all matching items regardless of folder
-    if (searchTerm) {
-      const searchWithEmojis = emoji.emojify(searchTerm)
+    // If searching or filtering by created by, show only journeys (ignore folders)
+    if (searchTerm || createdByFilter !== 'all') {
+      const searchWithEmojis = searchTerm ? emoji.emojify(searchTerm) : ''
       const searchLower = searchWithEmojis.toLowerCase()
       
       const matchingJourneys = userJourneys.filter(journey => {
-        const matchesSearch = journey.name.toLowerCase().includes(searchLower) ||
+        // Apply search filter
+        const matchesSearch = !searchTerm || 
+                             journey.name.toLowerCase().includes(searchLower) ||
                              (journey.description && journey.description.toLowerCase().includes(searchLower))
         
-        // Apply project filter
+        // Apply project filter (if projectId is provided)
         let matchesProject = true
         if (projectId) {
           matchesProject = journey.project_id === projectId
-        } else {
-          matchesProject = projectFilter === 'all' || 
-                          (projectFilter === 'none' && !journey.project_id) ||
-                          journey.project_id === projectFilter
         }
         
-        return matchesSearch && matchesProject
+        // Apply created by filter
+        const matchesCreatedBy = createdByFilter === 'all' || 
+                                journey.created_by === createdByFilter
+        
+        return matchesSearch && matchesProject && matchesCreatedBy
       }).map(journey => ({ type: 'journey' as const, data: journey }))
 
-      const matchingFolders = folders.filter(folder =>
-        folder.name.toLowerCase().includes(searchLower)
-      ).map(folder => ({ 
-        type: 'folder' as const, 
-        data: { 
-          ...folder, 
-          journey_count: folderJourneyCounts[folder.id] || 0,
-          createdByUser: folder.created_by ? usersMap.get(folder.created_by) : undefined
-        } 
-      }))
-
-      return [...matchingFolders, ...matchingJourneys]
+      return matchingJourneys
     }
 
     // Normal navigation mode - show current level only
+    // If filtering by created by, only show journeys (hide folders)
+    if (createdByFilter !== 'all') {
+      const journeyItems: TableItem[] = currentLevelJourneys.filter(journey => {
+        // Apply project filter (if projectId is provided)
+        let matchesProject = true
+        if (projectId) {
+          matchesProject = journey.project_id === projectId
+        }
+        
+        // Apply created by filter
+        const matchesCreatedBy = journey.created_by === createdByFilter
+        
+        return matchesProject && matchesCreatedBy
+      }).map(journey => ({ type: 'journey', data: journey }))
+      
+      return journeyItems
+    }
+    
+    // Normal mode - show folders and journeys
     const folderItems: TableItem[] = currentLevelFolders.map(folder => ({
       type: 'folder',
       data: { 
@@ -387,14 +397,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }))
 
     const journeyItems: TableItem[] = currentLevelJourneys.filter(journey => {
-      // Apply project filter
+      // Apply project filter (if projectId is provided)
       let matchesProject = true
       if (projectId) {
         matchesProject = journey.project_id === projectId
-      } else {
-        matchesProject = projectFilter === 'all' || 
-                        (projectFilter === 'none' && !journey.project_id) ||
-                        journey.project_id === projectFilter
       }
       
       return matchesProject
@@ -1097,20 +1103,19 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           />
         </div>
         
-        {/* Only show Epic filter if not filtering by project */}
-        {!projectId && (
-          <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Epics</option>
-            <option value="none">No Epic</option>
-            {projects.map(project => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-          </select>
-        )}
+        {/* Created by filter */}
+        <select
+          value={createdByFilter}
+          onChange={(e) => setCreatedByFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          <option value="all">All Users</option>
+          {Array.from(usersMap.values()).map(user => (
+            <option key={user.id} value={user.id}>
+              {user.full_name || user.email || 'Unknown User'}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Breadcrumb Navigation */}

@@ -151,11 +151,45 @@ export function DataTable<T>({
   const sortedData = [...data].sort((a, b) => {
     if (!sortField) return 0
     
-    let aValue = a[sortField]
-    let bValue = b[sortField]
+    // Handle nested data structures (e.g., TableItem with type and data)
+    let aValue: any = a[sortField]
+    let bValue: any = b[sortField]
     
-    if (typeof aValue === 'string') aValue = aValue.toLowerCase()
-    if (typeof bValue === 'string') bValue = bValue.toLowerCase()
+    // If the value is undefined, try accessing through a 'data' property
+    if (aValue === undefined && 'data' in a && typeof a.data === 'object' && a.data !== null) {
+      aValue = (a.data as any)[sortField]
+    }
+    if (bValue === undefined && 'data' in b && typeof b.data === 'object' && b.data !== null) {
+      bValue = (b.data as any)[sortField]
+    }
+    
+    // Handle null/undefined values - put them at the end
+    if (aValue === null || aValue === undefined) {
+      if (bValue === null || bValue === undefined) return 0
+      return 1 // a is null/undefined, b is not - a goes after b
+    }
+    if (bValue === null || bValue === undefined) {
+      return -1 // b is null/undefined, a is not - b goes after a
+    }
+    
+    // Handle date strings - convert to Date objects for proper comparison
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      const aDate = new Date(aValue)
+      const bDate = new Date(bValue)
+      if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
+        // Both are valid dates
+        if (aDate < bDate) return sortDirection === 'asc' ? -1 : 1
+        if (aDate > bDate) return sortDirection === 'asc' ? 1 : -1
+        return 0
+      }
+      // Not dates, treat as strings
+      aValue = aValue.toLowerCase()
+      bValue = bValue.toLowerCase()
+    } else if (typeof aValue === 'string') {
+      aValue = aValue.toLowerCase()
+    } else if (typeof bValue === 'string') {
+      bValue = bValue.toLowerCase()
+    }
     
     if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
     if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
