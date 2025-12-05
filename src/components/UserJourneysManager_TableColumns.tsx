@@ -1,7 +1,7 @@
 // This file contains the new table columns configuration for UserJourneysManager
 // Replace the existing columns array with this code
 
-import { FolderOpen } from 'lucide-react'
+import { FolderOpen, Users } from 'lucide-react'
 import { Column } from './DesignSystem/components/DataTable'
 import { convertEmojis } from '../utils/emojiConverter'
 
@@ -15,6 +15,9 @@ const columns: Column<TableItem>[] = [
     render: (item) => {
       if (item.type === 'folder') {
         const folder = item.data
+        const status = folder.status || 'personal'
+        // Blue for shared folders, yellow for personal folders
+        const folderColor = status === 'shared' ? '#3B82F6' : '#F59E0B'
         return (
           <div 
             className="break-words whitespace-normal flex items-center gap-3 cursor-pointer"
@@ -24,7 +27,7 @@ const columns: Column<TableItem>[] = [
           >
             <div
               className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: folder.color }}
+              style={{ backgroundColor: folderColor }}
             >
               <FolderOpen size={14} className="text-white" />
             </div>
@@ -56,9 +59,21 @@ const columns: Column<TableItem>[] = [
     width: '120px',
     render: (item) => {
       if (item.type === 'folder') {
+        const status = item.data.status || 'personal'
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            Folder
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            status === 'shared' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            {status === 'shared' ? (
+              <>
+                <Users size={14} className="flex-shrink-0" />
+                <span>Shared folder</span>
+              </>
+            ) : (
+              'Personal'
+            )}
           </span>
         )
       } else {

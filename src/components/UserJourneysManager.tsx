@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { Plus, Search, Edit, Trash2, Copy, FolderOpen, ChevronRight, Link as LinkIcon, Move } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Copy, FolderOpen, ChevronRight, Link as LinkIcon, Move, Users } from 'lucide-react'
 import { Button } from './DesignSystem/components/Button'
 import { Modal } from './DesignSystem/components/Modal'
 import { DataTable, Column } from './DesignSystem/components/DataTable'
@@ -73,7 +73,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const [showEditFolderModal, setShowEditFolderModal] = useState(false)
   const [folderToEdit, setFolderToEdit] = useState<UserJourneyFolder | null>(null)
   const [editFolderName, setEditFolderName] = useState('')
-  const [editFolderColor, setEditFolderColor] = useState('')
+  const [editFolderStatus, setEditFolderStatus] = useState<'personal' | 'shared'>('personal')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false)
   const [journeyToDuplicate, setJourneyToDuplicate] = useState<UserJourneyWithProject | null>(null)
   const [duplicating, setDuplicating] = useState(false)
@@ -179,6 +180,19 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     }
   }
 
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          setCurrentUserId(user.id)
+        }
+      }
+    }
+    getCurrentUser()
+  }, [])
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -195,7 +209,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       setFolders(foldersData)
       setLawFirms(lawFirmsData)
 
-      // Batch fetch folder counts - get all journeys with folder_id in one query
+      // Batch fetch folder counts - get all journeys and subfolders with folder_id/parent_folder_id in one query
       const counts: Record<string, number> = {}
       if (foldersData.length > 0 && supabase) {
         const folderIds = foldersData.map(f => f.id)
@@ -205,12 +219,12 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         })
         
         // Fetch all journeys with folder_id in one query
-        const { data: journeysWithFolders, error } = await supabase
+        const { data: journeysWithFolders, error: journeysError } = await supabase
           .from('user_journeys')
           .select('folder_id')
           .in('folder_id', folderIds)
         
-        if (!error && journeysWithFolders) {
+        if (!journeysError && journeysWithFolders) {
           // Count journeys per folder
           journeysWithFolders.forEach(journey => {
             if (journey.folder_id) {
@@ -218,6 +232,13 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             }
           })
         }
+        
+        // Count subfolders per folder (folders with parent_folder_id matching folder id)
+        foldersData.forEach(folder => {
+          if (folder.parent_folder_id && folderIds.includes(folder.parent_folder_id)) {
+            counts[folder.parent_folder_id] = (counts[folder.parent_folder_id] || 0) + 1
+          }
+        })
       }
       setFolderJourneyCounts(counts)
       
@@ -794,14 +815,14 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   const handleAddFolderClick = () => {
     setFolderToEdit(null)
     setEditFolderName('')
-    setEditFolderColor('#3B82F6') // Default blue color
+    setEditFolderStatus('personal')
     setShowEditFolderModal(true)
   }
 
   const handleEditFolderClick = (folder: UserJourneyFolder) => {
     setFolderToEdit(folder)
     setEditFolderName(folder.name)
-    setEditFolderColor(folder.color)
+    setEditFolderStatus(folder.status || 'personal')
     setShowEditFolderModal(true)
   }
 
@@ -809,22 +830,26 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
     if (!editFolderName.trim()) return
 
     try {
+      // Color is determined by status: blue for shared, yellow for personal
+      const folderColor = editFolderStatus === 'shared' ? '#3B82F6' : '#F59E0B'
+      
       if (folderToEdit) {
         // Update existing folder
         await updateUserJourneyFolder(folderToEdit.id, {
           name: editFolderName.trim(),
-          color: editFolderColor
+          color: folderColor,
+          status: editFolderStatus
         })
       } else {
         // Create new folder - nest it in current folder if we're inside one
-        await createUserJourneyFolder(editFolderName.trim(), editFolderColor, currentFolderId)
+        await createUserJourneyFolder(editFolderName.trim(), folderColor, currentFolderId)
       }
       
       await loadData()
       setShowEditFolderModal(false)
       setFolderToEdit(null)
       setEditFolderName('')
-      setEditFolderColor('')
+      setEditFolderStatus('personal')
     } catch (error) {
       console.error(`Error ${folderToEdit ? 'updating' : 'creating'} folder:`, error)
       alert(`Failed to ${folderToEdit ? 'update' : 'create'} folder. Please try again.`)
@@ -841,11 +866,14 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       render: (item) => {
         if (item.type === 'folder') {
           const folder = item.data
+          const status = folder.status || 'personal'
+          // Blue for shared folders, yellow for personal folders
+          const folderColor = status === 'shared' ? '#3B82F6' : '#F59E0B'
           return (
             <div className="break-words whitespace-normal flex items-center gap-3">
               <div
                 className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: folder.color }}
+                style={{ backgroundColor: folderColor }}
               >
                 <FolderOpen size={14} className="text-white" />
               </div>
@@ -872,9 +900,21 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       width: '120px',
       render: (item) => {
         if (item.type === 'folder') {
+          const status = item.data.status || 'personal'
           return (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              Folder
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              status === 'shared' 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {status === 'shared' ? (
+                <>
+                  <Users size={14} className="flex-shrink-0" />
+                  <span>Shared folder</span>
+                </>
+              ) : (
+                'Personal'
+              )}
             </span>
           )
         } else {
@@ -1262,7 +1302,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             setShowEditFolderModal(false)
             setFolderToEdit(null)
             setEditFolderName('')
-            setEditFolderColor('')
+            setEditFolderStatus('personal')
           }}
           title={folderToEdit ? "Edit Folder" : "Add Folder"}
           size="sm"
@@ -1274,7 +1314,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
                   setShowEditFolderModal(false)
                   setFolderToEdit(null)
                   setEditFolderName('')
-                  setEditFolderColor('')
+                  setEditFolderStatus('personal')
                 }}
               >
                 Cancel
@@ -1303,27 +1343,38 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Color
-              </label>
-              <div className="flex gap-2 flex-wrap">
-                {['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'].map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setEditFolderColor(color)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      editFolderColor === color
-                        ? 'border-gray-900 scale-110'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
-                ))}
+            {/* Status Toggle - Only show when editing (not creating) and user is the creator */}
+            {folderToEdit && currentUserId && folderToEdit.created_by === currentUserId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <p className="text-sm text-gray-500 mb-3">
+                  Share to make this folder accessible to everyone in the workspace
+                </p>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={editFolderStatus === 'shared'}
+                      onChange={(e) => setEditFolderStatus(e.target.checked ? 'shared' : 'personal')}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {editFolderStatus === 'shared' ? 'Shared' : 'Personal'}
+                  </span>
+                </label>
+                {editFolderStatus === 'shared' && (
+                  <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      All user journeys and folders inside this folder will also be shared, and therefore available to all users in this workspace.
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </Modal>
       )}
