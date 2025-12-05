@@ -3,6 +3,7 @@ import { Modal } from './DesignSystem/components/Modal'
 import { Button } from './DesignSystem/components/Button'
 import { Plus, Edit, Trash2, X } from 'lucide-react'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
+import { supabase } from '../lib/supabase'
 import {
   getUserJourneyFolders,
   createUserJourneyFolder,
@@ -17,16 +18,6 @@ interface ManageFoldersModalProps {
   onFoldersChanged: () => void // Callback to refresh folders in parent
 }
 
-const DEFAULT_COLORS = [
-  '#3B82F6', // Blue
-  '#10B981', // Green
-  '#F59E0B', // Amber
-  '#EF4444', // Red
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-  '#84CC16', // Lime
-]
 
 export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: ManageFoldersModalProps) {
   const [folders, setFolders] = useState<UserJourneyFolder[]>([])
@@ -34,7 +25,8 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingFolder, setEditingFolder] = useState<UserJourneyFolder | null>(null)
   const [newFolderName, setNewFolderName] = useState('')
-  const [newFolderColor, setNewFolderColor] = useState(DEFAULT_COLORS[0])
+  const [folderStatus, setFolderStatus] = useState<'personal' | 'shared'>('personal')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [folderToDelete, setFolderToDelete] = useState<UserJourneyFolder | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -44,6 +36,19 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
       loadFolders()
     }
   }, [isOpen])
+
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          setCurrentUserId(user.id)
+        }
+      }
+    }
+    getCurrentUser()
+  }, [])
 
   const loadFolders = async () => {
     setLoading(true)
@@ -62,11 +67,13 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
 
     setSaving(true)
     try {
-      await createUserJourneyFolder(newFolderName.trim(), newFolderColor)
+      // Color is determined by status: blue for shared, yellow for personal
+      const defaultColor = folderStatus === 'shared' ? '#3B82F6' : '#F59E0B'
+      await createUserJourneyFolder(newFolderName.trim(), defaultColor)
       await loadFolders()
       onFoldersChanged()
       setNewFolderName('')
-      setNewFolderColor(DEFAULT_COLORS[0])
+      setFolderStatus('personal')
       setShowAddForm(false)
     } catch (error) {
       console.error('Error creating folder:', error)
@@ -81,15 +88,18 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
 
     setSaving(true)
     try {
+      // Color is determined by status: blue for shared, yellow for personal
+      const folderColor = folderStatus === 'shared' ? '#3B82F6' : '#F59E0B'
       await updateUserJourneyFolder(editingFolder.id, {
         name: newFolderName.trim(),
-        color: newFolderColor
+        color: folderColor,
+        status: folderStatus
       })
       await loadFolders()
       onFoldersChanged()
       setEditingFolder(null)
       setNewFolderName('')
-      setNewFolderColor(DEFAULT_COLORS[0])
+      setFolderStatus('personal')
     } catch (error) {
       console.error('Error updating folder:', error)
       alert('Failed to update folder. Please try again.')
@@ -124,21 +134,21 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
   const startEdit = (folder: UserJourneyFolder) => {
     setEditingFolder(folder)
     setNewFolderName(folder.name)
-    setNewFolderColor(folder.color)
+    setFolderStatus(folder.status || 'personal')
     setShowAddForm(false)
   }
 
   const cancelEdit = () => {
     setEditingFolder(null)
     setNewFolderName('')
-    setNewFolderColor(DEFAULT_COLORS[0])
+    setFolderStatus('personal')
   }
 
   const startAdd = () => {
     setShowAddForm(true)
     setEditingFolder(null)
     setNewFolderName('')
-    setNewFolderColor(DEFAULT_COLORS[0])
+    setFolderStatus('personal')
   }
 
   return (
@@ -205,27 +215,38 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Color
-                    </label>
-                    <div className="flex gap-2 flex-wrap">
-                      {DEFAULT_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setNewFolderColor(color)}
-                          className={`w-8 h-8 rounded-full border-2 transition-all ${
-                            newFolderColor === color
-                              ? 'border-gray-900 scale-110'
-                              : 'border-gray-200 hover:border-gray-400'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          title={color}
-                        />
-                      ))}
+                  {/* Status Toggle - Only show when editing (not creating) and user is the creator */}
+                  {editingFolder && currentUserId && editingFolder.created_by === currentUserId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Status
+                      </label>
+                      <p className="text-sm text-gray-500 mb-3">
+                        Share to make this folder accessible to everyone in the workspace
+                      </p>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            checked={folderStatus === 'shared'}
+                            onChange={(e) => setFolderStatus(e.target.checked ? 'shared' : 'personal')}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-700">
+                          {folderStatus === 'shared' ? 'Shared' : 'Personal'}
+                        </span>
+                      </label>
+                      {folderStatus === 'shared' && (
+                        <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <p className="text-sm text-yellow-800">
+                            All user journeys and folders inside this folder will also be shared, and therefore available to all users in this workspace.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex gap-2 pt-2">
                     <Button

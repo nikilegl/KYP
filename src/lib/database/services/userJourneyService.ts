@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../../supabase'
 import type { Node, Edge } from '@xyflow/react'
+import { getUserJourneyFolders } from './userJourneyFolderService'
 
 export interface UserJourney {
   id: string
@@ -8,7 +9,9 @@ export interface UserJourney {
   name: string
   description?: string
   layout?: 'vertical' | 'horizontal'
-  status?: 'personal' | 'shared'
+  // Status is now computed from folder - journeys inherit status from their parent folder
+  // If folder is shared, journey is shared. If folder is personal, journey is personal.
+  // Journeys without a folder are personal by default.
   flow_data?: {
     nodes: Node[]
     edges: Edge[]
@@ -38,7 +41,7 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
   }
 
   try {
-    // Get current user to filter draft journeys
+    // Get current user to filter journeys
     const { data: { user } } = await supabase.auth.getUser()
     const currentUserId = user?.id
     
@@ -62,6 +65,7 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
       }
     }
     
+    // Fetch journeys and folders in parallel
     let query = supabase
       .from('user_journeys')
       .select('*')
@@ -72,23 +76,50 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
       query = query.eq('project_id', projectId)
     }
 
-    const { data, error } = await query
+    const [journeysResult, foldersResult] = await Promise.all([
+      query,
+      getUserJourneyFolders().catch(() => [])
+    ])
+
+    const { data, error } = journeysResult
+    const folders = foldersResult || []
 
     if (error) throw error
     
-    // If user is owner/admin, show all journeys (including personal journeys by others)
-    if (isOwnerOrAdmin) {
-      return data || []
+    // Create a map of folder IDs to folder status
+    const folderStatusMap = new Map<string, 'personal' | 'shared'>()
+    folders.forEach(folder => {
+      folderStatusMap.set(folder.id, folder.status)
+    })
+    
+    // Helper function to get journey status from folder
+    const getJourneyStatus = (journey: any): 'personal' | 'shared' => {
+      if (!journey.folder_id) return 'personal'
+      return folderStatusMap.get(journey.folder_id) || 'personal'
     }
     
-    // Filter results: show shared journeys to all, but personal journeys only to creator
-    const filteredData = (data || []).filter(journey => {
+    // If user is owner/admin, show all journeys
+    if (isOwnerOrAdmin) {
+      return (data || []).map((journey: any) => {
+        // Remove status if it exists (legacy data)
+        const { status, ...journeyWithoutStatus } = journey
+        return journeyWithoutStatus
+      })
+    }
+    
+    // Filter results: show shared journeys (in shared folders) to all, but personal journeys only to creator
+    const filteredData = (data || []).filter((journey: any) => {
+      // Determine journey status from folder
+      const isShared = getJourneyStatus(journey) === 'shared'
+      
       // If shared, show to everyone
-      if (journey.status === 'shared') return true
+      if (isShared) return true
       // If personal, only show to creator
-      if (journey.status === 'personal') return journey.created_by === currentUserId
-      // Default to showing if no status (for backwards compatibility)
-      return true
+      return journey.created_by === currentUserId
+    }).map((journey: any) => {
+      // Remove status if it exists (legacy data)
+      const { status, ...journeyWithoutStatus } = journey
+      return journeyWithoutStatus
     })
     
     return filteredData
@@ -166,10 +197,16 @@ export const getUserJourneyByShortId = async (
           }
         })
       const journey = allJourneys.find((j: UserJourney) => j.short_id === shortId)
-      if (journey && onlyPublished && journey.status !== 'shared') {
+      // For local storage, check legacy status field if it exists
+      if (journey && onlyPublished && (journey as any).status !== 'shared') {
         return null
       }
-      return journey || null
+      if (journey) {
+        // Remove status if it exists (legacy data)
+        const { status, ...journeyWithoutStatus } = journey as any
+        return journeyWithoutStatus
+      }
+      return null
     } catch {
       return null
     }
@@ -182,12 +219,6 @@ export const getUserJourneyByShortId = async (
       .select('*')
       .eq('short_id', shortId)
     
-    // Only filter by shared status if onlyPublished is true (for workspace visibility)
-    // Note: Both personal and shared journeys can be accessed via public link
-    if (onlyPublished) {
-      query = query.eq('status', 'shared')
-    }
-    
     const { data, error } = await query.single()
 
     if (error) {
@@ -198,7 +229,26 @@ export const getUserJourneyByShortId = async (
       }
       throw error
     }
-    return data
+    
+    if (!data) return null
+    
+    // If onlyPublished is true, check folder status
+    if (onlyPublished) {
+      if (data.folder_id) {
+        const folders = await getUserJourneyFolders().catch(() => [])
+        const folder = folders.find(f => f.id === data.folder_id)
+        if (!folder || folder.status !== 'shared') {
+          return null
+        }
+      } else {
+        // Journey without folder is personal
+        return null
+      }
+    }
+    
+    // Remove status if it exists (legacy data)
+    const { status, ...journeyWithoutStatus } = data as any
+    return journeyWithoutStatus
   } catch (error) {
     console.error('Error fetching user journey by short ID:', error)
     return null
@@ -211,7 +261,7 @@ export const createUserJourney = async (
   flowData: { nodes: Node[]; edges: Edge[] },
   projectId?: string | null,
   layout: 'vertical' | 'horizontal' = 'vertical',
-  status: 'personal' | 'shared' = 'personal'
+  folderId?: string | null
 ): Promise<UserJourney | null> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
@@ -222,10 +272,10 @@ export const createUserJourney = async (
       const newJourney: UserJourney = {
         id: `local_${Date.now()}`,
         project_id: projectId || null,
+        folder_id: folderId || null,
         name,
         description,
         layout,
-        status,
         flow_data: flowData,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -250,10 +300,10 @@ export const createUserJourney = async (
       .insert([
         {
           project_id: projectId || null,
+          folder_id: folderId || null,
           name,
           description,
           layout,
-          status,
           flow_data: flowData,
           created_by: user?.id || null,
           updated_by: user?.id || null
@@ -279,9 +329,9 @@ export const updateUserJourney = async (
     name?: string
     description?: string
     layout?: 'vertical' | 'horizontal'
-    status?: 'personal' | 'shared'
     flow_data?: { nodes: Node[]; edges: Edge[] }
     project_id?: string | null
+    folder_id?: string | null
   }
 ): Promise<UserJourney | null> => {
   if (!isSupabaseConfigured || !supabase) {

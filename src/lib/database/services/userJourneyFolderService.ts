@@ -5,6 +5,7 @@ export interface UserJourneyFolder {
   workspace_id: string
   name: string
   color: string
+  status: 'personal' | 'shared'
   parent_folder_id: string | null
   created_by?: string | null
   created_at: string
@@ -86,6 +87,7 @@ export async function createUserJourneyFolder(
       workspace_id: workspaceUser.workspace_id,
       name,
       color,
+      status: 'personal', // Default to personal
       parent_folder_id: parentFolderId,
       created_by: user.id
     })
@@ -104,7 +106,7 @@ export async function createUserJourneyFolder(
  */
 export async function updateUserJourneyFolder(
   id: string,
-  updates: { name?: string; color?: string }
+  updates: { name?: string; color?: string; status?: 'personal' | 'shared' }
 ): Promise<UserJourneyFolder> {
   if (!supabase) {
     throw new Error('Supabase client not initialized')
@@ -124,7 +126,58 @@ export async function updateUserJourneyFolder(
     throw new Error(`Failed to update folder: ${error.message}`)
   }
 
+  // If status is being changed to 'shared', update all nested items
+  if (updates.status === 'shared') {
+    await updateNestedItemsStatus(id, 'shared')
+  }
+
   return data
+}
+
+/**
+ * Update status of all user journeys and folders inside a folder
+ */
+async function updateNestedItemsStatus(
+  folderId: string,
+  status: 'personal' | 'shared'
+): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase client not initialized')
+  }
+
+  // Note: User journeys no longer have a status column - they inherit status from their folder
+  // So we don't need to update journeys here, just folders
+
+  // Get all subfolders
+  const { data: subfolders, error: foldersError } = await supabase
+    .from('user_journey_folders')
+    .select('id')
+    .eq('parent_folder_id', folderId)
+
+  if (foldersError) {
+    console.error('Failed to get subfolders:', foldersError)
+    return
+  }
+
+  // Recursively update all subfolders and their contents
+  for (const subfolder of subfolders || []) {
+    // Update subfolder status
+    const { error: updateError } = await supabase
+      .from('user_journey_folders')
+      .update({ 
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', subfolder.id)
+
+    if (updateError) {
+      console.error(`Failed to update subfolder ${subfolder.id}:`, updateError)
+      continue
+    }
+
+    // Recursively update nested items in subfolder
+    await updateNestedItemsStatus(subfolder.id, status)
+  }
 }
 
 /**
