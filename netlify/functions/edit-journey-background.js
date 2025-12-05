@@ -128,6 +128,8 @@ CRITICAL RULES:
 - When removing nodes: also remove connected edges
 - IMPORTANT: For edges, ALWAYS preserve sourceHandle and targetHandle properties exactly as provided (e.g., "source-top", "target-bottom", "source-left", "target-right")
 - Do NOT change edge handle positions unless explicitly requested - they control how edges connect to nodes
+- CRITICAL: For highlight regions (type: "highlightRegion"), ALWAYS preserve style, width, and height properties exactly as provided
+- Do NOT modify region dimensions (width, height) or style properties unless explicitly requested in the instruction
 - Preserve all properties not mentioned in the instruction
 
 SELECTION-AWARE EDITING:

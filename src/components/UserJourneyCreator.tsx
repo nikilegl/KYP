@@ -1511,6 +1511,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }
         }
         
+        // Preserve style and dimensions for highlight regions
+        const isHighlightRegion = node.type === 'highlightRegion'
+        
         return {
           id: node.id,
           type: node.type || 'process',
@@ -1518,6 +1521,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             x: node.position.x,
             y: node.position.y
           },
+          // Preserve style, width, and height for highlight regions
+          ...(isHighlightRegion && node.style ? { style: node.style } : {}),
+          ...(isHighlightRegion && node.width ? { width: node.width } : {}),
+          ...(isHighlightRegion && node.height ? { height: node.height } : {}),
           data: {
             ...node.data,
             userRole: userRoleObj
@@ -1991,6 +1998,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         ])
       )
 
+      // Create a map of original nodes by ID to preserve properties (especially for highlight regions)
+      const originalNodesMap = new Map(
+        nodes.map(node => [
+          node.id,
+          {
+            style: node.style,
+            width: node.width,
+            height: node.height,
+            data: node.data
+          }
+        ])
+      )
+
       // Prepare current journey data for AI (send only essential data)
       const currentJourney = {
         name: journeyName,
@@ -2001,6 +2021,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           type: node.type,
           position: node.position,
           selected: node.selected || false, // Include selection state
+          // Include style properties for highlight regions so AI knows about them
+          style: node.type === 'highlightRegion' ? node.style : undefined,
+          width: node.type === 'highlightRegion' ? (node.width || node.style?.width) : undefined,
+          height: node.type === 'highlightRegion' ? (node.height || node.style?.height) : undefined,
           data: {
             label: node.data?.label,
             type: node.data?.type,
@@ -2008,7 +2032,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             variant: node.data?.variant || '',
             thirdPartyName: node.data?.thirdPartyName || '',
             bulletPoints: node.data?.bulletPoints || [],
-            customProperties: node.data?.customProperties || {}
+            customProperties: node.data?.customProperties || {},
+            // Include region-specific data
+            backgroundColor: node.data?.backgroundColor,
+            borderColor: node.data?.borderColor
           }
         })),
         edges: edges.map(edge => ({
@@ -2050,6 +2077,33 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }
         }
 
+        // Get original node to preserve properties (especially for highlight regions)
+        const originalNode = originalNodesMap.get(node.id)
+        // Check if this is a highlight region by checking the original nodes array
+        const originalNodeInArray = nodes.find(n => n.id === node.id)
+        const isHighlightRegion = node.type === 'highlightRegion' || originalNodeInArray?.type === 'highlightRegion'
+
+        // For highlight regions, preserve original style and dimensions unless AI explicitly changed them
+        let preservedStyle = originalNode?.style
+        let preservedWidth = originalNode?.width
+        let preservedHeight = originalNode?.height
+
+        if (isHighlightRegion && originalNode) {
+          // If AI provided style/dimensions, use them; otherwise preserve original
+          preservedStyle = node.style || originalNode.style
+          preservedWidth = node.width !== undefined ? node.width : (originalNode.width || originalNode.style?.width)
+          preservedHeight = node.height !== undefined ? node.height : (originalNode.height || originalNode.style?.height)
+          
+          // Ensure style object has width/height if they exist
+          if (preservedStyle && (preservedWidth || preservedHeight)) {
+            preservedStyle = {
+              ...preservedStyle,
+              ...(preservedWidth ? { width: preservedWidth } : {}),
+              ...(preservedHeight ? { height: preservedHeight } : {})
+            }
+          }
+        }
+
         return {
           id: node.id,
           type: node.type || 'process',
@@ -2057,8 +2111,17 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             x: node.position.x,
             y: node.position.y
           },
+          // Preserve style and dimensions for highlight regions
+          ...(isHighlightRegion && preservedStyle ? { style: preservedStyle } : {}),
+          ...(isHighlightRegion && preservedWidth ? { width: preservedWidth } : {}),
+          ...(isHighlightRegion && preservedHeight ? { height: preservedHeight } : {}),
           data: {
             ...node.data,
+            ...(originalNode?.data ? {
+              // Preserve original data properties that AI might not return
+              backgroundColor: node.data?.backgroundColor || originalNode.data.backgroundColor,
+              borderColor: node.data?.borderColor || originalNode.data.borderColor
+            } : {}),
             userRole: userRoleObj
           },
           selectable: true,
