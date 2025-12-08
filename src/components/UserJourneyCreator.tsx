@@ -4305,8 +4305,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 computedJourneyStatus === 'shared' 
-                  ? 'bg-green-100 text-green-800 border-green-500' 
-                  : 'bg-yellow-100 text-yellow-800'
+                  ? 'bg-green-100 text-green-800 border-green-400' 
+                  : 'bg-yellow-100 text-yellow-800 border-yellow-400'
               }`}>
                 {computedJourneyStatus === 'shared' ? 'Shared' : 'Personal'}
               </span>
