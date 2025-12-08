@@ -1,16 +1,6 @@
-/*
-  # Add Debugging to User Signup Process
-  
-  This migration adds comprehensive logging to the auto_add_legl_user trigger
-  function to help debug signup issues. All steps are logged with RAISE NOTICE
-  so they appear in Supabase logs.
-  
-  To view logs:
-  1. Go to Supabase Dashboard > Logs > Postgres Logs
-  2. Filter for "auto_add_legl_user" or "SIGNUP_DEBUG"
-*/
+-- Quick fix for ambiguous column reference error
+-- Run this directly in Supabase SQL Editor to fix the signup trigger immediately
 
--- Recreate the trigger function with comprehensive debugging
 CREATE OR REPLACE FUNCTION auto_add_legl_user()
 RETURNS TRIGGER
 SECURITY DEFINER
@@ -142,88 +132,4 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
--- Also add debugging to the update function
-CREATE OR REPLACE FUNCTION auto_add_legl_user_on_update()
-RETURNS TRIGGER
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  legl_workspace_id uuid;
-  user_full_name text;
-BEGIN
-  RAISE NOTICE 'SIGNUP_DEBUG: Update trigger fired - OLD.email: %, NEW.email: %', OLD.email, NEW.email;
-  
-  -- Only process if email changed to @legl.com
-  IF NEW.email IS NULL OR NOT (NEW.email ILIKE '%@legl.com') THEN
-    RAISE NOTICE 'SIGNUP_DEBUG: Update - Email does not match @legl.com, skipping';
-    RETURN NEW;
-  END IF;
-  
-  -- Skip if email didn't change
-  IF OLD.email = NEW.email THEN
-    RAISE NOTICE 'SIGNUP_DEBUG: Update - Email unchanged, skipping';
-    RETURN NEW;
-  END IF;
-  
-  RAISE NOTICE 'SIGNUP_DEBUG: Update - Processing email change to @legl.com';
-  
-  -- Extract full name from user metadata
-  user_full_name := COALESCE(
-    NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'name',
-    NEW.raw_user_meta_data->>'display_name',
-    NEW.raw_app_meta_data->>'full_name',
-    NEW.raw_app_meta_data->>'name'
-  );
-  
-  -- Find or create "Legl" workspace
-  SELECT id INTO legl_workspace_id
-  FROM workspaces
-  WHERE name = 'Legl'
-  LIMIT 1;
-  
-  -- Create workspace if it doesn't exist
-  IF legl_workspace_id IS NULL THEN
-    INSERT INTO workspaces (name, created_by)
-    VALUES ('Legl', NEW.id)
-    RETURNING id INTO legl_workspace_id;
-  END IF;
-  
-  -- Add user to workspace with full_name
-  INSERT INTO workspace_users (
-    workspace_id,
-    user_id,
-    user_email,
-    full_name,
-    role,
-    status
-  )
-  VALUES (
-    legl_workspace_id,
-    NEW.id,
-    NEW.email,
-    user_full_name,
-    'member',
-    'active'
-  )
-  ON CONFLICT (workspace_id, user_email) 
-  DO UPDATE SET
-    user_id = NEW.id,
-    full_name = COALESCE(EXCLUDED.full_name, workspace_users.full_name),
-    status = 'active',
-    updated_at = now();
-  
-  RETURN NEW;
-END;
-$$;
-
--- Ensure the trigger is active
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION auto_add_legl_user();
 

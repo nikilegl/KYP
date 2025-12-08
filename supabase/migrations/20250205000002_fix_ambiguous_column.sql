@@ -14,7 +14,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   legl_workspace_id uuid;
-  user_email text;
+  v_user_email text;  -- Renamed to avoid conflict with column name
   user_full_name text;
   insert_result text;
 BEGIN
@@ -22,21 +22,21 @@ BEGIN
   RAISE NOTICE 'SIGNUP_DEBUG: Trigger fired for user ID: %, Email: %', NEW.id, NEW.email;
   
   -- Get user email
-  user_email := NEW.email;
-  RAISE NOTICE 'SIGNUP_DEBUG: Extracted email: %', user_email;
+  v_user_email := NEW.email;
+  RAISE NOTICE 'SIGNUP_DEBUG: Extracted email: %', v_user_email;
   
   -- Only process @legl.com emails
-  IF user_email IS NULL THEN
+  IF v_user_email IS NULL THEN
     RAISE NOTICE 'SIGNUP_DEBUG: Email is NULL, skipping';
     RETURN NEW;
   END IF;
   
-  IF NOT (user_email ILIKE '%@legl.com') THEN
-    RAISE NOTICE 'SIGNUP_DEBUG: Email % does not match @legl.com pattern, skipping', user_email;
+  IF NOT (v_user_email ILIKE '%@legl.com') THEN
+    RAISE NOTICE 'SIGNUP_DEBUG: Email % does not match @legl.com pattern, skipping', v_user_email;
     RETURN NEW;
   END IF;
   
-  RAISE NOTICE 'SIGNUP_DEBUG: Email % matches @legl.com pattern, proceeding', user_email;
+  RAISE NOTICE 'SIGNUP_DEBUG: Email % matches @legl.com pattern, proceeding', v_user_email;
   
   -- Extract full name from user metadata (Google OAuth stores it here)
   user_full_name := COALESCE(
@@ -84,7 +84,7 @@ BEGIN
   -- Add user to workspace with full_name
   RAISE NOTICE 'SIGNUP_DEBUG: Attempting to insert into workspace_users...';
   RAISE NOTICE 'SIGNUP_DEBUG: Values - workspace_id: %, user_id: %, user_email: %, full_name: %, role: member, status: active', 
-    legl_workspace_id, NEW.id, user_email, user_full_name;
+    legl_workspace_id, NEW.id, v_user_email, user_full_name;
   
   BEGIN
     INSERT INTO workspace_users (
@@ -98,7 +98,7 @@ BEGIN
     VALUES (
       legl_workspace_id,
       NEW.id,
-      user_email,
+      v_user_email,
       user_full_name,
       'member',
       'active'
@@ -116,14 +116,14 @@ BEGIN
     SELECT COUNT(*) INTO insert_result
     FROM workspace_users wu
     WHERE wu.workspace_id = legl_workspace_id 
-      AND (wu.user_id = NEW.id OR wu.user_email = user_email);
+      AND (wu.user_id = NEW.id OR wu.user_email = v_user_email);
     
     RAISE NOTICE 'SIGNUP_DEBUG: Verification - Found % matching entries in workspace_users', insert_result;
     
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'SIGNUP_DEBUG: ERROR inserting into workspace_users: % - %', SQLSTATE, SQLERRM;
     RAISE WARNING 'SIGNUP_DEBUG: Error details - workspace_id: %, user_id: %, user_email: %', 
-      legl_workspace_id, NEW.id, user_email;
+      legl_workspace_id, NEW.id, v_user_email;
     
     -- Check RLS policies
     RAISE NOTICE 'SIGNUP_DEBUG: Checking if RLS might be blocking...';
@@ -133,7 +133,7 @@ BEGIN
     RAISE EXCEPTION 'SIGNUP_DEBUG: Failed to add user to workspace_users. Original error: %', SQLERRM;
   END;
   
-  RAISE NOTICE 'SIGNUP_DEBUG: Trigger completed successfully for user: %', user_email;
+  RAISE NOTICE 'SIGNUP_DEBUG: Trigger completed successfully for user: %', v_user_email;
   RETURN NEW;
 END;
 $$;
