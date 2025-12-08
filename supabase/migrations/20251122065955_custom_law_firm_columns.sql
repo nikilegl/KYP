@@ -141,3 +141,4 @@ CREATE TRIGGER update_law_firm_custom_values_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_law_firm_custom_values_updated_at();
 
+
