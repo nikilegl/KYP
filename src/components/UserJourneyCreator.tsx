@@ -2631,27 +2631,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     setNodes((nds) => [newRegion, ...nds]) // Add region at the beginning (before other nodes)
   }, [setNodes, snapToGrid])
 
-  // Keyboard shortcut for adding region (Cmd/Ctrl+R) - defined after addHighlightRegion
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isModifierPressed = event.metaKey || event.ctrlKey
-      
-      // Don't trigger if user is typing in an input field
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      // Handle Command/Ctrl+R to add highlight region
-      if (isModifierPressed && (event.key === 'r' || event.key === 'R')) {
-        event.preventDefault()
-        addHighlightRegion()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [addHighlightRegion])
 
   // Configure highlight region (for editing)
   const configureRegion = useCallback((regionId: string) => {
