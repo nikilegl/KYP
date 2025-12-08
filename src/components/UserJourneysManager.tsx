@@ -1022,10 +1022,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       if (item.type === 'folder') {
         const status = item.data.status || 'personal'
         return (
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
             status === 'shared' 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
+              ? 'bg-green-100 text-green-800 border-green-800' 
+              : 'bg-yellow-100 text-yellow-800 border-yellow-800'
           }`}>
             {status === 'shared' ? (
               <>
@@ -1043,10 +1043,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         const folder = journey.folder_id ? folders.find(f => f.id === journey.folder_id) : null
         const status = folder?.status || 'personal'
         return (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
             status === 'shared' 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
+              ? 'bg-green-100 text-green-800 border-green-800' 
+              : 'bg-yellow-100 text-yellow-800 border-yellow-800'
           }`}>
             {status === 'shared' ? 'Shared' : 'Personal'}
           </span>

@@ -28,9 +28,20 @@ export const getUserJourneyComments = async (userJourneyId: string): Promise<Use
       .eq('user_journey_id', userJourneyId)
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      // Handle 404 specifically (table doesn't exist)
+      if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+        console.warn('user_journey_comments table does not exist yet. Comments feature will be unavailable.')
+        return []
+      }
+      throw error
+    }
     return data || []
-  } catch (error) {
+  } catch (error: any) {
+    // Silently handle 404 errors (table doesn't exist)
+    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.status === 404) {
+      return []
+    }
     console.error('Error fetching user journey comments:', error)
     return []
   }

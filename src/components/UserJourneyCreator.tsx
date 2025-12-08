@@ -25,7 +25,7 @@ import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNo
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { getNodesInRegion, getEdgesForNodes, shiftNodesToOrigin, type RegionBounds } from '../utils/exportUtils'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
+import { Save, Plus, Download, Upload, ArrowLeft, Edit, FolderOpen, Check, Sparkles, Image as ImageIcon, Share2, Copy as CopyIcon, ChevronLeft, ChevronRight, ChevronDown, Trash2, Maximize, Minimize } from 'lucide-react'
 import { Modal, ConfirmModal } from './DesignSystem/components/Modal'
 import { OptionsMenu } from './DesignSystem/components/OptionsMenu'
 import { ImportJourneyImageModal } from './ImportJourneyImageModal'
@@ -113,10 +113,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const navigate = useNavigate()
   const location = useLocation()
   const params = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const reactFlowInstanceRef = useRef<any>(null)
+  
+  // Fullscreen state - initialize from URL
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    return searchParams.get('fullscreen') === 'true'
+  })
   
   // Track Alt key state and original node position for duplicate on drag
   const isAltPressedRef = useRef(false)
@@ -765,6 +770,46 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })))
     }
   }, [nodes, setEdges])
+
+  // Sync fullscreen state with URL params (for browser back button)
+  useEffect(() => {
+    const fullscreenParam = searchParams.get('fullscreen') === 'true'
+    if (fullscreenParam !== isFullscreen) {
+      setIsFullscreen(fullscreenParam)
+    }
+  }, [searchParams, isFullscreen])
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        exitFullscreen()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isFullscreen])
+
+  // Fullscreen handlers
+  const enterFullscreen = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('fullscreen', 'true')
+    setSearchParams(newParams, { replace: true })
+    setIsFullscreen(true)
+  }, [searchParams, setSearchParams])
+
+  const exitFullscreen = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams)
+    newParams.delete('fullscreen')
+    setSearchParams(newParams, { replace: true })
+    setIsFullscreen(false)
+  }, [searchParams, setSearchParams])
 
   // Copy selected nodes to clipboard (Command+C / Ctrl+C) - works across browser tabs
   const copySelectedNodes = useCallback(async () => {
@@ -4012,6 +4057,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       />
     ),
   }), [handleEdgeLabelClick])
+  
+  // Update nodeTypes dependencies to exclude edges (using ref instead)
+  // This prevents React Flow warning about recreating nodeTypes
 
   // Handler to update handle arrow state
   const handleHandleArrowToggle = useCallback((nodeId: string, handleId: string) => {
@@ -4027,6 +4075,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     })
   }, [])
 
+  // Use refs to avoid recreating nodeTypes when edges change
+  const edgesRef = useRef(edges)
+  edgesRef.current = edges
+  
   // Define node types with handlers
   const nodeTypes: NodeTypes = useMemo(() => ({
     start: (props: any) => (
@@ -4037,7 +4089,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
-        connectedEdges={edges}
+        connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         handleArrowStates={handleArrowStates[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
@@ -4051,7 +4103,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
-        connectedEdges={edges}
+        connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         handleArrowStates={handleArrowStates[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
@@ -4065,7 +4117,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
-        connectedEdges={edges}
+        connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         handleArrowStates={handleArrowStates[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
@@ -4079,7 +4131,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
-        connectedEdges={edges}
+        connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
         handleArrowStates={handleArrowStates[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
@@ -4109,7 +4161,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
       />
     ),
-  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, edges, userRoleEmojiOverrides, handleArrowStates, handleHandleArrowToggle, handleExportRegion])
+  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, userRoleEmojiOverrides, handleArrowStates, handleHandleArrowToggle, handleExportRegion])
 
   // Comment handlers
   const handleAddComment = useCallback(async (commentText: string) => {
@@ -4183,8 +4235,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative h-full">
+    <div className={`flex-1 flex flex-col overflow-hidden relative ${isFullscreen ? 'h-screen fixed inset-0 z-50 bg-white' : 'h-full'}`}>
       {/* Header */}
+      {!isFullscreen && (
       <div className="space-y-3 mb-6 p-6 pb-0 flex-shrink-0">
         {/* Row 1: Back button and Unsaved changes */}
         <div className="flex items-center justify-between">
@@ -4273,7 +4326,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 computedJourneyStatus === 'shared' 
-                  ? 'bg-green-100 text-green-800' 
+                  ? 'bg-green-100 text-green-800 border-green-500' 
                   : 'bg-yellow-100 text-yellow-800'
               }`}>
                 {computedJourneyStatus === 'shared' ? 'Shared' : 'Personal'}
@@ -4410,11 +4463,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           </div>
         </div>
       </div>
+      )}
 
       {/* Content with React Flow and Comments Panel */}
-      <div className="flex-1 flex overflow-hidden relative" style={{ minHeight: 0 }}>
+      <div className={`flex-1 flex overflow-hidden relative ${isFullscreen ? 'h-full' : ''}`} style={{ minHeight: 0, width: '100%' }}>
         {/* React Flow Canvas */}
-        <div className={`flex-1 bg-white rounded-lg border overflow-hidden transition-all duration-300 mx-6 mb-6 ${showComments ? 'mr-0' : ''}`} style={{ minHeight: 0 }}>
+        <div className={`flex-1 bg-white overflow-hidden transition-all duration-300 ${isFullscreen ? 'h-full rounded-none border-0' : 'rounded-lg border mx-6 mb-6'} ${showComments && !isFullscreen ? 'mr-0' : ''}`} style={{ minHeight: 0, width: '100%', height: isFullscreen ? '100%' : '100%' }}>
           <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -4486,31 +4540,48 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           />
           <KeyboardZoomHandler />
           <Panel position="top-right">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 items-end">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditWithAIModal(true)}
+                  className="flex items-center gap-2"
+                  disabled={nodes.length === 0}
+                >
+                  <Sparkles size={16} />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={addHighlightRegion}
+                  className="flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  Add Region
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={smartAddNode}
+                  className="flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  Add Node
+                </Button>
+              </div>
               <Button
                 variant="outline"
-                onClick={() => setShowEditWithAIModal(true)}
+                onClick={isFullscreen ? exitFullscreen : enterFullscreen}
                 className="flex items-center gap-2"
-                disabled={nodes.length === 0}
+                title={isFullscreen ? "Exit fullscreen (ESC)" : "Enter fullscreen"}
               >
-                <Sparkles size={16} />
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                onClick={addHighlightRegion}
-                className="flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Add Region
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={smartAddNode}
-                className="flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Add Node
+                {isFullscreen ? (
+                  <>
+                    <Minimize size={16} />
+                    Exit Fullscreen
+                  </>
+                ) : (
+                  <Maximize size={16} />
+                )}
               </Button>
             </div>
           </Panel>
@@ -4518,7 +4589,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </div>
 
         {/* History Column - Full Height */}
-        {currentJourneyId && (
+        {currentJourneyId && !isFullscreen && (
           <div className="absolute top-0 right-0 bottom-0 z-40">
             <HistorySection
               entityId={currentJourneyId}
@@ -4539,8 +4610,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         )}
       </div>
 
-      {/* Toggle Comments Button - only show if journey exists */}
-      {currentJourneyId && (
+      {/* Toggle Comments Button - only show if journey exists and not in fullscreen */}
+      {currentJourneyId && !isFullscreen && (
         <button
           onClick={() => setShowComments(!showComments)}
           className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
