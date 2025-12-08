@@ -1024,8 +1024,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         return (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
             status === 'shared' 
-              ? 'bg-green-100 text-green-800 border-green-800' 
-              : 'bg-yellow-100 text-yellow-800 border-yellow-800'
+              ? 'bg-green-100 text-green-800 border-green-400' 
+              : 'bg-yellow-100 text-yellow-800 border-yellow-400'
           }`}>
             {status === 'shared' ? (
               <>
@@ -1045,8 +1045,8 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         return (
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
             status === 'shared' 
-              ? 'bg-green-100 text-green-800 border-green-800' 
-              : 'bg-yellow-100 text-yellow-800 border-yellow-800'
+              ? 'bg-green-100 text-green-800 border-green-400' 
+              : 'bg-yellow-100 text-yellow-800 border-yellow-400'
           }`}>
             {status === 'shared' ? 'Shared' : 'Personal'}
           </span>
