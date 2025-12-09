@@ -38,7 +38,7 @@ import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
 import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney } from '../lib/database/services/userJourneyService'
-import { assignUserJourneysToFolder, getUserJourneyFolders, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
+import { assignUserJourneysToFolder, getUserJourneyFolders, getUserJourneyFolderById, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
 import { getPlatforms } from '../lib/database/services/platformService'
@@ -407,43 +407,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const loadData = async () => {
     try {
       setLoading(true)
-      const projectsData = await getProjects()
-      setProjects(projectsData)
-      
-      // Load all law firms
-      const lawFirmsData = await getLawFirms()
-      setLawFirms(lawFirmsData)
-      
-      // Load all third parties if not provided
-      if (!initialThirdParties || initialThirdParties.length === 0) {
-        // Get current user's workspace
-        if (supabase) {
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            const { data: workspaceUser } = await supabase
-              .from('workspace_users')
-              .select('workspace_id')
-              .eq('user_id', user.id)
-              .single()
-            
-            if (workspaceUser) {
-              setWorkspaceId(workspaceUser.workspace_id)
-              const thirdPartiesData = await getThirdParties(workspaceUser.workspace_id)
-              setThirdParties(thirdPartiesData)
-            }
-          }
-        }
-      }
-      
-      // Load all platforms if not provided
-      if (!initialPlatforms || initialPlatforms.length === 0) {
-        const platformsData = await getPlatforms()
-        setPlatforms(platformsData)
-      }
-      
-      // Load workspace users for comments
-      const workspaceUsersData = await getWorkspaceUsers()
-      setWorkspaceUsers(workspaceUsersData)
       
       // Check if there's an ID in the URL query params or path
       const urlJourneyId = searchParams.get('id')
@@ -456,19 +419,91 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setSelectedFolderId(urlFolderId)
       }
       
-      let journey = null
+      // Parallelize all independent data loading
+      const loadPromises: Promise<any>[] = [
+        getProjects(),
+        getLawFirms(),
+        !initialPlatforms || initialPlatforms.length === 0 ? getPlatforms() : Promise.resolve(initialPlatforms),
+      ]
       
-      // If we have a shortId in the path (e.g., /user-journey/123), use that
-      if (shortIdParam && location.pathname.startsWith('/user-journey/')) {
-        journey = await getUserJourneyByShortId(shortIdParam)
-      } 
-      // Otherwise check for full ID in query params or props
-      else {
-        const loadJourneyId = urlJourneyId || journeyId
-        if (loadJourneyId) {
-          journey = await getUserJourneyById(loadJourneyId)
+      // Load third parties if needed (requires workspace lookup first)
+      let workspaceIdPromise: Promise<string | null> | null = null
+      if (!initialThirdParties || initialThirdParties.length === 0) {
+        if (supabase) {
+          workspaceIdPromise = supabase.auth.getUser().then(async ({ data: { user } }) => {
+            if (user) {
+              const { data: workspaceUser } = await supabase
+                .from('workspace_users')
+                .select('workspace_id')
+                .eq('user_id', user.id)
+                .single()
+              
+              if (workspaceUser) {
+                setWorkspaceId(workspaceUser.workspace_id)
+                return workspaceUser.workspace_id
+              }
+            }
+            return null
+          })
         }
       }
+      
+      // Load journey in parallel with other data
+      let journeyPromise: Promise<any>
+      if (shortIdParam && location.pathname.startsWith('/user-journey/')) {
+        journeyPromise = getUserJourneyByShortId(shortIdParam)
+      } else {
+        const loadJourneyId = urlJourneyId || journeyId
+        journeyPromise = loadJourneyId ? getUserJourneyById(loadJourneyId) : Promise.resolve(null)
+      }
+      
+      loadPromises.push(journeyPromise)
+      
+      // Execute all parallel loads
+      const [projectsData, lawFirmsData, platformsData, journey] = await Promise.all(loadPromises)
+      
+      // Set basic data immediately
+      setProjects(projectsData)
+      setLawFirms(lawFirmsData)
+      if (!initialPlatforms || initialPlatforms.length === 0) {
+        setPlatforms(platformsData)
+      } else {
+        setPlatforms(initialPlatforms)
+      }
+      
+      // Load third parties after workspace is determined
+      if (workspaceIdPromise) {
+        workspaceIdPromise.then(async (workspaceId) => {
+          if (workspaceId) {
+            const thirdPartiesData = await getThirdParties(workspaceId)
+            setThirdParties(thirdPartiesData)
+          }
+        }).catch(error => {
+          console.error('Error loading third parties:', error)
+        })
+      } else if (initialThirdParties && initialThirdParties.length > 0) {
+        setThirdParties(initialThirdParties)
+      }
+      
+      // Defer non-critical data loading (comments, workspace users) until after initial render
+      Promise.all([
+        getWorkspaceUsers(),
+        journey ? getUserJourneyComments(journey.id).catch(() => []) : Promise.resolve([])
+      ]).then(([workspaceUsersData, commentsData]) => {
+        setWorkspaceUsers(workspaceUsersData)
+        if (journey) {
+          setComments(commentsData.map(c => ({
+            id: c.id,
+            user_id: c.user_id,
+            comment_text: c.comment_text,
+            created_at: c.created_at,
+            updated_at: c.updated_at
+          })))
+        }
+      }).catch(error => {
+        console.error('Error loading deferred data:', error)
+        setComments([])
+      })
       
       if (journey) {
         // Load existing journey
@@ -478,37 +513,18 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         setJourneyLayout(journey.layout || 'vertical')
         setSelectedProjectId(journey.project_id || '')
         
-        // Load folder if journey belongs to one
-        if (journey.folder_id) {
-          try {
-            const folders = await getUserJourneyFolders()
-            const folder = folders.find(f => f.id === journey.folder_id)
-            if (folder) {
-              setJourneyFolder(folder)
-            }
-          } catch (error) {
-            console.error('Error loading folder:', error)
-          }
-        }
+        // Load folder and law firms in parallel
+        const folderAndLawFirmsPromises: Promise<any>[] = [
+          journey.folder_id ? getUserJourneyFolderById(journey.folder_id).catch(() => null) : Promise.resolve(null),
+          getUserJourneyLawFirms(journey.id)
+        ]
         
-        // Load associated law firms
-        const lawFirmIds = await getUserJourneyLawFirms(journey.id)
+        const [folder, lawFirmIds] = await Promise.all(folderAndLawFirmsPromises)
+        
+        if (folder) {
+          setJourneyFolder(folder)
+        }
         setSelectedLawFirmIds(lawFirmIds)
-        
-        // Load comments if journey exists
-        try {
-          const commentsData = await getUserJourneyComments(journey.id)
-          setComments(commentsData.map(c => ({
-            id: c.id,
-            user_id: c.user_id,
-            comment_text: c.comment_text,
-            created_at: c.created_at,
-            updated_at: c.updated_at
-          })))
-        } catch (error) {
-          console.error('Error loading comments:', error)
-          setComments([])
-        }
         
         if (journey.flow_data) {
           // Extract userRoleEmojiOverrides from flow_data if it exists
@@ -526,77 +542,92 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }))
           setNodes(nodesWithSelection)
           
-          // Migrate old edge handle IDs to new format if needed
-          // Old format: 'top', 'bottom', 'left', 'right' (simple side names) or null/undefined
-          // New format: 'source-top', 'target-top', etc. (with type prefix)
-          
-          // Determine default handle side based on journey layout
-          // For vertical layouts: source-bottom, target-top
-          // For horizontal layouts: source-right, target-left
-          const defaultSourceHandle = journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'
-          const defaultTargetHandle = journeyLayout === 'horizontal' ? 'target-left' : 'target-top'
-          
-          const migratedEdges = journey.flow_data.edges.map(edge => {
-            let newSourceHandle = edge.sourceHandle
-            let newTargetHandle = edge.targetHandle
-            let needsMigration = false
+          // Optimize edge migration - only process if edges exist and might need migration
+          const edges = journey.flow_data.edges || []
+          if (edges.length > 0) {
+            // Determine default handle side based on journey layout (use journey.layout directly since state update is async)
+            const layout = journey.layout || 'vertical'
+            const defaultSourceHandle = layout === 'horizontal' ? 'source-right' : 'source-bottom'
+            const defaultTargetHandle = layout === 'horizontal' ? 'target-left' : 'target-top'
             
-            // Check if sourceHandle needs migration
-            if (!newSourceHandle || 
-                (typeof newSourceHandle === 'string' &&
-                 !newSourceHandle.startsWith('source-') && 
-                 !newSourceHandle.startsWith('target-'))) {
-              if (newSourceHandle && typeof newSourceHandle === 'string') {
-                // Old format: 'top', 'bottom', etc. - migrate to new format
-                const validSides = ['top', 'bottom', 'left', 'right']
-                if (validSides.includes(newSourceHandle)) {
-                  newSourceHandle = `source-${newSourceHandle}`
-                  needsMigration = true
-                }
-              } else {
-                // No handle ID - assign default based on layout
-                newSourceHandle = defaultSourceHandle
-                needsMigration = true
-              }
-            }
+            // Check if migration is needed before processing all edges
+            const needsMigration = edges.some(edge => {
+              const sourceNeedsMigration = !edge.sourceHandle || 
+                (typeof edge.sourceHandle === 'string' &&
+                 !edge.sourceHandle.startsWith('source-') && 
+                 !edge.sourceHandle.startsWith('target-'))
+              const targetNeedsMigration = !edge.targetHandle || 
+                (typeof edge.targetHandle === 'string' &&
+                 !edge.targetHandle.startsWith('source-') && 
+                 !edge.targetHandle.startsWith('target-'))
+              return sourceNeedsMigration || targetNeedsMigration
+            })
             
-            // Check if targetHandle needs migration
-            if (!newTargetHandle || 
-                (typeof newTargetHandle === 'string' &&
-                 !newTargetHandle.startsWith('source-') && 
-                 !newTargetHandle.startsWith('target-'))) {
-              if (newTargetHandle && typeof newTargetHandle === 'string') {
-                // Old format: 'top', 'bottom', etc. - migrate to new format
-                const validSides = ['top', 'bottom', 'left', 'right']
-                if (validSides.includes(newTargetHandle)) {
-                  newTargetHandle = `target-${newTargetHandle}`
-                  needsMigration = true
-                }
-              } else {
-                // No handle ID - assign default based on layout
-                newTargetHandle = defaultTargetHandle
-                needsMigration = true
-              }
-            }
-            
-            // Always return migrated edge if migration was needed
             if (needsMigration) {
-              return {
-                ...edge,
-                sourceHandle: newSourceHandle,
-                targetHandle: newTargetHandle
-              }
+              // Only migrate if needed
+              const migratedEdges = edges.map(edge => {
+                let newSourceHandle = edge.sourceHandle
+                let newTargetHandle = edge.targetHandle
+                let edgeNeedsMigration = false
+                
+                // Check if sourceHandle needs migration
+                if (!newSourceHandle || 
+                    (typeof newSourceHandle === 'string' &&
+                     !newSourceHandle.startsWith('source-') && 
+                     !newSourceHandle.startsWith('target-'))) {
+                  if (newSourceHandle && typeof newSourceHandle === 'string') {
+                    // Old format: 'top', 'bottom', etc. - migrate to new format
+                    const validSides = ['top', 'bottom', 'left', 'right']
+                    if (validSides.includes(newSourceHandle)) {
+                      newSourceHandle = `source-${newSourceHandle}`
+                      edgeNeedsMigration = true
+                    }
+                  } else {
+                    // No handle ID - assign default based on layout
+                    newSourceHandle = defaultSourceHandle
+                    edgeNeedsMigration = true
+                  }
+                }
+                
+                // Check if targetHandle needs migration
+                if (!newTargetHandle || 
+                    (typeof newTargetHandle === 'string' &&
+                     !newTargetHandle.startsWith('source-') && 
+                     !newTargetHandle.startsWith('target-'))) {
+                  if (newTargetHandle && typeof newTargetHandle === 'string') {
+                    // Old format: 'top', 'bottom', etc. - migrate to new format
+                    const validSides = ['top', 'bottom', 'left', 'right']
+                    if (validSides.includes(newTargetHandle)) {
+                      newTargetHandle = `target-${newTargetHandle}`
+                      edgeNeedsMigration = true
+                    }
+                  } else {
+                    // No handle ID - assign default based on layout
+                    newTargetHandle = defaultTargetHandle
+                    edgeNeedsMigration = true
+                  }
+                }
+                
+                // Only return migrated edge if migration was needed
+                if (edgeNeedsMigration) {
+                  return {
+                    ...edge,
+                    sourceHandle: newSourceHandle,
+                    targetHandle: newTargetHandle
+                  }
+                }
+                
+                return edge
+              })
+              
+              setEdges(migratedEdges)
+            } else {
+              // No migration needed, use edges as-is
+              setEdges(edges)
             }
-            
-            return edge
-          })
-          
-          const migratedCount = migratedEdges.filter((e, i) => {
-            const original = journey.flow_data.edges[i]
-            return e.sourceHandle !== original.sourceHandle || e.targetHandle !== original.targetHandle
-          }).length
-          
-          setEdges(migratedEdges)
+          } else {
+            setEdges([])
+          }
         }
       } else {
         // New journey - set up defaults
@@ -2795,6 +2826,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       
       const exportEdgeTypes: EdgeTypes = {
         default: (props: any) => React.createElement(CustomEdge, props),
+        custom: (props: any) => React.createElement(CustomEdge, props),
       }
       
       // Render ReactFlow off-screen
@@ -4035,6 +4067,15 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
       />
     ),
+    custom: (props: any) => (
+      <CustomEdge
+        {...props}
+        data={{
+          ...props.data,
+          onLabelClick: handleEdgeLabelClick,
+        }}
+      />
+    ),
   }), [handleEdgeLabelClick])
   
   // Update nodeTypes dependencies to exclude edges (using ref instead)
@@ -4058,6 +4099,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const edgesRef = useRef(edges)
   edgesRef.current = edges
   
+  // Use ref for handleArrowStates to avoid recreating nodeTypes
+  const handleArrowStatesRef = useRef(handleArrowStates)
+  handleArrowStatesRef.current = handleArrowStates
+  
   // Define node types with handlers
   const nodeTypes: NodeTypes = useMemo(() => ({
     start: (props: any) => (
@@ -4070,7 +4115,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
-        handleArrowStates={handleArrowStates[props.id] || []}
+        handleArrowStates={handleArrowStatesRef.current[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
@@ -4084,7 +4129,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
-        handleArrowStates={handleArrowStates[props.id] || []}
+        handleArrowStates={handleArrowStatesRef.current[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
@@ -4098,7 +4143,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
-        handleArrowStates={handleArrowStates[props.id] || []}
+        handleArrowStates={handleArrowStatesRef.current[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
@@ -4112,7 +4157,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         isConnecting={isConnecting}
         connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
-        handleArrowStates={handleArrowStates[props.id] || []}
+        handleArrowStates={handleArrowStatesRef.current[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
@@ -4124,9 +4169,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         platforms={platforms}
         onEdit={() => configureNode(props.id)}
         isConnecting={isConnecting}
-        connectedEdges={edges}
+        connectedEdges={edgesRef.current}
         userRoleEmojiOverrides={userRoleEmojiOverrides}
-        handleArrowStates={handleArrowStates[props.id] || []}
+        handleArrowStates={handleArrowStatesRef.current[props.id] || []}
         onHandleArrowToggle={handleHandleArrowToggle}
       />
     ),
@@ -4140,7 +4185,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }}
       />
     ),
-  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, userRoleEmojiOverrides, handleArrowStates, handleHandleArrowToggle, handleExportRegion])
+  }), [configureNode, thirdParties, platforms, configureRegion, isConnecting, userRoleEmojiOverrides, handleHandleArrowToggle, handleExportRegion])
 
   // Comment handlers
   const handleAddComment = useCallback(async (commentText: string) => {

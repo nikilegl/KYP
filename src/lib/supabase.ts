@@ -58,6 +58,21 @@ export const forceSignOut = async () => {
 const customFetch = async (url: RequestInfo | URL, options?: RequestInit) => {
   const response = await fetch(url, options)
   
+  // Suppress 404 errors for tables that might not exist yet (e.g., user_journey_comments)
+  // This prevents console noise when migrations haven't been run yet
+  if (response.status === 404) {
+    const urlString = typeof url === 'string' ? url : url.toString()
+    if (urlString.includes('user_journey_comments')) {
+      // Return a mock empty response for 404s on this table
+      // The service layer will handle this gracefully
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+  }
+  
   // Check for authentication errors
   if (response.status === 400 || response.status === 401 || response.status === 403) {
     try {

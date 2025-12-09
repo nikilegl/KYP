@@ -164,7 +164,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/projects') {
-        console.log('🔵 WorkspaceDataFetcher: Processing projects path')
         setCurrentView('projects')
         onViewChange('projects')
         setSelectedProject(null)
@@ -190,7 +189,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/stakeholders') {
-        console.log('🔵 WorkspaceDataFetcher: Processing stakeholders path')
         setCurrentView('stakeholders')
         onViewChange('stakeholders')
         setSelectedProject(null)
@@ -203,7 +201,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/settings') {
-        console.log('🔵 WorkspaceDataFetcher: Processing settings path')
         setCurrentView('settings')
         onViewChange('settings')
         setSelectedProject(null)
@@ -216,7 +213,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/design-system') {
-        console.log('🔵 WorkspaceDataFetcher: Processing design-system path')
         setCurrentView('design-system')
         onViewChange('design-system')
         setSelectedProject(null)
@@ -229,7 +225,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/user-journeys' || pathname.startsWith('/user-journeys/')) {
-        console.log('🔵 WorkspaceDataFetcher: Processing user-journeys path', pathname)
         setCurrentView('user-journeys')
         onViewChange('user-journeys')
         setSelectedProject(null)
@@ -242,7 +237,6 @@ export function WorkspaceDataFetcher({
       }
 
       if (pathname === '/user-journey-creator') {
-        console.log('🔵 WorkspaceDataFetcher: Processing user-journey-creator path')
         setCurrentView('user-journey-creator')
         onViewChange('user-journey-creator')
         setSelectedProject(null)
@@ -256,9 +250,7 @@ export function WorkspaceDataFetcher({
 
 
       const shortId = routeParams.shortId ? parseInt(routeParams.shortId) : null
-      console.log('🔵 WorkspaceDataFetcher: Extracted shortId:', shortId, 'from routeParams:', routeParams)
       if (!shortId) {
-        console.log('🔵 WorkspaceDataFetcher: No shortId found, returning')
         return
       }
 
@@ -341,59 +333,45 @@ export function WorkspaceDataFetcher({
           navigate('/')
         }
       } else if (pathname.startsWith('/design/')) {
-        console.log('🔵 WorkspaceDataFetcher: Processing design route with shortId:', shortId)
         const { getAssetByShortId: getDesignByShortId, getProjectById } = await import('../../lib/database')
         const design = await getDesignByShortId(shortId)
-        console.log('🔵 WorkspaceDataFetcher: Design lookup result:', design)
         if (design) {
           // Always set the design for viewing
           setSelectedDesignForProject(design)
-          setSelectedDesign(design) // Add this line to set selectedDesign
-          console.log('🔵 WorkspaceDataFetcher: Set selectedDesign and selectedDesignForProject')
+          setSelectedDesign(design)
           
           // Try to load the associated project if it exists
           if (design.project_id) {
             try {
               const project = await getProjectById(design.project_id)
-              console.log('🔵 WorkspaceDataFetcher: Project lookup result:', project)
               if (project) {
                 setSelectedProject(project)
                 setCurrentView('project-dashboard')
-                console.log('🔵 WorkspaceDataFetcher: Set currentView to project-dashboard')
               } else {
                 // Project not found, show standalone design detail
                 setCurrentView('design-detail')
-                console.log('🔵 WorkspaceDataFetcher: Set currentView to design-detail (no project)')
               }
             } catch (error) {
               console.error('Error loading project for design:', error)
               // Show standalone design detail on error
               setCurrentView('design-detail')
-              console.log('🔵 WorkspaceDataFetcher: Set currentView to design-detail (error)')
             }
           } else {
             // Design doesn't belong to a project, show standalone design detail
             setCurrentView('design-detail')
-            console.log('🔵 WorkspaceDataFetcher: Set currentView to design-detail (no project_id)')
           }
         } else {
-          console.log('🔵 WorkspaceDataFetcher: Design not found, navigating to /')
           navigate('/')
         }
       } else if (pathname.startsWith('/law-firm/')) {
-        console.log('🔵 WorkspaceDataFetcher: Processing law-firm route with shortId:', shortId)
         const lawFirm = await getLawFirmByShortId(shortId)
-        console.log('🔵 WorkspaceDataFetcher: Law firm lookup result:', lawFirm)
         if (lawFirm) {
           setSelectedLawFirm(lawFirm)
           setCurrentView('law-firm-detail')
-          console.log('🔵 WorkspaceDataFetcher: Set currentView to law-firm-detail')
         } else {
-          console.log('🔵 WorkspaceDataFetcher: Law firm not found, navigating to /')
           navigate('/')
         }
       } else if (pathname.startsWith('/user-journey/')) {
-        console.log('🔵 WorkspaceDataFetcher: Processing user-journey route with shortId:', shortId)
         // Set view to user-journey-creator to render the creator component
         setCurrentView('user-journey-creator')
         onViewChange('user-journey-creator')
@@ -475,22 +453,8 @@ export function WorkspaceDataFetcher({
       setAllUserStories(allUserStoriesData)
       setAllDesigns(allDesignsData)
       
-      // Debug: Log workspaceUsers data
-      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData:', workspaceUsersData)
-      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData length:', workspaceUsersData.length)
-      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData type:', typeof workspaceUsersData)
-      console.log('🔵 WorkspaceDataFetcher: workspaceUsersData is array:', Array.isArray(workspaceUsersData))
-      
-      // Debug: Check state after setting
-      setTimeout(() => {
-        console.log('🔵 WorkspaceDataFetcher: workspaceUsers state after setState:', workspaceUsers)
-        console.log('🔵 WorkspaceDataFetcher: workspaceUsers state length:', workspaceUsers.length)
-      }, 100)
-      
       // Calculate stakeholder notes count
       const stakeholderNotesCount: Record<string, number> = {}
-      console.log('📊 WorkspaceDataFetcher: allNoteStakeholders data:', allNoteStakeholders)
-      console.log('📊 WorkspaceDataFetcher: Number of notes with stakeholders:', Object.keys(allNoteStakeholders).length)
       
       Object.values(allNoteStakeholders).forEach(stakeholderIds => {
         stakeholderIds.forEach(stakeholderId => {
@@ -498,7 +462,6 @@ export function WorkspaceDataFetcher({
         })
       })
       
-      console.log('📊 WorkspaceDataFetcher: Final stakeholder notes count:', stakeholderNotesCount)
       setStakeholderNotesCountMap(stakeholderNotesCount)
       
       // Background data loading complete
@@ -916,17 +879,13 @@ export function WorkspaceDataFetcher({
       status?: string
     }
   ) => {
-    console.log('🔵 WorkspaceDataFetcher.handleUpdateUserStory: Called with story ID:', story.id, 'updates:', updates)
     const updatedUserStory = await updateUserStory(story.id, updates)
-    console.log('🔵 WorkspaceDataFetcher.handleUpdateUserStory: updateUserStory returned:', updatedUserStory)
     if (updatedUserStory) {
-      console.log('🔵 WorkspaceDataFetcher.handleUpdateUserStory: Updating allUserStories state')
       setAllUserStories(allUserStories.map(story => 
         story.id === story.id ? updatedUserStory : story
       ))
-      console.log('✅ WorkspaceDataFetcher.handleUpdateUserStory: State updated successfully')
     } else {
-      console.error('❌ WorkspaceDataFetcher.handleUpdateUserStory: updateUserStory returned null/undefined')
+      console.error('Error updating user story: updateUserStory returned null/undefined')
     }
   }, [allUserStories])
 

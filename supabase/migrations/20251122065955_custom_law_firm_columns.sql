@@ -42,6 +42,10 @@ CREATE INDEX IF NOT EXISTS idx_law_firm_custom_columns_workspace_id ON law_firm_
 CREATE INDEX IF NOT EXISTS idx_law_firm_custom_columns_display_order ON law_firm_custom_columns(workspace_id, display_order);
 
 -- RLS Policies
+-- Drop policies if they exist (in case migration was partially run before)
+DROP POLICY IF EXISTS "Users can view custom columns in their workspaces" ON law_firm_custom_columns;
+DROP POLICY IF EXISTS "Owners and admins can manage custom columns" ON law_firm_custom_columns;
+
 -- Users can view custom columns in their workspaces
 CREATE POLICY "Users can view custom columns in their workspaces"
   ON law_firm_custom_columns
@@ -90,6 +94,10 @@ CREATE INDEX IF NOT EXISTS idx_law_firm_custom_values_law_firm_id ON law_firm_cu
 CREATE INDEX IF NOT EXISTS idx_law_firm_custom_values_workspace_id ON law_firm_custom_values(workspace_id);
 
 -- RLS Policies for custom values
+-- Drop policies if they exist (in case migration was partially run before)
+DROP POLICY IF EXISTS "Users can view custom values in their workspaces" ON law_firm_custom_values;
+DROP POLICY IF EXISTS "Users can manage custom values in their workspaces" ON law_firm_custom_values;
+
 CREATE POLICY "Users can view custom values in their workspaces"
   ON law_firm_custom_values
   FOR SELECT
@@ -123,6 +131,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop trigger if it exists (in case migration was partially run before)
+DROP TRIGGER IF EXISTS update_law_firm_custom_columns_updated_at ON law_firm_custom_columns;
+
 CREATE TRIGGER update_law_firm_custom_columns_updated_at
   BEFORE UPDATE ON law_firm_custom_columns
   FOR EACH ROW
@@ -136,9 +147,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop trigger if it exists (in case migration was partially run before)
+DROP TRIGGER IF EXISTS update_law_firm_custom_values_updated_at ON law_firm_custom_values;
+
 CREATE TRIGGER update_law_firm_custom_values_updated_at
   BEFORE UPDATE ON law_firm_custom_values
   FOR EACH ROW
   EXECUTE FUNCTION update_law_firm_custom_values_updated_at();
+
 
 

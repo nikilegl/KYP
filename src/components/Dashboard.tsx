@@ -16,8 +16,6 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
 
   // Update currentDashboardView based on pathname
   useEffect(() => {
-    console.log('🔵 Dashboard: pathname changed to:', pathname)
-    
     if (pathname === '/') {
       setCurrentDashboardView('user-journeys')
     } else if (pathname === '/projects') {
@@ -34,23 +32,11 @@ export function Dashboard({ routeParams, pathname }: DashboardProps) {
       setCurrentDashboardView('settings')
     } else if (pathname === '/design-system') {
       setCurrentDashboardView('design-system')
-    } else if (pathname.startsWith('/project/') || 
-               pathname.startsWith('/note/') || 
-               pathname.startsWith('/user-story/') || 
-               pathname.startsWith('/user-journey/') || 
-               pathname.startsWith('/design/') || 
-               pathname.startsWith('/stakeholder/') || 
-               pathname.startsWith('/law-firm/')) {
-      // For entity detail pages, we don't need to set a specific view
-      // The WorkspaceDataFetcher will handle the routing
-      console.log('🔵 Dashboard: Entity detail route detected')
     }
   }, [pathname])
 
   const handleSignOut = async () => {
-    console.log('🔵 Dashboard: handleSignOut called')
     await signOut()
-    console.log('🔵 Dashboard: signOut completed, reloading page')
     // Force a page reload to ensure the user is properly logged out
     window.location.reload()
   }

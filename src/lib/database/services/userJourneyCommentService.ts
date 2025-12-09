@@ -29,19 +29,31 @@ export const getUserJourneyComments = async (userJourneyId: string): Promise<Use
       .order('created_at', { ascending: false })
 
     if (error) {
-      // Handle 404 specifically (table doesn't exist)
-      if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
-        console.warn('user_journey_comments table does not exist yet. Comments feature will be unavailable.')
+      // Handle 404 specifically (table doesn't exist) - don't log as error
+      if (error.code === 'PGRST116' || 
+          error.message?.includes('does not exist') || 
+          error.message?.includes('relation') ||
+          error.status === 404 ||
+          error.statusCode === 404) {
+        // Table doesn't exist - this is expected if migration hasn't been run
+        // Silently return empty array without logging
         return []
       }
-      throw error
+      // Only log non-404 errors
+      console.error('Error fetching user journey comments:', error)
+      return []
     }
     return data || []
   } catch (error: any) {
     // Silently handle 404 errors (table doesn't exist)
-    if (error?.code === 'PGRST116' || error?.message?.includes('does not exist') || error?.status === 404) {
+    if (error?.code === 'PGRST116' || 
+        error?.message?.includes('does not exist') || 
+        error?.message?.includes('relation') ||
+        error?.status === 404 ||
+        error?.statusCode === 404) {
       return []
     }
+    // Only log non-404 errors
     console.error('Error fetching user journey comments:', error)
     return []
   }
@@ -85,9 +97,28 @@ export const createUserJourneyComment = async (
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // Handle 404 specifically (table doesn't exist) - don't log as error
+      if (error.code === 'PGRST116' || 
+          error.message?.includes('does not exist') || 
+          error.message?.includes('relation') ||
+          error.status === 404 ||
+          error.statusCode === 404) {
+        // Table doesn't exist - return null silently
+        return null
+      }
+      throw error
+    }
     return data
-  } catch (error) {
+  } catch (error: any) {
+    // Silently handle 404 errors (table doesn't exist)
+    if (error?.code === 'PGRST116' || 
+        error?.message?.includes('does not exist') || 
+        error?.message?.includes('relation') ||
+        error?.status === 404 ||
+        error?.statusCode === 404) {
+      return null
+    }
     console.error('Error creating user journey comment:', error)
     return null
   }
@@ -124,9 +155,27 @@ export const updateUserJourneyComment = async (
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // Handle 404 specifically (table doesn't exist)
+      if (error.code === 'PGRST116' || 
+          error.message?.includes('does not exist') || 
+          error.message?.includes('relation') ||
+          error.status === 404 ||
+          error.statusCode === 404) {
+        return null
+      }
+      throw error
+    }
     return data
-  } catch (error) {
+  } catch (error: any) {
+    // Silently handle 404 errors (table doesn't exist)
+    if (error?.code === 'PGRST116' || 
+        error?.message?.includes('does not exist') || 
+        error?.message?.includes('relation') ||
+        error?.status === 404 ||
+        error?.statusCode === 404) {
+      return null
+    }
     console.error('Error updating user journey comment:', error)
     return null
   }
@@ -152,9 +201,27 @@ export const deleteUserJourneyComment = async (commentId: string): Promise<boole
       .delete()
       .eq('id', commentId)
 
-    if (error) throw error
+    if (error) {
+      // Handle 404 specifically (table doesn't exist)
+      if (error.code === 'PGRST116' || 
+          error.message?.includes('does not exist') || 
+          error.message?.includes('relation') ||
+          error.status === 404 ||
+          error.statusCode === 404) {
+        return false
+      }
+      throw error
+    }
     return true
-  } catch (error) {
+  } catch (error: any) {
+    // Silently handle 404 errors (table doesn't exist)
+    if (error?.code === 'PGRST116' || 
+        error?.message?.includes('does not exist') || 
+        error?.message?.includes('relation') ||
+        error?.status === 404 ||
+        error?.statusCode === 404) {
+      return false
+    }
     console.error('Error deleting user journey comment:', error)
     return false
   }
