@@ -167,6 +167,15 @@ export function PublicUserJourneyView() {
         }}
       />
     ),
+    custom: (props: any) => (
+      <CustomEdge
+        {...props}
+        data={{
+          ...props.data,
+          onLabelClick: undefined, // No label editing in public view
+        }}
+      />
+    ),
   }), [])
 
   if (loading) {

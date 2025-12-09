@@ -235,9 +235,14 @@ export const getUserJourneyByShortId = async (
     // If onlyPublished is true, check folder status
     if (onlyPublished) {
       if (data.folder_id) {
-        const folders = await getUserJourneyFolders().catch(() => [])
-        const folder = folders.find(f => f.id === data.folder_id)
-        if (!folder || folder.status !== 'shared') {
+        // Use a more efficient query - fetch only the specific folder we need
+        const { data: folder, error: folderError } = await supabase
+          .from('user_journey_folders')
+          .select('status')
+          .eq('id', data.folder_id)
+          .single()
+        
+        if (folderError || !folder || folder.status !== 'shared') {
           return null
         }
       } else {

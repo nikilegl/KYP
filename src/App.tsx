@@ -27,10 +27,6 @@ function App() {
     }
   }, [searchParams, setSearchParams])
 
-  // Debug: Log user state changes
-  console.log('🔵 App: user state:', user)
-  console.log('🔵 App: loading state:', loading)
-
   // Show error message if Auth0 callback had an error
   if (authError) {
     return (
@@ -71,11 +67,9 @@ function App() {
   }
 
   if (!user) {
-    console.log('🔵 App: No user, showing LoginForm')
     return <LoginForm />
   }
 
-  console.log('🔵 App: User exists, showing Dashboard')
   return <Dashboard routeParams={params} pathname={location.pathname} />
 }
 

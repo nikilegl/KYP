@@ -52,6 +52,31 @@ export async function getUserJourneyFolders(): Promise<UserJourneyFolder[]> {
 }
 
 /**
+ * Get a single user journey folder by ID
+ */
+export async function getUserJourneyFolderById(folderId: string): Promise<UserJourneyFolder | null> {
+  if (!supabase) {
+    throw new Error('Supabase client not initialized')
+  }
+
+  const { data, error } = await supabase
+    .from('user_journey_folders')
+    .select('*')
+    .eq('id', folderId)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No rows returned
+      return null
+    }
+    throw new Error(`Failed to fetch folder: ${error.message}`)
+  }
+
+  return data
+}
+
+/**
  * Create a new user journey folder
  */
 export async function createUserJourneyFolder(
