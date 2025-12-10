@@ -345,26 +345,28 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
         )
       })}
 
-      {/* Title Row: Title + Edit button */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0 text-base font-semibold text-gray-900 break-words">
-          {convertEmojis(label)}
+      {/* Title Row: Title + Edit button - Only show if label exists */}
+      {label && label.trim() && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0 text-base font-semibold text-gray-900 break-words">
+            {convertEmojis(label)}
+          </div>
+          
+          {/* Edit button - Hidden by default, visible on hover */}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit?.()
+              }}
+              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-150"
+              title="Edit node"
+            >
+              <Edit size={14} />
+            </button>
+          </div>
         </div>
-        
-        {/* Edit button - Hidden by default, visible on hover */}
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit?.()
-            }}
-            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-150"
-            title="Edit node"
-          >
-            <Edit size={14} />
-          </button>
-        </div>
-      </div>
+      )}
       
       {/* Bullet Points - Full width */}
       {bulletPoints && bulletPoints.filter(b => b && b.trim()).length > 0 && (

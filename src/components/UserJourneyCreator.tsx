@@ -1331,6 +1331,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     // Don't mark as unsaved if we're just loading the journey
     if (currentJourneyId && nodes.length > 0) {
       setHasUnsavedChanges(true)
+      // Reset "Saved" state when there are unsaved changes
+      setJustSaved(false)
     }
   }, [nodes, edges, currentJourneyId])
 
@@ -1421,7 +1423,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           
           setJustSaved(true)
           setHasUnsavedChanges(false) // Clear unsaved changes flag
-          setTimeout(() => setJustSaved(false), 3000)
         }
       } else {
         // Create new journey
@@ -1446,7 +1447,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setCurrentJourneyId(created.id)
           setJustSaved(true)
           setHasUnsavedChanges(false) // Clear unsaved changes flag
-          setTimeout(() => setJustSaved(false), 3000)
         }
       }
       
@@ -2314,6 +2314,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
     setUserRoleEmojiOverrides(newOverrides)
     setHasUnsavedChanges(true)
+    setJustSaved(false) // Reset "Saved" state when there are unsaved changes
     
     // Update all nodes with this user role to use the new emoji
     // Note: The actual emoji display will be handled by UserRoleTag using the override
@@ -4431,9 +4432,9 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
               }
             }}
             className="flex items-center gap-2 whitespace-nowrap"
-            disabled={saving || justSaved}
+            disabled={saving || (justSaved && !hasUnsavedChanges)}
           >
-            {justSaved ? (
+            {justSaved && !hasUnsavedChanges ? (
               <>
                 <Check size={16} />
                 Saved
@@ -4613,7 +4614,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         </div>
 
         {/* History Column - Full Height */}
-        {currentJourneyId && !isFullscreen && (
+        {/* Hidden for now */}
+        {false && currentJourneyId && !isFullscreen && (
           <div className="absolute top-0 right-0 bottom-0 z-40">
             <HistorySection
               entityId={currentJourneyId}
@@ -4635,7 +4637,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       </div>
 
       {/* Toggle Comments Button - only show if journey exists and not in fullscreen */}
-      {currentJourneyId && !isFullscreen && (
+      {/* Hidden for now */}
+      {false && currentJourneyId && !isFullscreen && (
         <button
           onClick={() => setShowComments(!showComments)}
           className={`absolute top-1/2 transform -translate-y-1/2 bg-blue-600 text-white z-50 transition-all duration-300 ease-in-out rounded-l-full rounded-r-none pr-1 pl-2 pt-2 pb-2 ${
