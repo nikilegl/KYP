@@ -1,4 +1,5 @@
-import { NodeResizer } from '@xyflow/react'
+import React from 'react'
+import { NodeResizer, Handle, Position } from '@xyflow/react'
 import { Edit, MoreVertical, Image as ImageIcon } from 'lucide-react'
 import { convertEmojis } from '../../../utils/emojiConverter'
 import { useState, useRef, useEffect } from 'react'
@@ -16,9 +17,13 @@ interface HighlightRegionNodeProps {
   data: HighlightRegionNodeData
   selected?: boolean
   onEdit?: () => void
+  isConnecting?: boolean
+  connectedEdges?: Array<{ sourceHandle?: string | null; targetHandle?: string | null; source: string; target: string }>
+  handleArrowStates?: string[]
+  onHandleArrowToggle?: (nodeId: string, handleId: string) => void
 }
 
-export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightRegionNodeProps) {
+export function HighlightRegionNode({ id, data, selected, onEdit, isConnecting = false, connectedEdges = [], handleArrowStates = [], onHandleArrowToggle }: HighlightRegionNodeProps) {
   const {
     label = 'Highlight Region',
     backgroundColor = '#ccfbf1', // Turquoise (Teal) by default
@@ -33,6 +38,12 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
   const buttonRef = useRef<HTMLButtonElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonClickTimeRef = useRef<number>(0)
+  
+  // Track hover state for individual handles
+  const [hoveredHandleId, setHoveredHandleId] = useState<string | null>(null)
+  
+  // Track which handles are arrows (Set of handle IDs)
+  const arrowHandles = React.useMemo(() => new Set(handleArrowStates), [handleArrowStates.join(',')])
 
   // Update menu position when it opens
   useEffect(() => {
@@ -210,6 +221,70 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
     onExportRegion?.(id)
   }
 
+  // Get all handle positions - regions can connect from any side
+  const getAllHandlePositions = () => {
+    return [
+      { type: 'source' as const, position: Position.Top, id: 'source-top' },
+      { type: 'source' as const, position: Position.Right, id: 'source-right' },
+      { type: 'source' as const, position: Position.Bottom, id: 'source-bottom' },
+      { type: 'source' as const, position: Position.Left, id: 'source-left' },
+      { type: 'target' as const, position: Position.Top, id: 'target-top' },
+      { type: 'target' as const, position: Position.Right, id: 'target-right' },
+      { type: 'target' as const, position: Position.Bottom, id: 'target-bottom' },
+      { type: 'target' as const, position: Position.Left, id: 'target-left' },
+    ]
+  }
+
+  // Extract the side from handle ID (e.g., 'source-top' -> 'top')
+  const getHandleSide = (handleId: string): string => {
+    return handleId.replace(/^(source|target)-/, '')
+  }
+
+  // Check if a handle has an edge connected to it
+  const hasEdgeOnHandle = (handleId: string, handleType: 'source' | 'target') => {
+    if (handleType === 'source') {
+      return connectedEdges.some(edge => {
+        if (edge.source !== id) return false
+        if (!edge.sourceHandle) return false
+        if (edge.sourceHandle === handleId) return true
+        const handleSide = getHandleSide(handleId)
+        if (edge.sourceHandle === handleSide) return true
+        const edgeSide = edge.sourceHandle.replace(/^(source|target)-/, '')
+        if (edgeSide === handleSide) return true
+        return false
+      })
+    } else {
+      return connectedEdges.some(edge => {
+        if (edge.target !== id) return false
+        if (!edge.targetHandle) return false
+        if (edge.targetHandle === handleId) return true
+        const handleSide = getHandleSide(handleId)
+        if (edge.targetHandle === handleSide) return true
+        const edgeSide = edge.targetHandle.replace(/^(source|target)-/, '')
+        if (edgeSide === handleSide) return true
+        return false
+      })
+    }
+  }
+
+  // Determine if a handle should be visible
+  const shouldShowHandle = (handleId: string, handleType: 'source' | 'target') => {
+    if (isConnecting) return true
+    if (isHovered) return true
+    if (hoveredHandleId !== null) return true // Keep all handles visible when hovering over any handle
+    if (hasEdgeOnHandle(handleId, handleType)) return true
+    return false
+  }
+
+  // Toggle arrow state for a handle
+  const toggleHandleArrow = (handleId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (onHandleArrowToggle) {
+      onHandleArrowToggle(id, handleId)
+    }
+  }
+
   return (
     <>
       {/* Node Resizer - allows dragging corners/edges to resize */}
@@ -220,6 +295,73 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
         handleClassName="!w-3 !h-3 !border-2"
         lineClassName="!border-2"
       />
+
+      {/* Connection Handles - show on all sides, visible on hover or when connecting */}
+      {/* IMPORTANT: All handles must always be rendered so React Flow can register them and calculate edge paths */}
+      {getAllHandlePositions().map((handle, index) => {
+        const isVisible = shouldShowHandle(handle.id, handle.type)
+        const hasEdge = hasEdgeOnHandle(handle.id, handle.type)
+        const isConnected = hasEdge
+        const isHoveredHandle = hoveredHandleId === handle.id
+        const shouldBeArrow = arrowHandles.has(handle.id)
+        
+        return (
+          <React.Fragment key={`${handle.type}-${handle.id}-${index}`}>
+            <Handle
+              type={handle.type}
+              position={handle.position}
+              id={handle.id}
+              isConnectable={true}
+              onMouseEnter={() => setHoveredHandleId(handle.id)}
+              onMouseLeave={() => setHoveredHandleId(null)}
+              onMouseDown={(e) => {
+                if (isConnected) {
+                  e.stopPropagation()
+                }
+              }}
+              onClick={(e) => {
+                if (isConnected) {
+                  toggleHandleArrow(handle.id, e)
+                }
+              }}
+              style={{
+                width: '16px',
+                height: '16px',
+                background: shouldBeArrow ? 'transparent' : (isHoveredHandle && isConnected ? '#3b82f6' : (isVisible ? '#9ca3af' : 'transparent')),
+                border: shouldBeArrow ? 'none' : (isVisible ? '2px solid white' : 'none'),
+                borderRadius: '50%',
+                zIndex: 10,
+                opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
+                pointerEvents: isVisible || hasEdge ? 'all' : 'none',
+                transition: 'background 0.2s ease-in-out, border 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                cursor: isConnected ? 'pointer' : (isVisible ? 'crosshair' : 'default'),
+              }}
+            />
+            {/* Arrow shape overlay when handle is arrow */}
+            {shouldBeArrow && (
+              <div
+                style={{
+                  position: 'absolute',
+                  ...(handle.position === Position.Top && { top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(180deg)' }),
+                  ...(handle.position === Position.Right && { right: '-8px', top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }),
+                  ...(handle.position === Position.Bottom && { bottom: '-8px', left: '50%', transform: 'translateX(-50%) rotate(0deg)' }),
+                  ...(handle.position === Position.Left && { left: '-8px', top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
+                  width: 0,
+                  height: 0,
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
+                  borderBottom: '10px solid',
+                  borderBottomColor: isHoveredHandle && isConnected ? '#3b82f6' : (isVisible ? '#9ca3af' : '#9ca3af'),
+                  pointerEvents: 'none', // Ensure arrow doesn't block handle clicks
+                  zIndex: 10, // Lower than handle's z-index (12) so handles capture events
+                  opacity: hasEdge ? 1 : (isVisible ? 1 : 0),
+                  transition: 'border-bottom-color 0.2s ease-in-out, opacity 0.2s ease-in-out',
+                }}
+              />
+            )}
+          </React.Fragment>
+        )
+      })}
       
       {/* Main Region Container */}
       <div
@@ -236,6 +378,8 @@ export function HighlightRegionNode({ id, data, selected, onEdit }: HighlightReg
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => {
+          // Only hide if menu is not open
+          // Note: hoveredHandleId check in shouldShowHandle keeps handles visible
           if (!showMenu) {
             setIsHovered(false)
           }

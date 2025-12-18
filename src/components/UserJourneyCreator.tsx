@@ -4144,6 +4144,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       <HighlightRegionNode
         {...props}
         onEdit={() => configureRegion(props.id)}
+        isConnecting={isConnecting}
+        connectedEdges={edgesRef.current}
+        handleArrowStates={handleArrowStatesRef.current[props.id] || []}
+        onHandleArrowToggle={handleHandleArrowToggle}
         data={{
           ...props.data,
           onExportRegion: handleExportRegion,
