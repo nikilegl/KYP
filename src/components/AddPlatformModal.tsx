@@ -562,6 +562,7 @@ export function AddPlatformModal({
       onClose={handleCancel}
       title={isEditing ? 'Edit Platform' : 'Add Platform'}
       size="md"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex items-center justify-end gap-3">
           <Button

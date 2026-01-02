@@ -27,8 +27,20 @@ export function NodeModal({
   onClose
 }: NodeModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={(e) => {
+        // Prevent closing on overlay click - only close via close button, cancel, or save
+        if (e.target === e.currentTarget) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">

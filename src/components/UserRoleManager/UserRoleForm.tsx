@@ -53,6 +53,7 @@ export function UserRoleForm({
       onClose={onClose}
       title={isEditing ? 'Edit User Role' : 'Add New User Role'}
       size="lg"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex items-center justify-end gap-3">
           <Button

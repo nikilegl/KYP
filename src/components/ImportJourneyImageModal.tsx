@@ -154,6 +154,7 @@ export function ImportJourneyImageModal({
       onClose={handleClose}
       title="Import Journey from Image"
       size="lg"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex items-center justify-end gap-3">
           <Button variant="ghost" onClick={handleClose} disabled={analyzing}>

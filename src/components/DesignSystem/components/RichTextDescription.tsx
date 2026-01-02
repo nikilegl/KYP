@@ -105,6 +105,7 @@ export function RichTextDescription({
             setLinkText('')
             setLinkUrl('')
           }}
+          closeOnOverlayClick={false}
           title="Insert Link"
           size="sm"
           footerContent={

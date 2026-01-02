@@ -4582,6 +4582,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onClose={cancelDeleteNode}
           title="Delete Node"
           size="sm"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -4618,6 +4619,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             setEdgeLabel('')
           }}
           title="Edge Label"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-between w-full">
               <Button
@@ -4917,6 +4919,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setImportJsonError(null)
         }}
         title="Import Journey from JSON"
+        closeOnOverlayClick={false}
         size="lg"
         footerContent={
           <div className="flex justify-end gap-3">
@@ -4998,6 +5001,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             setEditAIProgress('')
           }
         }}
+        closeOnOverlayClick={false}
         title="Edit Journey with AI"
         size="lg"
         footerContent={
@@ -5117,6 +5121,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }}
           title="Edit Region"
           size="md"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -5229,6 +5234,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }}
           title="Share User Journey"
           size="md"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex justify-end">
               <Button

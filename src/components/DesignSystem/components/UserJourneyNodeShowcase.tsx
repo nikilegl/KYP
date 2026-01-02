@@ -244,6 +244,7 @@ export function UserJourneyNodeShowcase({ userRoles = [] }: UserJourneyNodeShowc
           isOpen={showConfigModal}
           onClose={() => setShowConfigModal(false)}
           title="Configure Node"
+          closeOnOverlayClick={false}
         >
           <div className="space-y-6">
             <div>
