@@ -156,6 +156,7 @@ export function LawFirmForm({
       onClose={onClose}
       title={isEditing ? 'Edit Law Firm' : 'Add New Law Firm'}
       size="md"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex items-center justify-end gap-3">
           <Button

@@ -412,6 +412,7 @@ export function EditColumnsModal({
       onClose={handleClose}
       title="Edit Columns"
       size="lg"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex items-center justify-between gap-3">
           <Button

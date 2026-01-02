@@ -68,6 +68,7 @@ export function AddUserRoleModal({
       onClose={onClose}
       title="Add User Role"
       size="md"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onClose} disabled={saving}>

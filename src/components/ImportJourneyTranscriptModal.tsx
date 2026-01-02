@@ -46,6 +46,7 @@ export function ImportJourneyTranscriptModal({
       onClose={handleClose}
       title="Import Journey from Transcript"
       size="lg"
+      closeOnOverlayClick={false}
       footerContent={
         <div className="flex justify-end gap-3">
           <Button

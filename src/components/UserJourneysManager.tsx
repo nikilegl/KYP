@@ -1236,6 +1236,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           }}
           title="Delete User Journey"
           size="sm"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -1275,6 +1276,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           }}
           title="Duplicate User Journey"
           size="sm"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -1316,6 +1318,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             setEditFolderName('')
             setEditFolderStatus('personal')
           }}
+          closeOnOverlayClick={false}
           title={folderToEdit ? "Edit Folder" : "Add Folder"}
           size="sm"
           footerContent={
@@ -1401,6 +1404,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
           }}
           title="Delete Folder"
           size="md"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -1496,6 +1500,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
             setFolderToMove(null)
             setSelectedMoveFolder('')
           }}
+          closeOnOverlayClick={false}
           title={journeyToMove ? "Move User Journey" : "Move Folder"}
           size="sm"
           footerContent={
@@ -1613,6 +1618,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         onClose={() => setShowAddToFolderModal(false)}
         title="Add to Folder"
         size="sm"
+        closeOnOverlayClick={false}
         footerContent={
           <div className="flex items-center justify-end gap-3">
             <Button

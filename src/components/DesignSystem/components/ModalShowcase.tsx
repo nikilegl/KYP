@@ -103,6 +103,7 @@ export function ModalShowcase() {
         onClose={() => setShowBasicModal(false)}
         title="Basic Modal Example"
         size="md"
+        closeOnOverlayClick={false}
         footerContent={
           <div className="flex justify-end gap-3">
             <Button
@@ -144,6 +145,7 @@ export function ModalShowcase() {
         onClose={() => setShowLargeModal(false)}
         title="Large Modal Example"
         size="xl"
+        closeOnOverlayClick={false}
       >
         <div className="p-6">
           <p className="text-gray-700 mb-4">

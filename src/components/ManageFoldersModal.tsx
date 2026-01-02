@@ -158,6 +158,7 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
         onClose={onClose}
         title="Manage Folders"
         size="md"
+        closeOnOverlayClick={false}
         footerContent={
           <div className="flex items-center justify-end">
             <Button variant="ghost" onClick={onClose}>
@@ -321,6 +322,7 @@ export function ManageFoldersModal({ isOpen, onClose, onFoldersChanged }: Manage
       <Modal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
+        closeOnOverlayClick={false}
         title="Delete Folder"
         size="sm"
         footerContent={

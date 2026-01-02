@@ -111,8 +111,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState(initialEdges)
   const reactFlowInstanceRef = useRef<any>(null)
+  
+  // History for undo functionality (tracks both nodes and edges) - declared early for use in callbacks
+  const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const isUndoing = useRef(false)
   
   // Fullscreen state - initialize from URL
   const [isFullscreen, setIsFullscreen] = useState(() => {
@@ -133,6 +138,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const dragInitialDirectionRef = useRef<Map<string, 'x' | 'y' | null>>(new Map()) // Track initial drag direction for each node
   const resizeStartDimensionsRef = useRef<Map<string, { width: number; height: number }>>(new Map()) // Track initial dimensions when resizing starts
   const resizeInitialDirectionRef = useRef<Map<string, 'width' | 'height' | null>>(new Map()) // Track initial resize direction for each region
+  
+  // Track selection state for auto-panning
+  const isSelectingRef = useRef(false)
+  const autoPanIntervalRef = useRef<number | null>(null)
   
   // Custom onNodesChange that intercepts Alt+drag to keep original node locked and Shift+resize to constrain axis
   const onNodesChange = useCallback((changes: any[]) => {
@@ -243,6 +252,52 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
     }
   }, [onNodesChangeBase, setNodes, nodes])
+
+  // Custom onEdgesChange that saves history when edges change
+  const onEdgesChange = useCallback((changes: any[]) => {
+    // Apply changes
+    onEdgesChangeBase(changes)
+    
+    // Save history when edges change (if not undoing and changes are significant)
+    if (!isUndoing.current) {
+      // Only save history for significant changes (not just selection changes)
+      const hasSignificantChange = changes.some(change => 
+        change.type === 'add' || 
+        change.type === 'remove'
+      )
+      
+      if (hasSignificantChange) {
+        // Use a small delay to ensure edges state is updated after React Flow processes the change
+        setTimeout(() => {
+          if (!isUndoing.current) {
+            // Read current state using functional updates to get the latest values
+            setEdges((currentEdges) => {
+              const edgesSnapshot = JSON.parse(JSON.stringify(currentEdges))
+              setNodes((currentNodes) => {
+                const nodesSnapshot = JSON.parse(JSON.stringify(currentNodes))
+                const snapshot = {
+                  nodes: nodesSnapshot,
+                  edges: edgesSnapshot
+                }
+                setHistory((prev) => {
+                  // Clear any "future" states if we're not at the end
+                  const newHistory = prev.slice(0, historyIndex + 1)
+                  // Add new snapshot
+                  const updated = [...newHistory, snapshot]
+                  // Limit history to last 50 states
+                  return updated.slice(-50)
+                })
+                setHistoryIndex((prev) => prev + 1)
+                return currentNodes
+              })
+              return currentEdges
+            })
+          }
+        }, 10)
+      }
+    }
+  }, [onEdgesChangeBase, setNodes, setEdges, historyIndex])
+
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
   const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
@@ -316,11 +371,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     description: string
     action: 'tidyUp' | 'aiEdit'
   } | null>(null)
-  
-  // History for undo functionality (tracks both nodes and edges)
-  const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
-  const isUndoing = useRef(false)
 
   // Track selected nodes for copy/paste and edge highlighting
   const [copiedNodes, setCopiedNodes] = useState<Node[]>([])
@@ -700,44 +750,84 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Handles both AI/TidyUp undo and node history undo/redo
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't interfere with native undo/redo in input fields
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
       const key = event.key.toLowerCase()
       const isZ = key === 'z'
       
       if (!isZ) return
 
+      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO/REDO
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      if (!isModifierPressed) return
+
+      // Don't interfere with native undo/redo in actual input fields
+      // But allow it to work when React Flow elements are focused
+      const target = event.target as HTMLElement
+      
+      // Only block if we're clearly in a form input field (not React Flow's internal elements)
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        const input = target as HTMLInputElement | HTMLTextAreaElement
+        // Only skip if it's a text input that's actually editable AND in a form/modal
+        const isTextInput = !input.type || 
+          input.type === 'text' || 
+          input.type === 'textarea' || 
+          input.type === 'search' || 
+          input.type === 'email' || 
+          input.type === 'password' ||
+          input.type === 'url' ||
+          input.type === 'tel'
+        
+        if (isTextInput && !input.disabled && !input.readOnly) {
+          // Only block if it's in a form or modal (not React Flow's canvas)
+          const isInForm = target.closest('form') || 
+                          target.closest('[role="dialog"]') || 
+                          target.closest('.modal-overlay') ||
+                          target.closest('[data-testid]') // Common test/component marker
+          if (isInForm) {
+            return
+          }
+        }
+      }
+      
+      // Skip if it's a contentEditable element that's actually being edited in a modal/form
+      if (target.isContentEditable && target.getAttribute('contenteditable') === 'true') {
+        const isInModal = target.closest('[role="dialog"]') || target.closest('.modal-overlay')
+        if (isInModal) {
+          return
+        }
+      }
+
       // Check for Cmd+Shift+Z (Mac) or Ctrl+Shift+Z (Windows/Linux) - REDO
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey) {
+      if (event.shiftKey) {
         // Only works with node history (no redo for AI/TidyUp snapshots)
         if (historyIndex < history.length - 1) {
           event.preventDefault()
+          event.stopPropagation()
           redo()
         }
       }
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO
-      else if ((event.metaKey || event.ctrlKey) && !event.shiftKey) {
+      else {
         // Try AI/TidyUp undo first (takes priority)
         if (undoSnapshot) {
           event.preventDefault()
+          event.stopPropagation()
           handleUndo()
         }
         // Fall back to node history undo
         else if (historyIndex >= 0 && history[historyIndex]) {
           event.preventDefault()
+          event.stopPropagation()
           undo()
         }
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    // Use capture phase to catch events before React Flow handles them
+    // This ensures undo/redo works even when React Flow elements are focused
+    window.addEventListener('keydown', handleKeyDown, true)
     
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
     }
   }, [undoSnapshot, handleUndo, historyIndex, history, undo, redo])
 
@@ -993,6 +1083,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
     if (selectedNodes.length === 0) return
 
+    // Save history before duplicating (for undo)
+    if (!isUndoing.current) {
+      const snapshot = {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges))
+      }
+      setHistory((prev) => {
+        const newHistory = prev.slice(0, historyIndex + 1)
+        const updated = [...newHistory, snapshot]
+        return updated.slice(-50)
+      })
+      setHistoryIndex((prev) => prev + 1)
+    }
+
     const timestamp = Date.now()
     const newNodes = selectedNodes.map((node, index) => {
       const newNodeId = `node-${timestamp}-${index}`
@@ -1013,12 +1117,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     })
 
     setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
-  }, [nodes, setNodes])
+  }, [nodes, edges, setNodes, historyIndex])
 
   // Duplicate selected regions (for Cmd+D shortcut)
   const duplicateSelectedRegions = useCallback(() => {
     const selectedRegions = nodes.filter((node) => node.selected && node.type === 'highlightRegion')
     if (selectedRegions.length === 0) return
+
+    // Save history before duplicating (for undo)
+    if (!isUndoing.current) {
+      const snapshot = {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges))
+      }
+      setHistory((prev) => {
+        const newHistory = prev.slice(0, historyIndex + 1)
+        const updated = [...newHistory, snapshot]
+        return updated.slice(-50)
+      })
+      setHistoryIndex((prev) => prev + 1)
+    }
 
     const timestamp = Date.now()
     const regionIdMap = new Map<string, string>() // Map old region ID to new region ID
@@ -1096,7 +1214,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         ...newEdges
       ])
     }
-  }, [nodes, edges, setNodes, setEdges])
+  }, [nodes, edges, setNodes, setEdges, historyIndex])
 
   // Keyboard shortcuts for copy/paste/duplicate and comments toggle
   // Note: saveJourney handler is added later after saveJourney is defined
@@ -2972,6 +3090,147 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [])
 
+  // Auto-pan when selecting (Shift+drag) and cursor reaches viewport edges
+  useEffect(() => {
+    const EDGE_THRESHOLD = 50 // pixels from edge to trigger panning
+    const PAN_SPEED = 10 // pixels per frame to pan
+    const PAN_INTERVAL = 16 // milliseconds (roughly 60fps)
+    let isSelecting = false
+    let panX = 0
+    let panY = 0
+    let mouseDownOnPane = false
+
+    const checkIfSelecting = (): boolean => {
+      // Check if selection is active:
+      // 1. Shift is pressed
+      // 2. Mouse is down on pane (or selection box is visible as fallback)
+      const selectionBox = document.querySelector('.react-flow__nodesselection')
+      const hasSelectionBox = selectionBox !== null
+      
+      // If Shift is pressed and mouse was down on pane, we're selecting
+      // Also check for selection box as a fallback (might appear slightly after drag starts)
+      return isShiftPressedRef.current && (mouseDownOnPane || hasSelectionBox)
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Check if mouse down is on the React Flow pane and Shift is pressed
+      const target = e.target as HTMLElement
+      // Don't trigger if clicking on a node or interactive element
+      const isNode = target.closest('.react-flow__node')
+      const isButton = target.closest('button') || target.tagName === 'BUTTON'
+      
+      if (!isNode && !isButton) {
+        const pane = target.closest('.react-flow__pane') || target.closest('.react-flow__viewport')
+        if (pane && isShiftPressedRef.current) {
+          mouseDownOnPane = true
+        }
+      }
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Check if we're currently selecting
+      const currentlySelecting = checkIfSelecting()
+      
+      if (!currentlySelecting) {
+        // Stop panning if not selecting
+        isSelecting = false
+        if (autoPanIntervalRef.current !== null) {
+          clearInterval(autoPanIntervalRef.current)
+          autoPanIntervalRef.current = null
+        }
+        return
+      }
+
+      // Mark as selecting
+      isSelecting = true
+
+      if (!reactFlowInstanceRef.current) return
+
+      // Get viewport bounds - use the React Flow pane element for accurate bounds
+      const pane = document.querySelector('.react-flow__pane') as HTMLElement
+      if (!pane) return
+
+      const rect = pane.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+      const viewportWidth = rect.width
+      const viewportHeight = rect.height
+
+      // Calculate pan direction based on cursor position
+      panX = 0
+      panY = 0
+
+      // Check left edge
+      if (mouseX < EDGE_THRESHOLD) {
+        panX = PAN_SPEED * ((EDGE_THRESHOLD - mouseX) / EDGE_THRESHOLD)
+      }
+      // Check right edge
+      else if (mouseX > viewportWidth - EDGE_THRESHOLD) {
+        panX = -PAN_SPEED * ((mouseX - (viewportWidth - EDGE_THRESHOLD)) / EDGE_THRESHOLD)
+      }
+
+      // Check top edge
+      if (mouseY < EDGE_THRESHOLD) {
+        panY = PAN_SPEED * ((EDGE_THRESHOLD - mouseY) / EDGE_THRESHOLD)
+      }
+      // Check bottom edge
+      else if (mouseY > viewportHeight - EDGE_THRESHOLD) {
+        panY = -PAN_SPEED * ((mouseY - (viewportHeight - EDGE_THRESHOLD)) / EDGE_THRESHOLD)
+      }
+
+      // Clear existing interval if pan direction changed or no panning needed
+      if (autoPanIntervalRef.current !== null) {
+        clearInterval(autoPanIntervalRef.current)
+        autoPanIntervalRef.current = null
+      }
+
+      // Start panning if needed
+      if (panX !== 0 || panY !== 0) {
+        autoPanIntervalRef.current = window.setInterval(() => {
+          // Re-check if still selecting
+          if (!checkIfSelecting() || !reactFlowInstanceRef.current) {
+            if (autoPanIntervalRef.current !== null) {
+              clearInterval(autoPanIntervalRef.current)
+              autoPanIntervalRef.current = null
+            }
+            return
+          }
+
+          // Pan the viewport
+          reactFlowInstanceRef.current.panBy({
+            x: panX,
+            y: panY
+          })
+        }, PAN_INTERVAL)
+      }
+    }
+
+    const handleMouseUp = () => {
+      // Stop auto-panning when mouse is released
+      isSelecting = false
+      mouseDownOnPane = false
+      if (autoPanIntervalRef.current !== null) {
+        clearInterval(autoPanIntervalRef.current)
+        autoPanIntervalRef.current = null
+      }
+    }
+
+    // Use capture phase to catch events before React Flow handles them
+    window.addEventListener('mousedown', handleMouseDown, true)
+    window.addEventListener('mousemove', handleMouseMove, true)
+    window.addEventListener('mouseup', handleMouseUp, true)
+
+    return () => {
+      window.removeEventListener('mousedown', handleMouseDown, true)
+      window.removeEventListener('mousemove', handleMouseMove, true)
+      window.removeEventListener('mouseup', handleMouseUp, true)
+      if (autoPanIntervalRef.current !== null) {
+        clearInterval(autoPanIntervalRef.current)
+        autoPanIntervalRef.current = null
+      }
+    }
+  }, [])
+
   // Update region nodes' draggable property based on space bar state
   useEffect(() => {
     setNodes((nds) =>
@@ -3111,6 +3370,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   const handleNodeDragStop = useCallback(
     (_event: any, draggedNode: Node) => {
+      // Note: History is saved on drag start, not drag stop, to allow undo to revert to pre-drag position
+      
       // Clear resize tracking when drag/resize stops
       if (draggedNode.type === 'highlightRegion') {
         resizeStartDimensionsRef.current.delete(draggedNode.id)
@@ -4582,6 +4843,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           onClose={cancelDeleteNode}
           title="Delete Node"
           size="sm"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -4618,6 +4880,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             setEdgeLabel('')
           }}
           title="Edge Label"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-between w-full">
               <Button
@@ -4917,6 +5180,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setImportJsonError(null)
         }}
         title="Import Journey from JSON"
+        closeOnOverlayClick={false}
         size="lg"
         footerContent={
           <div className="flex justify-end gap-3">
@@ -4998,6 +5262,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             setEditAIProgress('')
           }
         }}
+        closeOnOverlayClick={false}
         title="Edit Journey with AI"
         size="lg"
         footerContent={
@@ -5117,6 +5382,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }}
           title="Edit Region"
           size="md"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex items-center justify-end gap-3">
               <Button
@@ -5229,6 +5495,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           }}
           title="Share User Journey"
           size="md"
+          closeOnOverlayClick={false}
           footerContent={
             <div className="flex justify-end">
               <Button
