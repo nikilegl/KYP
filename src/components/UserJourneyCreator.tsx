@@ -1079,6 +1079,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const selectedNodes = nodes.filter((node) => node.selected && node.type !== 'highlightRegion')
     if (selectedNodes.length === 0) return
 
+    // Save history before duplicating (for undo)
+    if (!isUndoing.current) {
+      const snapshot = {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges))
+      }
+      setHistory((prev) => {
+        const newHistory = prev.slice(0, historyIndex + 1)
+        const updated = [...newHistory, snapshot]
+        return updated.slice(-50)
+      })
+      setHistoryIndex((prev) => prev + 1)
+    }
+
     const timestamp = Date.now()
     const newNodes = selectedNodes.map((node, index) => {
       const newNodeId = `node-${timestamp}-${index}`
@@ -1099,12 +1113,26 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     })
 
     setNodes((nds) => [...nds.map(n => ({ ...n, selected: false })), ...newNodes.map(n => ({ ...n, selected: true }))])
-  }, [nodes, setNodes])
+  }, [nodes, edges, setNodes, historyIndex])
 
   // Duplicate selected regions (for Cmd+D shortcut)
   const duplicateSelectedRegions = useCallback(() => {
     const selectedRegions = nodes.filter((node) => node.selected && node.type === 'highlightRegion')
     if (selectedRegions.length === 0) return
+
+    // Save history before duplicating (for undo)
+    if (!isUndoing.current) {
+      const snapshot = {
+        nodes: JSON.parse(JSON.stringify(nodes)),
+        edges: JSON.parse(JSON.stringify(edges))
+      }
+      setHistory((prev) => {
+        const newHistory = prev.slice(0, historyIndex + 1)
+        const updated = [...newHistory, snapshot]
+        return updated.slice(-50)
+      })
+      setHistoryIndex((prev) => prev + 1)
+    }
 
     const timestamp = Date.now()
     const regionIdMap = new Map<string, string>() // Map old region ID to new region ID
@@ -1182,7 +1210,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         ...newEdges
       ])
     }
-  }, [nodes, edges, setNodes, setEdges])
+  }, [nodes, edges, setNodes, setEdges, historyIndex])
 
   // Keyboard shortcuts for copy/paste/duplicate and comments toggle
   // Note: saveJourney handler is added later after saveJourney is defined
