@@ -111,8 +111,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState(initialEdges)
   const reactFlowInstanceRef = useRef<any>(null)
+  
+  // History for undo functionality (tracks both nodes and edges) - declared early for use in callbacks
+  const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const isUndoing = useRef(false)
   
   // Fullscreen state - initialize from URL
   const [isFullscreen, setIsFullscreen] = useState(() => {
@@ -243,6 +248,52 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
     }
   }, [onNodesChangeBase, setNodes, nodes])
+
+  // Custom onEdgesChange that saves history when edges change
+  const onEdgesChange = useCallback((changes: any[]) => {
+    // Apply changes
+    onEdgesChangeBase(changes)
+    
+    // Save history when edges change (if not undoing and changes are significant)
+    if (!isUndoing.current) {
+      // Only save history for significant changes (not just selection changes)
+      const hasSignificantChange = changes.some(change => 
+        change.type === 'add' || 
+        change.type === 'remove'
+      )
+      
+      if (hasSignificantChange) {
+        // Use a small delay to ensure edges state is updated after React Flow processes the change
+        setTimeout(() => {
+          if (!isUndoing.current) {
+            // Read current state using functional updates to get the latest values
+            setEdges((currentEdges) => {
+              const edgesSnapshot = JSON.parse(JSON.stringify(currentEdges))
+              setNodes((currentNodes) => {
+                const nodesSnapshot = JSON.parse(JSON.stringify(currentNodes))
+                const snapshot = {
+                  nodes: nodesSnapshot,
+                  edges: edgesSnapshot
+                }
+                setHistory((prev) => {
+                  // Clear any "future" states if we're not at the end
+                  const newHistory = prev.slice(0, historyIndex + 1)
+                  // Add new snapshot
+                  const updated = [...newHistory, snapshot]
+                  // Limit history to last 50 states
+                  return updated.slice(-50)
+                })
+                setHistoryIndex((prev) => prev + 1)
+                return currentNodes
+              })
+              return currentEdges
+            })
+          }
+        }, 10)
+      }
+    }
+  }, [onEdgesChangeBase, setNodes, setEdges, historyIndex])
+
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>(initialThirdParties || [])
   const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms || [])
   const [journeyName, setJourneyName] = useState('User Journey 01')
@@ -316,11 +367,6 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     description: string
     action: 'tidyUp' | 'aiEdit'
   } | null>(null)
-  
-  // History for undo functionality (tracks both nodes and edges)
-  const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
-  const isUndoing = useRef(false)
 
   // Track selected nodes for copy/paste and edge highlighting
   const [copiedNodes, setCopiedNodes] = useState<Node[]>([])
@@ -700,44 +746,84 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Handles both AI/TidyUp undo and node history undo/redo
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't interfere with native undo/redo in input fields
-      const target = event.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
       const key = event.key.toLowerCase()
       const isZ = key === 'z'
       
       if (!isZ) return
 
+      // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO/REDO
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      if (!isModifierPressed) return
+
+      // Don't interfere with native undo/redo in actual input fields
+      // But allow it to work when React Flow elements are focused
+      const target = event.target as HTMLElement
+      
+      // Only block if we're clearly in a form input field (not React Flow's internal elements)
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        const input = target as HTMLInputElement | HTMLTextAreaElement
+        // Only skip if it's a text input that's actually editable AND in a form/modal
+        const isTextInput = !input.type || 
+          input.type === 'text' || 
+          input.type === 'textarea' || 
+          input.type === 'search' || 
+          input.type === 'email' || 
+          input.type === 'password' ||
+          input.type === 'url' ||
+          input.type === 'tel'
+        
+        if (isTextInput && !input.disabled && !input.readOnly) {
+          // Only block if it's in a form or modal (not React Flow's canvas)
+          const isInForm = target.closest('form') || 
+                          target.closest('[role="dialog"]') || 
+                          target.closest('.modal-overlay') ||
+                          target.closest('[data-testid]') // Common test/component marker
+          if (isInForm) {
+            return
+          }
+        }
+      }
+      
+      // Skip if it's a contentEditable element that's actually being edited in a modal/form
+      if (target.isContentEditable && target.getAttribute('contenteditable') === 'true') {
+        const isInModal = target.closest('[role="dialog"]') || target.closest('.modal-overlay')
+        if (isInModal) {
+          return
+        }
+      }
+
       // Check for Cmd+Shift+Z (Mac) or Ctrl+Shift+Z (Windows/Linux) - REDO
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey) {
+      if (event.shiftKey) {
         // Only works with node history (no redo for AI/TidyUp snapshots)
         if (historyIndex < history.length - 1) {
           event.preventDefault()
+          event.stopPropagation()
           redo()
         }
       }
       // Check for Cmd+Z (Mac) or Ctrl+Z (Windows/Linux) - UNDO
-      else if ((event.metaKey || event.ctrlKey) && !event.shiftKey) {
+      else {
         // Try AI/TidyUp undo first (takes priority)
         if (undoSnapshot) {
           event.preventDefault()
+          event.stopPropagation()
           handleUndo()
         }
         // Fall back to node history undo
         else if (historyIndex >= 0 && history[historyIndex]) {
           event.preventDefault()
+          event.stopPropagation()
           undo()
         }
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    // Use capture phase to catch events before React Flow handles them
+    // This ensures undo/redo works even when React Flow elements are focused
+    window.addEventListener('keydown', handleKeyDown, true)
     
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
     }
   }, [undoSnapshot, handleUndo, historyIndex, history, undo, redo])
 
@@ -3111,6 +3197,8 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
   const handleNodeDragStop = useCallback(
     (_event: any, draggedNode: Node) => {
+      // Note: History is saved on drag start, not drag stop, to allow undo to revert to pre-drag position
+      
       // Clear resize tracking when drag/resize stops
       if (draggedNode.type === 'highlightRegion') {
         resizeStartDimensionsRef.current.delete(draggedNode.id)
