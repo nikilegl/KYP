@@ -464,16 +464,28 @@ export function EditNodeModal({
     if (formData.variant && formData.variant !== 'Custom') {
       const platform = platforms.find(p => p.name === formData.variant)
       setSelectedPlatform(platform || null)
-      if (platform) {
+      if (platform && !showPlatformDropdown) {
         setPlatformSearchQuery(platform.name)
+      } else if (platforms.length > 0 && !showPlatformDropdown) {
+        // Platform not found in list, but variant is set - clear search query if dropdown is closed
+        setPlatformSearchQuery('')
       }
+    } else if (formData.variant === 'Custom') {
+      // For Custom variant, show customPlatformName in search query if it exists
+      if (formData.customPlatformName && !showPlatformDropdown) {
+        setPlatformSearchQuery(formData.customPlatformName)
+      } else if (!showPlatformDropdown) {
+        setPlatformSearchQuery('')
+      }
+      setSelectedPlatform(null)
     } else {
+      // No variant set (shouldn't happen if default is applied, but handle gracefully)
       setSelectedPlatform(null)
       if (!showPlatformDropdown) {
         setPlatformSearchQuery('')
       }
     }
-  }, [formData.variant, platforms, showPlatformDropdown])
+  }, [formData.variant, formData.customPlatformName, platforms, showPlatformDropdown])
 
   // Find selected user role
   useEffect(() => {
@@ -601,7 +613,8 @@ export function EditNodeModal({
         nodeVariant = 'Custom'
       }
       
-      const resolvedVariant = nodeVariant !== undefined && nodeVariant !== null ? nodeVariant : 'Legl'
+      // Default to 'Legl' if variant is empty or undefined
+      const resolvedVariant = (nodeVariant !== undefined && nodeVariant !== null && nodeVariant !== '') ? nodeVariant : 'Legl'
       
       // Convert bullet points to objects with IDs
       const bulletPointsWithNewIds: BulletPoint[] = existingBulletPoints.length > 0
@@ -642,9 +655,24 @@ export function EditNodeModal({
         customProperties: (node.data?.customProperties as Record<string, unknown>) || {},
         swimLane: (node as any).parentId || null
       })
-      // Reset platform search
-      setPlatformSearchQuery('')
-      setSelectedPlatform(null)
+      // Set platform search query based on variant
+      if (resolvedVariant === 'Custom') {
+        // For Custom variant, show customPlatformName if it exists
+        if (initialCustomPlatformNameValue) {
+          setPlatformSearchQuery(initialCustomPlatformNameValue)
+        } else {
+          setPlatformSearchQuery('')
+        }
+        setSelectedPlatform(null)
+      } else if (resolvedVariant) {
+        // For non-Custom variants, set the platform name immediately
+        // The useEffect will update selectedPlatform when platforms load
+        setPlatformSearchQuery(resolvedVariant)
+      } else {
+        // Shouldn't happen since we default to 'Legl', but handle gracefully
+        setPlatformSearchQuery('')
+        setSelectedPlatform(null)
+      }
       // Set custom user role selected state if customUserRoleName exists
       setIsCustomUserRoleSelected(!!customUserRoleName)
     } else if (isAddingNewNode && isOpen) {
@@ -671,8 +699,9 @@ export function EditNodeModal({
         swimLane: null
       })
       
-      // Reset platform search for new node
-      setPlatformSearchQuery('')
+      // Set platform search query for new node (defaults to 'Legl')
+      setPlatformSearchQuery('Legl')
+      // The useEffect will set selectedPlatform when platforms load
       setSelectedPlatform(null)
       // Reset user role search for new node
       setUserRoleSearchQuery('')
@@ -705,8 +734,12 @@ export function EditNodeModal({
     // Convert bulletPointsWithIds back to string array
     const bulletPointsAsStrings = bulletPointsWithIds.map(bp => bp.text)
     
+    // Ensure default platform 'Legl' if no platform is set
+    const finalVariant = formData.variant || 'Legl'
+    
     onSave({
       ...formData,
+      variant: finalVariant,
       bulletPoints: bulletPointsAsStrings
     })
   }, [formData, bulletPointsWithIds, onSave])
