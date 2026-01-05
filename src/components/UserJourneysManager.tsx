@@ -696,7 +696,11 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   }
 
   const handleCopyLink = async (journey: UserJourneyWithProject) => {
-    const url = `${window.location.origin}/public/user-journey/${journey.short_id}`
+    if (!journey.public_id) {
+      alert('This journey does not have a public ID. Please save the journey first.')
+      return
+    }
+    const url = `${window.location.origin}/public/user-journey/${journey.public_id}`
     try {
       await navigator.clipboard.writeText(url)
       setContextMenu(null)

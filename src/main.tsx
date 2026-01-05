@@ -14,7 +14,7 @@ root.render(
     <Routes>
       <Route path="/" element={<App />} />
         <Route path="/projects" element={<App />} />
-      <Route path="/public/user-journey/:shortId" element={<PublicUserJourneyView />} />
+      <Route path="/public/user-journey/:publicId" element={<PublicUserJourneyView />} />
       <Route path="/project/:shortId" element={<App />} />
       <Route path="/stakeholder/:shortId" element={<App />} />
       <Route path="/note/:shortId" element={<App />} />

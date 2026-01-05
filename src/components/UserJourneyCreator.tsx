@@ -558,10 +558,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setHandleArrowStates(arrowStates)
           
           // Ensure nodes are selectable and regions have negative z-index (behind nodes)
+          // Also store journey public_id in node data for sharing
           const nodesWithSelection = journey.flow_data.nodes.map(node => {
             const updatedNode = {
               ...node,
-              selectable: true
+              selectable: true,
+              data: {
+                ...node.data,
+                journeyId: journey.id,
+                journeyPublicId: journey.public_id, // Store public_id for sharing
+              }
             }
             
             // Ensure regions always have negative z-index to stay behind nodes
@@ -5779,9 +5785,13 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   variant="outline"
                   onClick={async () => {
                     try {
-                      // Get the journey to find its short_id
+                      // Get the journey to find its public_id
                       const journey = await getUserJourneyById(currentJourneyId)
-                      const shareUrl = `${window.location.origin}/public/user-journey/${journey?.short_id}`
+                      if (!journey?.public_id) {
+                        alert('This journey does not have a public ID. Please save the journey first.')
+                        return
+                      }
+                      const shareUrl = `${window.location.origin}/public/user-journey/${journey.public_id}`
                       await navigator.clipboard.writeText(shareUrl)
                       setCopySuccess(true)
                       setTimeout(() => setCopySuccess(false), 2000)
