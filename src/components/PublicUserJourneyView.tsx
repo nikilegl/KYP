@@ -17,7 +17,7 @@ import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
 import { HighlightRegionNode } from './DesignSystem/components/HighlightRegionNode'
 import { CustomEdge } from './DesignSystem/components/CustomEdge'
 import { LoadingState } from './DesignSystem/components/LoadingSpinner'
-import { getUserJourneyByShortId } from '../lib/database'
+import { getUserJourneyByPublicId } from '../lib/database/services/userJourneyService'
 import type { ThirdParty, Platform } from '../lib/supabase'
 import { getPlatforms } from '../lib/database'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -29,7 +29,7 @@ const initialNodes: Node[] = []
 const initialEdges: Edge[] = []
 
 export function PublicUserJourneyView() {
-  const { shortId } = useParams<{ shortId: string }>()
+  const { publicId } = useParams<{ publicId: string }>()
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [journeyName, setJourneyName] = useState('')
@@ -42,15 +42,14 @@ export function PublicUserJourneyView() {
   useEffect(() => {
     const loadJourney = async () => {
       try {
-        if (!shortId) {
+        if (!publicId) {
           setError('No journey ID provided')
           setLoading(false)
           return
         }
 
-        const journeyShortId = parseInt(shortId)
-        // Fetch journey by short_id (both personal and shared journeys can be accessed via public link)
-        const journey = await getUserJourneyByShortId(journeyShortId, false)
+        // Fetch journey by secure public_id
+        const journey = await getUserJourneyByPublicId(publicId)
 
         if (!journey) {
           setError('Journey not found')
@@ -94,7 +93,7 @@ export function PublicUserJourneyView() {
     }
 
     loadJourney()
-  }, [shortId, setNodes, setEdges])
+  }, [publicId, setNodes, setEdges])
 
   // Define node types for read-only view
   const nodeTypes: NodeTypes = React.useMemo(() => ({
