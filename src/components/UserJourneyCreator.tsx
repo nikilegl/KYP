@@ -1141,10 +1141,20 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const timestamp = Date.now()
     const regionIdMap = new Map<string, string>() // Map old region ID to new region ID
     
+    // Find the highest z-index among existing regions to place duplicated regions in front
+    const existingRegions = nodes.filter(n => n.type === 'highlightRegion')
+    const maxRegionZIndex = existingRegions.reduce((max, region) => {
+      const regionZIndex = (region.style?.zIndex as number) ?? -1
+      return Math.max(max, regionZIndex)
+    }, -1)
+    
     // First, duplicate the regions themselves
     const newRegions = selectedRegions.map((region, index) => {
       const newRegionId = `region-${timestamp}-${index}`
       regionIdMap.set(region.id, newRegionId)
+      
+      // New duplicated regions should be in front of all other regions
+      const newRegionZIndex = maxRegionZIndex + index + 1
       
       return {
         ...region,
@@ -1152,6 +1162,10 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         position: {
           x: region.position.x + 50,
           y: region.position.y + 50
+        },
+        style: {
+          ...region.style,
+          zIndex: newRegionZIndex, // Render in front of all other regions
         },
         selected: false // Deselect the new region
       }
@@ -2718,31 +2732,43 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const regionWidth = 600
     const regionHeight = 400
 
-    // Center the region at the viewport center
-    // Position is top-left corner, so subtract half width/height
-    const newRegionId = `region-${Date.now()}`
-    const newRegion: Node = {
-      id: newRegionId,
-      type: 'highlightRegion',
-      position: { 
-        x: snapToGrid(viewportCenter.x - regionWidth / 2), 
-        y: snapToGrid(viewportCenter.y - regionHeight / 2) 
-      },
-      style: {
-        width: regionWidth,
-        height: regionHeight,
-        zIndex: -1, // Render behind regular nodes
-      },
-      data: {
-        label: 'New Region',
-        backgroundColor: '#ccfbf1',
-        borderColor: '#14b8a6',
-      },
-      draggable: true,
-      selectable: true,
-    }
+    // Find the highest z-index among existing regions to place new region in front
+    setNodes((nds) => {
+      const existingRegions = nds.filter(n => n.type === 'highlightRegion')
+      const maxRegionZIndex = existingRegions.reduce((max, region) => {
+        const regionZIndex = (region.style?.zIndex as number) ?? -1
+        return Math.max(max, regionZIndex)
+      }, -1)
+      
+      // New region should be in front of all other regions, but still behind regular nodes
+      const newRegionZIndex = maxRegionZIndex + 1
 
-    setNodes((nds) => [newRegion, ...nds]) // Add region at the beginning (before other nodes)
+      // Center the region at the viewport center
+      // Position is top-left corner, so subtract half width/height
+      const newRegionId = `region-${Date.now()}`
+      const newRegion: Node = {
+        id: newRegionId,
+        type: 'highlightRegion',
+        position: { 
+          x: snapToGrid(viewportCenter.x - regionWidth / 2), 
+          y: snapToGrid(viewportCenter.y - regionHeight / 2) 
+        },
+        style: {
+          width: regionWidth,
+          height: regionHeight,
+          zIndex: newRegionZIndex, // Render in front of all other regions, but behind regular nodes
+        },
+        data: {
+          label: 'New Region',
+          backgroundColor: '#ccfbf1',
+          borderColor: '#14b8a6',
+        },
+        draggable: true,
+        selectable: true,
+      }
+
+      return [newRegion, ...nds] // Add region at the beginning (before other nodes)
+    })
   }, [setNodes, snapToGrid])
 
 

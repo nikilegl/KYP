@@ -164,6 +164,7 @@ export function PublicUserJourneyView() {
         data={{
           ...props.data,
           onLabelClick: undefined, // No label editing in public view
+          disableHover: true, // Disable hover highlighting in public view
         }}
       />
     ),
@@ -173,6 +174,7 @@ export function PublicUserJourneyView() {
         data={{
           ...props.data,
           onLabelClick: undefined, // No label editing in public view
+          disableHover: true, // Disable hover highlighting in public view
         }}
       />
     ),

@@ -11,6 +11,7 @@ interface CustomEdgeData {
   label?: string
   onLabelClick?: (edgeId: string) => void
   highlighted?: boolean
+  disableHover?: boolean
 }
 
 type CustomEdgeProps = EdgeProps & {
@@ -43,7 +44,8 @@ export function CustomEdge(props: CustomEdgeProps) {
   })
 
   const hasLabel = data?.label && data.label.trim() !== ''
-  const isHighlighted = selected || isHovered || data?.highlighted
+  const disableHover = data?.disableHover === true
+  const isHighlighted = selected || (!disableHover && isHovered) || data?.highlighted
 
 
   const handleLabelClick = (e: React.MouseEvent) => {
@@ -63,10 +65,10 @@ export function CustomEdge(props: CustomEdgeProps) {
         stroke="transparent"
         strokeWidth={150}
         className="react-flow__edge-interaction"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => !disableHover && setIsHovered(true)}
+        onMouseLeave={() => !disableHover && setIsHovered(false)}
         style={{ 
-          cursor: 'pointer',
+          cursor: disableHover ? 'default' : 'pointer',
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
           pointerEvents: 'stroke'
@@ -95,8 +97,8 @@ export function CustomEdge(props: CustomEdgeProps) {
             zIndex: 1000,
           }}
           className="nodrag nopan"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          onMouseEnter={() => !disableHover && setIsHovered(true)}
+          onMouseLeave={() => !disableHover && setIsHovered(false)}
         >
           {hasLabel ? (
             <div
