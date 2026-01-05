@@ -557,11 +557,27 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           const arrowStates = (journey.flow_data as any).handleArrowStates || {}
           setHandleArrowStates(arrowStates)
           
-          // Ensure nodes are selectable
-          const nodesWithSelection = journey.flow_data.nodes.map(node => ({
-            ...node,
-            selectable: true
-          }))
+          // Ensure nodes are selectable and regions have negative z-index (behind nodes)
+          const nodesWithSelection = journey.flow_data.nodes.map(node => {
+            const updatedNode = {
+              ...node,
+              selectable: true
+            }
+            
+            // Ensure regions always have negative z-index to stay behind nodes
+            if (node.type === 'highlightRegion') {
+              const currentZIndex = (node.style?.zIndex as number) ?? -1
+              // If z-index is positive or zero, set it to -1 (or more negative if needed)
+              if (currentZIndex >= 0) {
+                updatedNode.style = {
+                  ...node.style,
+                  zIndex: -1
+                }
+              }
+            }
+            
+            return updatedNode
+          })
           setNodes(nodesWithSelection)
           
           // Optimize edge migration - only process if edges exist and might need migration
@@ -935,6 +951,40 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     }
   }, [nodes, edges])
 
+  // Copy selected regions to clipboard (Command+C / Ctrl+C) - works across browser tabs
+  const copySelectedRegions = useCallback(async () => {
+    const selectedRegions = nodes.filter(node => node.selected && node.type === 'highlightRegion')
+    if (selectedRegions.length === 0) return
+
+    // Get nodes that belong to these regions (nodes with parentId matching region ID)
+    const selectedRegionIds = new Set(selectedRegions.map(r => r.id))
+    const nodesInRegions = nodes.filter(node => 
+      node.parentId && selectedRegionIds.has(node.parentId)
+    )
+
+    // Get edges that connect nodes within the selected regions
+    const nodeIdsInRegions = new Set(nodesInRegions.map(n => n.id))
+    const relevantEdges = edges.filter(edge => 
+      nodeIdsInRegions.has(edge.source) && nodeIdsInRegions.has(edge.target)
+    )
+
+    // Add type identifier for cross-tab compatibility
+    const copyData = {
+      type: 'kyp-user-journey-regions',
+      version: '1.0',
+      regions: selectedRegions,
+      nodes: nodesInRegions,
+      edges: relevantEdges
+    }
+
+    // Copy to clipboard as JSON (works across browser tabs)
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(copyData, null, 2))
+    } catch (error) {
+      console.error('Failed to copy regions to clipboard:', error)
+    }
+  }, [nodes, edges])
+
   // Paste nodes from clipboard (Command+V / Ctrl+V)
   const pasteNodes = useCallback(async () => {
     try {
@@ -952,7 +1002,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
 
       // Try to read from clipboard as text
-      let copyData: { type?: string; nodes: Node[], edges: Edge[] } | null = null
+      let copyData: { 
+        type?: string; 
+        nodes?: Node[]; 
+        edges?: Edge[]; 
+        regions?: Node[];
+      } | null = null
       
       try {
         const clipboardText = await navigator.clipboard.readText()
@@ -962,6 +1017,14 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         if (parsed.type === 'kyp-user-journey-nodes' && Array.isArray(parsed.nodes)) {
           copyData = {
             nodes: parsed.nodes,
+            edges: parsed.edges || []
+          }
+        } else if (parsed.type === 'kyp-user-journey-regions' && Array.isArray(parsed.regions)) {
+          // Region paste format
+          copyData = {
+            type: 'kyp-user-journey-regions',
+            regions: parsed.regions,
+            nodes: parsed.nodes || [],
             edges: parsed.edges || []
           }
         } else if (parsed.nodes && Array.isArray(parsed.nodes)) {
@@ -978,7 +1041,152 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
         }
       }
 
-      if (!copyData || !copyData.nodes || copyData.nodes.length === 0) {
+      if (!copyData) {
+        return
+      }
+
+      // Handle region paste
+      if (copyData.type === 'kyp-user-journey-regions' && copyData.regions && copyData.regions.length > 0) {
+        // Get the React Flow instance to access viewport utilities
+        const reactFlowInstance = reactFlowInstanceRef.current
+        if (!reactFlowInstance) {
+          console.error('React Flow instance not available')
+          return
+        }
+
+        // Get viewport center in flow coordinates
+        const viewportCenter = reactFlowInstance.screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2
+        })
+
+        // Calculate bounding box of regions being pasted
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+
+        copyData.regions.forEach(region => {
+          const pos = region.position || { x: 0, y: 0 }
+          const width = (region.style?.width as number) || (region.width as number) || 600
+          const height = (region.style?.height as number) || (region.height as number) || 400
+          minX = Math.min(minX, pos.x)
+          minY = Math.min(minY, pos.y)
+          maxX = Math.max(maxX, pos.x + width)
+          maxY = Math.max(maxY, pos.y + height)
+        })
+
+        // Calculate center of the bounding box
+        const boundingBoxCenterX = (minX + maxX) / 2
+        const boundingBoxCenterY = (minY + maxY) / 2
+
+        // Calculate offset to move bounding box center to viewport center
+        const offsetX = viewportCenter.x - boundingBoxCenterX
+        const offsetY = viewportCenter.y - boundingBoxCenterY
+
+        // Create ID mapping for regions and nodes
+        const regionIdMapping = new Map<string, string>()
+        const nodeIdMapping = new Map<string, string>()
+
+        // Paste regions first
+        const newRegions: Node[] = copyData.regions.map(region => {
+          const newId = `region-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          regionIdMapping.set(region.id, newId)
+          
+          const originalPos = region.position || { x: 0, y: 0 }
+          
+          return {
+            ...region,
+            id: newId,
+            position: {
+              x: snapToGrid(originalPos.x + offsetX),
+              y: snapToGrid(originalPos.y + offsetY)
+            },
+            selected: true,
+            style: {
+              ...region.style,
+            }
+          }
+        })
+
+        // Paste nodes that belong to regions
+        const newNodes: Node[] = (copyData.nodes || []).map(node => {
+          const newId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          nodeIdMapping.set(node.id, newId)
+          
+          const originalPos = node.position || { x: 0, y: 0 }
+          const originalParentId = node.parentId
+          const newParentId = originalParentId ? regionIdMapping.get(originalParentId) : undefined
+          
+          return {
+            ...node,
+            id: newId,
+            parentId: newParentId,
+            position: {
+              x: snapToGrid(originalPos.x + offsetX),
+              y: snapToGrid(originalPos.y + offsetY)
+            },
+            selected: true,
+          }
+        })
+
+        // Update edge references to use new node IDs
+        const newEdges: Edge[] = (copyData.edges || [])
+          .filter(edge => {
+            const newSourceId = nodeIdMapping.get(edge.source)
+            const newTargetId = nodeIdMapping.get(edge.target)
+            return newSourceId && newTargetId
+          })
+          .map(edge => {
+            const newSourceId = nodeIdMapping.get(edge.source)!
+            const newTargetId = nodeIdMapping.get(edge.target)!
+            
+            return {
+              ...edge,
+              id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              source: newSourceId,
+              target: newTargetId,
+              sourceHandle: edge.sourceHandle ?? (journeyLayout === 'horizontal' ? 'source-right' : 'source-bottom'),
+              targetHandle: edge.targetHandle ?? (journeyLayout === 'horizontal' ? 'target-left' : 'target-top'),
+            }
+          })
+
+        // Find the maximum (least negative, closest to 0) z-index among existing regions
+        // Regions use negative z-index to stay behind nodes
+        // More negative = further back, less negative (closer to 0) = further front
+        const existingRegions = nodes.filter(n => n.type === 'highlightRegion')
+        const maxRegionZIndex = existingRegions.length > 0 
+          ? existingRegions.reduce((max, region) => {
+              const regionZIndex = (region.style?.zIndex as number) ?? -1
+              // Only consider negative values
+              return regionZIndex < 0 ? Math.max(max, regionZIndex) : max
+            }, -Infinity)
+          : -1
+
+        // Set z-index for pasted regions to be in front of existing regions (less negative, closer to 0)
+        // Start from -1 and go more negative if needed, but ensure they stay negative
+        const regionsWithZIndex = newRegions.map((region, index) => ({
+          ...region,
+          style: {
+            ...region.style,
+            zIndex: maxRegionZIndex >= -1 ? -1 - index : maxRegionZIndex + 1 - index, // Less negative = in front, but still negative
+          }
+        }))
+
+        // Deselect existing nodes/regions
+        setNodes(prevNodes => [
+          ...prevNodes.map(node => ({ ...node, selected: false })),
+          ...regionsWithZIndex,
+          ...newNodes
+        ])
+        
+        // Add new edges
+        setEdges(prevEdges => [...prevEdges, ...newEdges])
+        return
+      }
+
+      // Handle regular node paste (existing logic)
+      if (!copyData.nodes || copyData.nodes.length === 0) {
         return
       }
 
@@ -1040,7 +1248,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       })
 
       // Update edge references to use new node IDs
-      const newEdges: Edge[] = copyData.edges
+      const newEdges: Edge[] = (copyData.edges || [])
         .filter(edge => {
           const newSourceId = idMapping.get(edge.source)
           const newTargetId = idMapping.get(edge.target)
@@ -1076,7 +1284,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     } catch (error) {
       console.error('Failed to paste nodes:', error)
     }
-  }, [copiedNodes, copiedEdges, setNodes, setEdges, snapToGrid])
+  }, [copiedNodes, copiedEdges, setNodes, setEdges, snapToGrid, nodes, journeyLayout])
 
   // Duplicate selected nodes (for Cmd+D shortcut)
   const duplicateSelectedNodes = useCallback(() => {
@@ -1141,20 +1349,24 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     const timestamp = Date.now()
     const regionIdMap = new Map<string, string>() // Map old region ID to new region ID
     
-    // Find the highest z-index among existing regions to place duplicated regions in front
+    // Find the maximum (least negative, closest to 0) z-index among existing regions
+    // Regions use negative z-index to stay behind nodes
+    // More negative = further back, less negative (closer to 0) = further front
     const existingRegions = nodes.filter(n => n.type === 'highlightRegion')
     const maxRegionZIndex = existingRegions.reduce((max, region) => {
       const regionZIndex = (region.style?.zIndex as number) ?? -1
-      return Math.max(max, regionZIndex)
-    }, -1)
+      // Only consider negative values
+      return regionZIndex < 0 ? Math.max(max, regionZIndex) : max
+    }, -Infinity)
     
     // First, duplicate the regions themselves
     const newRegions = selectedRegions.map((region, index) => {
       const newRegionId = `region-${timestamp}-${index}`
       regionIdMap.set(region.id, newRegionId)
       
-      // New duplicated regions should be in front of all other regions
-      const newRegionZIndex = maxRegionZIndex + index + 1
+      // New duplicated regions should be in front of all other regions (less negative, closer to 0)
+      // Start from -1 and go more negative if needed, but ensure they stay negative
+      const newRegionZIndex = maxRegionZIndex >= -1 ? -1 - index : maxRegionZIndex + 1 - index
       
       return {
         ...region,
@@ -1253,10 +1465,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           event.preventDefault()
           setShowEditWithAIModal(true)
         } else if (event.key === 'c' || event.key === 'C') {
-          // Only copy if there are selected nodes/edges
+          // Only copy if there are selected nodes/edges/regions
           if (hasSelection) {
             event.preventDefault()
-            copySelectedNodes()
+            // Check if regions are selected, otherwise copy nodes
+            const hasSelectedRegions = nodes.some(node => node.selected && node.type === 'highlightRegion')
+            if (hasSelectedRegions) {
+              copySelectedRegions()
+            } else {
+              copySelectedNodes()
+            }
           }
         } else if (event.key === 'v' || event.key === 'V') {
           // Always allow paste (works across browser tabs)
@@ -1281,7 +1499,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [copySelectedNodes, pasteNodes, duplicateSelectedNodes, duplicateSelectedRegions, nodes, edges, setShowEditWithAIModal])
+  }, [copySelectedNodes, copySelectedRegions, pasteNodes, duplicateSelectedNodes, duplicateSelectedRegions, nodes, edges, setShowEditWithAIModal])
 
   // Handle clicking outside the import dropdown
   useEffect(() => {
@@ -2735,13 +2953,21 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
     // Find the highest z-index among existing regions to place new region in front
     setNodes((nds) => {
       const existingRegions = nds.filter(n => n.type === 'highlightRegion')
-      const maxRegionZIndex = existingRegions.reduce((max, region) => {
-        const regionZIndex = (region.style?.zIndex as number) ?? -1
-        return Math.max(max, regionZIndex)
-      }, -1)
+      // Find the maximum (least negative, closest to 0) z-index among existing regions
+      // Regions use negative z-index to stay behind nodes
+      // More negative = further back, less negative (closer to 0) = further front
+      const maxRegionZIndex = existingRegions.length > 0
+        ? existingRegions.reduce((max, region) => {
+            const regionZIndex = (region.style?.zIndex as number) ?? -1
+            // Only consider negative values
+            return regionZIndex < 0 ? Math.max(max, regionZIndex) : max
+          }, -Infinity)
+        : -1
       
-      // New region should be in front of all other regions, but still behind regular nodes
-      const newRegionZIndex = maxRegionZIndex + 1
+      // New region should be in front of all other regions (less negative, closer to 0)
+      // But ensure it stays negative (behind nodes)
+      // Start from -1 and go more negative if needed
+      const newRegionZIndex = maxRegionZIndex >= -1 ? -1 : maxRegionZIndex + 1
 
       // Center the region at the viewport center
       // Position is top-left corner, so subtract half width/height
@@ -4796,7 +5022,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                 {isFullscreen ? (
                   <>
                     <Minimize size={16} />
-                    Exit Fullscreen
+                    Exit
                   </>
                 ) : (
                   <Maximize size={16} />
