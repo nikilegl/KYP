@@ -11,6 +11,7 @@ import {
   useEdgesState,
   Node,
   Edge,
+  useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { UserJourneyNode } from './DesignSystem/components/UserJourneyNode'
@@ -27,6 +28,40 @@ import { renderMarkdown } from '../utils/markdownRenderer'
 // Initial empty arrays with proper types
 const initialNodes: Node[] = []
 const initialEdges: Edge[] = []
+
+// Keyboard zoom handler component
+function KeyboardZoomHandler() {
+  const { zoomIn, zoomOut } = useReactFlow()
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Cmd (Mac) or Ctrl (Windows/Linux)
+      const isModifierPressed = event.metaKey || event.ctrlKey
+
+      if (isModifierPressed) {
+        // Don't trigger if user is typing in an input field
+        const target = event.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return
+        }
+
+        // Command+Plus (without Shift) zooms in
+        if ((event.key === '+' || event.key === '=') && !event.shiftKey) {
+          event.preventDefault()
+          zoomIn({ duration: 200 })
+        } else if (event.key === '-' || event.key === '_') {
+          event.preventDefault()
+          zoomOut({ duration: 200 })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [zoomIn, zoomOut])
+
+  return null
+}
 
 export function PublicUserJourneyView() {
   const { publicId } = useParams<{ publicId: string }>()
@@ -238,6 +273,7 @@ export function PublicUserJourneyView() {
             bgColor="#e5e7eb"
           />
           <Controls showInteractive={false} />
+          <KeyboardZoomHandler />
         </ReactFlow>
       </div>
 
