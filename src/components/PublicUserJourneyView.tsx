@@ -164,6 +164,7 @@ export function PublicUserJourneyView() {
         data={{
           ...props.data,
           onLabelClick: undefined, // No label editing in public view
+          disableHover: true, // Disable hover highlighting in public view
         }}
       />
     ),
@@ -173,6 +174,7 @@ export function PublicUserJourneyView() {
         data={{
           ...props.data,
           onLabelClick: undefined, // No label editing in public view
+          disableHover: true, // Disable hover highlighting in public view
         }}
       />
     ),
@@ -191,7 +193,7 @@ export function PublicUserJourneyView() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Journey Not Available</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Journey Not Available</h1>
           <p className="text-gray-600">{error}</p>
         </div>
       </div>
@@ -201,8 +203,8 @@ export function PublicUserJourneyView() {
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900">{convertEmojis(journeyName)}</h1>
+      <div className="bg-white border-b border-gray-200 px-5 py-4 flex-shrink-0">
+        <h1 className="text-xl font-bold text-gray-900">{convertEmojis(journeyName)}</h1>
         {journeyDescription && (
           <p className="text-sm text-gray-600 mt-1">{renderMarkdown(journeyDescription)}</p>
         )}
@@ -240,10 +242,7 @@ export function PublicUserJourneyView() {
         </ReactFlow>
       </div>
 
-      {/* Footer watermark */}
-      <div className="bg-white border-t border-gray-200 px-6 py-2 text-center text-xs text-gray-500 flex-shrink-0">
-        View only • Powered by KYP
-      </div>
+     
     </div>
   )
 }
