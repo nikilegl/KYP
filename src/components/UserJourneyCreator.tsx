@@ -37,7 +37,7 @@ import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/su
 import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
-import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney } from '../lib/database/services/userJourneyService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney, setUserJourneyPublicSharing } from '../lib/database/services/userJourneyService'
 import { assignUserJourneysToFolder, getUserJourneyFolders, getUserJourneyFolderById, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -558,10 +558,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
           setHandleArrowStates(arrowStates)
           
           // Ensure nodes are selectable and regions have negative z-index (behind nodes)
+          // Also store journey public_id in node data for sharing
           const nodesWithSelection = journey.flow_data.nodes.map(node => {
             const updatedNode = {
               ...node,
-              selectable: true
+              selectable: true,
+              data: {
+                ...node.data,
+                journeyId: journey.id,
+                journeyPublicId: journey.public_id, // Store public_id for sharing
+              }
             }
             
             // Ensure regions always have negative z-index to stay behind nodes
@@ -5779,9 +5785,19 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                   variant="outline"
                   onClick={async () => {
                     try {
-                      // Get the journey to find its short_id
+                      // Get the journey to find its public_id
                       const journey = await getUserJourneyById(currentJourneyId)
-                      const shareUrl = `${window.location.origin}/public/user-journey/${journey?.short_id}`
+                      if (!journey?.public_id) {
+                        alert('This journey does not have a public ID. Please save the journey first.')
+                        return
+                      }
+                      
+                      // Enable public sharing when copying the link
+                      if (!journey.is_publicly_shared) {
+                        await setUserJourneyPublicSharing(currentJourneyId, true)
+                      }
+                      
+                      const shareUrl = `${window.location.origin}/public/user-journey/${journey.public_id}`
                       await navigator.clipboard.writeText(shareUrl)
                       setCopySuccess(true)
                       setTimeout(() => setCopySuccess(false), 2000)
