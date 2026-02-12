@@ -16,6 +16,8 @@ export interface UserJourney {
     nodes: Node[]
     edges: Edge[]
   }
+  public_id?: string | null
+  is_publicly_shared?: boolean
   created_at: string
   updated_at: string
   created_by?: string | null
@@ -567,6 +569,67 @@ export const setUserJourneyLawFirms = async (
     return true
   } catch (error) {
     console.error('Error setting user journey law firms:', error)
+    return false
+  }
+}
+
+/**
+ * Enable or disable public sharing for a user journey.
+ * When enabled, the journey can be accessed via its public_id by anonymous users.
+ * When disabled, the journey is no longer accessible via public link.
+ */
+export const setUserJourneyPublicSharing = async (
+  journeyId: string,
+  isPubliclyShared: boolean
+): Promise<boolean> => {
+  if (!isSupabaseConfigured || !supabase) {
+    return false
+  }
+
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    // Ensure the journey has a public_id before enabling sharing
+    if (isPubliclyShared) {
+      // Check if journey has a public_id
+      const { data: journey } = await supabase
+        .from('user_journeys')
+        .select('public_id')
+        .eq('id', journeyId)
+        .single()
+
+      if (!journey?.public_id) {
+        // Generate a public_id if it doesn't exist
+        const { error: updateError } = await supabase
+          .from('user_journeys')
+          .update({
+            public_id: crypto.randomUUID(),
+            is_publicly_shared: true,
+            updated_at: new Date().toISOString(),
+            updated_by: user?.id || null
+          })
+          .eq('id', journeyId)
+
+        if (updateError) throw updateError
+        return true
+      }
+    }
+
+    // Update the is_publicly_shared flag
+    const { error } = await supabase
+      .from('user_journeys')
+      .update({
+        is_publicly_shared: isPubliclyShared,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null
+      })
+      .eq('id', journeyId)
+
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.error('Error setting user journey public sharing:', error)
     return false
   }
 }

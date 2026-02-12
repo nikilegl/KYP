@@ -9,7 +9,7 @@ import { LawFirmForm } from './LawFirmManager/LawFirmForm'
 import { EditJourneyModal } from './EditJourneyModal'
 import { getProjects, getUserJourneys, deleteUserJourney, updateUserJourney, createUserJourney, type UserJourney } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
-import { getUserJourneyLawFirms, setUserJourneyLawFirms } from '../lib/database/services/userJourneyService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms, setUserJourneyPublicSharing } from '../lib/database/services/userJourneyService'
 import { getUserJourneyFolders, assignUserJourneysToFolder, moveFolderToParent, updateUserJourneyFolder, deleteUserJourneyFolder, createUserJourneyFolder, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import type { Project, LawFirm } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
@@ -700,6 +700,12 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       alert('This journey does not have a public ID. Please save the journey first.')
       return
     }
+    
+    // Enable public sharing when copying the link
+    if (!journey.is_publicly_shared) {
+      await setUserJourneyPublicSharing(journey.id, true)
+    }
+    
     const url = `${window.location.origin}/public/user-journey/${journey.public_id}`
     try {
       await navigator.clipboard.writeText(url)

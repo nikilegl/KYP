@@ -259,6 +259,8 @@ export interface UserJourney {
   // If folder is shared, journey is shared. If folder is personal, journey is personal.
   // Journeys without a folder are personal by default.
   short_id: number
+  public_id?: string | null
+  is_publicly_shared?: boolean
   created_at: string
   updated_at: string
   created_by?: string | null

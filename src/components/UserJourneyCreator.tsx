@@ -37,7 +37,7 @@ import type { UserRole, Project, LawFirm, ThirdParty, Platform } from '../lib/su
 import { supabase } from '../lib/supabase'
 import { getProjects, createUserJourney, updateUserJourney, getUserJourneyById, getUserJourneyByShortId } from '../lib/database'
 import { getLawFirms, createLawFirm } from '../lib/database/services/lawFirmService'
-import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney } from '../lib/database/services/userJourneyService'
+import { getUserJourneyLawFirms, setUserJourneyLawFirms, deleteUserJourney, setUserJourneyPublicSharing } from '../lib/database/services/userJourneyService'
 import { assignUserJourneysToFolder, getUserJourneyFolders, getUserJourneyFolderById, type UserJourneyFolder } from '../lib/database/services/userJourneyFolderService'
 import { nameToSlug } from '../utils/slugUtils'
 import { getThirdParties } from '../lib/database/services/thirdPartyService'
@@ -5791,6 +5791,12 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
                         alert('This journey does not have a public ID. Please save the journey first.')
                         return
                       }
+                      
+                      // Enable public sharing when copying the link
+                      if (!journey.is_publicly_shared) {
+                        await setUserJourneyPublicSharing(currentJourneyId, true)
+                      }
+                      
                       const shareUrl = `${window.location.origin}/public/user-journey/${journey.public_id}`
                       await navigator.clipboard.writeText(shareUrl)
                       setCopySuccess(true)
