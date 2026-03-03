@@ -294,7 +294,7 @@ export function EditNodeModal({
   const [formData, setFormData] = useState<NodeFormData>({
     label: '',
     type: 'process',
-    variant: 'Legl',
+    variant: '',
     thirdPartyName: '',
     customPlatformName: '',
     userRole: null,
@@ -687,7 +687,7 @@ export function EditNodeModal({
       setFormData({
         label: '',
         type: defaultType,
-        variant: 'Legl',
+        variant: '',
         thirdPartyName: '',
         customPlatformName: '',
         userRole: null,
@@ -734,12 +734,8 @@ export function EditNodeModal({
     // Convert bulletPointsWithIds back to string array
     const bulletPointsAsStrings = bulletPointsWithIds.map(bp => bp.text)
     
-    // Ensure default platform 'Legl' if no platform is set
-    const finalVariant = formData.variant || 'Legl'
-    
     onSave({
       ...formData,
-      variant: finalVariant,
       bulletPoints: bulletPointsAsStrings
     })
   }, [formData, bulletPointsWithIds, onSave])
