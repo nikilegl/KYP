@@ -58,7 +58,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
     bulletPoints = [],
     notifications = [],
     customProperties = {},
-    variant = 'Legl',
+    variant = '',
     thirdPartyName = '',
     customPlatformName = '',
     journeyLayout = 'vertical'
@@ -402,9 +402,9 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
       )}
 
       {/* User Role Tag and Platform Label */}
-      {/* Show for all nodes if either userRole, customUserRoleName, or variant is present */}
+      {/* Show only if userRole, customUserRoleName, or variant is actually set (not empty) */}
       {/* For label nodes, only show platform (hide user role) */}
-      {(userRole || customUserRoleName || variant) && (
+      {(userRole || (customUserRoleName && customUserRoleName.trim()) || (variant && variant.trim())) && (
         <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
           <div>
             {type !== 'label' && (
@@ -443,7 +443,7 @@ export function UserJourneyNode({ id, data, selected, showHandles = false, third
             )}
           </div>
           <div>
-            {variant && (
+            {variant && variant.trim() && (
               variant === 'Legl' ? (
                 <div className="w-10 h-5">
                   <svg viewBox="0 0 39 21" xmlns="http://www.w3.org/2000/svg">
