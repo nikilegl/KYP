@@ -103,7 +103,14 @@ function rectsOverlap(
 // Bug: on mouse release, random nodes outside the viewport get selected.
 // We deselect nodes that: (1) don't intersect the visible viewport, or
 // (2) are regions that don't overlap the selection box of content nodes.
-function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateAction<Node[]>> }) {
+// Outlier filter only runs after selection box (not Shift+click) to avoid breaking multi-select.
+function SelectionGuard({
+  setNodes,
+  selectionBoxJustCompletedRef,
+}: {
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>
+  selectionBoxJustCompletedRef: React.MutableRefObject<boolean>
+}) {
   const getState = useStoreApi().getState
   const { screenToFlowPosition } = useReactFlow()
   const filterTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -163,10 +170,14 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
           if (!rectsOverlap(nodeRect, selectionBox, 2)) return true
         }
 
-        // Filter 3: Outlier - node must overlap with the selection cluster.
-        // On mouse release, React Flow can add the node under cursor to selection.
+        // Filter 3: Outlier - only after selection box drag (not Shift+click).
+        // On selection box mouse release, React Flow can add the node under cursor.
         // That node is typically outside the drawn selection box = outlier.
-        if (selectedNodes.length >= 2) {
+        // Skip this for Shift+click multi-select where nodes may be far apart.
+        if (
+          selectionBoxJustCompletedRef.current &&
+          selectedNodes.length >= 2
+        ) {
           const others = selectedNodes.filter((n) => n.id !== node.id)
           const otherRects = others.map(getNodeRect)
           const boxMinX = Math.min(...otherRects.map((r) => r.x))
@@ -195,7 +206,7 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
         )
       }
     },
-    [setNodes, getState, screenToFlowPosition]
+    [setNodes, getState, screenToFlowPosition, selectionBoxJustCompletedRef]
   )
 
   const scheduleFilter = useCallback(() => {
@@ -207,6 +218,7 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
     run()
     filterTimeoutsRef.current.push(setTimeout(run, 50))
     filterTimeoutsRef.current.push(setTimeout(run, 150))
+    filterTimeoutsRef.current.push(setTimeout(run, 250))
   }, [getState, runFilter])
 
   const onChange = useCallback(
@@ -312,6 +324,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
   // Track selection state for auto-panning
   const isSelectingRef = useRef(false)
   const autoPanIntervalRef = useRef<number | null>(null)
+  const selectionBoxJustCompletedRef = useRef(false)
   
   // Custom onNodesChange that intercepts Alt+drag to keep original node locked and Shift+resize to constrain axis
   const onNodesChange = useCallback((changes: any[]) => {
@@ -3633,7 +3646,25 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
     }
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // When releasing after selection box: prevent node under cursor from being
+      // added to selection (Shift+click on mouseup). Resize is safe: mouseDownOnPane
+      // is false when resizing (mousedown was on handle, not pane).
+      if (mouseDownOnPane && isShiftPressedRef.current) {
+        const target = e.target as HTMLElement
+        if (target.closest('.react-flow__node')) {
+          e.stopPropagation()
+          e.preventDefault()
+        }
+      }
+      // Mark selection box just completed (for SelectionGuard outlier filter).
+      // Keep ref true for 300ms - spurious node can be added after our handler runs.
+      if (mouseDownOnPane) {
+        selectionBoxJustCompletedRef.current = true
+        setTimeout(() => {
+          selectionBoxJustCompletedRef.current = false
+        }, 300)
+      }
       // Stop auto-panning when mouse is released
       isSelecting = false
       mouseDownOnPane = false
@@ -5160,7 +5191,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             bgColor="#e5e7eb"
           />
           <KeyboardZoomHandler />
-          <SelectionGuard setNodes={setNodes} />
+          <SelectionGuard setNodes={setNodes} selectionBoxJustCompletedRef={selectionBoxJustCompletedRef} />
           <Panel position="top-right">
             <div className="flex flex-col gap-2 items-end">
               <div className="flex gap-2">
