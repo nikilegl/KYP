@@ -101,11 +101,13 @@ function rectsOverlap(
 
 // SelectionGuard: filters out nodes incorrectly selected when shift-dragging.
 // Bug: on mouse release, random nodes outside the viewport get selected.
-// We deselect any node that doesn't intersect the visible viewport.
+// We deselect nodes that: (1) don't intersect the visible viewport, or
+// (2) are regions that don't overlap the selection box of content nodes.
 function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateAction<Node[]>> }) {
   const getState = useStoreApi().getState
   const { screenToFlowPosition } = useReactFlow()
-  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const filterTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const justFilteredRef = useRef(false)
 
   const runFilter = useCallback(
     (selectedNodes: Node[]) => {
@@ -114,7 +116,11 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
       const { domNode } = getState()
       if (!domNode) return
 
-      const rect = domNode.getBoundingClientRect()
+      // Use pane for viewport bounds (more accurate than full container with minimap/controls)
+      const pane = domNode.querySelector('.react-flow__pane') as HTMLElement | null
+      const viewportEl = pane || domNode
+      const rect = viewportEl.getBoundingClientRect()
+
       const topLeft = screenToFlowPosition({ x: rect.left, y: rect.top })
       const bottomRight = screenToFlowPosition({ x: rect.right, y: rect.bottom })
       const viewportBounds = {
@@ -123,8 +129,7 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
         width: Math.abs(bottomRight.x - topLeft.x),
         height: Math.abs(bottomRight.y - topLeft.y),
       }
-      // Small buffer so nodes at viewport edge aren't filtered
-      const buffer = 20
+      const buffer = 50
       const paddedViewport = {
         ...viewportBounds,
         x: viewportBounds.x - buffer,
@@ -133,12 +138,56 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
         height: viewportBounds.height + buffer * 2,
       }
 
+      const contentNodes = selectedNodes.filter((n) => n.type !== 'highlightRegion')
+      const regionNodes = selectedNodes.filter((n) => n.type === 'highlightRegion')
+
       const nodesToDeselect = selectedNodes.filter((node) => {
         const nodeRect = getNodeRect(node)
-        return !rectsOverlap(nodeRect, paddedViewport, 0)
+
+        // Filter 1: Must intersect visible viewport
+        if (!rectsOverlap(nodeRect, paddedViewport, 0)) return true
+
+        // Filter 2: Regions must overlap selection box of content nodes
+        if (node.type === 'highlightRegion' && contentNodes.length > 0) {
+          const contentRects = contentNodes.map(getNodeRect)
+          const selMinX = Math.min(...contentRects.map((r) => r.x))
+          const selMinY = Math.min(...contentRects.map((r) => r.y))
+          const selMaxX = Math.max(...contentRects.map((r) => r.x + r.width))
+          const selMaxY = Math.max(...contentRects.map((r) => r.y + r.height))
+          const selectionBox = {
+            x: selMinX,
+            y: selMinY,
+            width: selMaxX - selMinX,
+            height: selMaxY - selMinY,
+          }
+          if (!rectsOverlap(nodeRect, selectionBox, 2)) return true
+        }
+
+        // Filter 3: Outlier - node must overlap with the selection cluster.
+        // On mouse release, React Flow can add the node under cursor to selection.
+        // That node is typically outside the drawn selection box = outlier.
+        if (selectedNodes.length >= 2) {
+          const others = selectedNodes.filter((n) => n.id !== node.id)
+          const otherRects = others.map(getNodeRect)
+          const boxMinX = Math.min(...otherRects.map((r) => r.x))
+          const boxMinY = Math.min(...otherRects.map((r) => r.y))
+          const boxMaxX = Math.max(...otherRects.map((r) => r.x + r.width))
+          const boxMaxY = Math.max(...otherRects.map((r) => r.y + r.height))
+          const clusterBox = {
+            x: boxMinX,
+            y: boxMinY,
+            width: boxMaxX - boxMinX,
+            height: boxMaxY - boxMinY,
+          }
+          const clusterTolerance = 30
+          if (!rectsOverlap(nodeRect, clusterBox, clusterTolerance)) return true
+        }
+
+        return false
       })
 
       if (nodesToDeselect.length > 0) {
+        justFilteredRef.current = true
         setNodes((nds) =>
           nds.map((n) =>
             nodesToDeselect.some((r) => r.id === n.id) ? { ...n, selected: false } : n
@@ -149,36 +198,45 @@ function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateA
     [setNodes, getState, screenToFlowPosition]
   )
 
+  const scheduleFilter = useCallback(() => {
+    const run = () => {
+      const { nodes } = getState()
+      const currentSelected = nodes.filter((n) => n.selected)
+      runFilter(currentSelected)
+    }
+    run()
+    filterTimeoutsRef.current.push(setTimeout(run, 50))
+    filterTimeoutsRef.current.push(setTimeout(run, 150))
+  }, [getState, runFilter])
+
   const onChange = useCallback(
     ({ nodes: selectedNodes }: { nodes: Node[]; edges: Edge[] }) => {
       if (selectedNodes.length === 0) return
 
-      // Clear any pending filter from a previous selection change
-      if (filterTimeoutRef.current) {
-        clearTimeout(filterTimeoutRef.current)
-        filterTimeoutRef.current = null
+      // Skip if we just applied our own filter (avoids re-trigger loop)
+      if (justFilteredRef.current) {
+        justFilteredRef.current = false
+        return
       }
 
-      // Defer so we run after selection is finalized (catches viewport-coordinate bugs on release)
-      const FILTER_DELAY_MS = 50
-      filterTimeoutRef.current = setTimeout(() => {
-        filterTimeoutRef.current = null
-        const { nodes } = getState()
-        const currentSelected = nodes.filter((n) => n.selected)
-        runFilter(currentSelected)
-      }, FILTER_DELAY_MS)
+      filterTimeoutsRef.current.forEach((id) => clearTimeout(id))
+      filterTimeoutsRef.current = []
+
+      // Run filter immediately and at 50ms, 150ms to catch late selection changes
+      scheduleFilter()
     },
-    [getState, runFilter]
+    [scheduleFilter]
   )
 
   useOnSelectionChange({ onChange })
 
-  // Clear pending timeout on unmount
-  useEffect(() => () => {
-    if (filterTimeoutRef.current) {
-      clearTimeout(filterTimeoutRef.current)
-    }
-  }, [])
+  useEffect(
+    () => () => {
+      filterTimeoutsRef.current.forEach((id) => clearTimeout(id))
+      filterTimeoutsRef.current = []
+    },
+    []
+  )
 
   return null
 }
@@ -3575,7 +3633,16 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
     }
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // When releasing after a selection box drag: prevent the node under cursor
+      // from being added to selection (Shift+click on mouse up)
+      if (mouseDownOnPane && isShiftPressedRef.current) {
+        const target = e.target as HTMLElement
+        if (target.closest('.react-flow__node')) {
+          e.stopPropagation()
+          e.preventDefault()
+        }
+      }
       // Stop auto-panning when mouse is released
       isSelecting = false
       mouseDownOnPane = false
