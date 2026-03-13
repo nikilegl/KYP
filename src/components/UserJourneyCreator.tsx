@@ -16,7 +16,9 @@ import {
   NodeTypes,
   EdgeTypes,
   useReactFlow,
+  useStoreApi,
   ConnectionMode,
+  useOnSelectionChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Button } from './DesignSystem/components/Button'
@@ -69,6 +71,116 @@ interface UserJourneyCreatorProps {
   journeyId?: string // Optional - if provided, will load that journey for editing
   thirdParties?: ThirdParty[]
   platforms?: Platform[]
+}
+
+// Helper to get node bounding box (position + dimensions)
+function getNodeRect(node: Node): { x: number; y: number; width: number; height: number } {
+  const width = (node.measured?.width ?? node.width ?? (node.style?.width as number) ?? 320) as number
+  const height = (node.measured?.height ?? node.height ?? (node.style?.height as number) ?? 120) as number
+  return {
+    x: node.position.x,
+    y: node.position.y,
+    width: typeof width === 'number' ? width : 320,
+    height: typeof height === 'number' ? height : 120,
+  }
+}
+
+// Check if two rects overlap (with optional tolerance)
+function rectsOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+  tolerance = 0
+): boolean {
+  return (
+    a.x + a.width + tolerance > b.x &&
+    b.x + b.width + tolerance > a.x &&
+    a.y + a.height + tolerance > b.y &&
+    b.y + b.height + tolerance > a.y
+  )
+}
+
+// SelectionGuard: filters out nodes incorrectly selected when shift-dragging.
+// Bug: on mouse release, random nodes outside the viewport get selected.
+// We deselect any node that doesn't intersect the visible viewport.
+function SelectionGuard({ setNodes }: { setNodes: React.Dispatch<React.SetStateAction<Node[]>> }) {
+  const getState = useStoreApi().getState
+  const { screenToFlowPosition } = useReactFlow()
+  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const runFilter = useCallback(
+    (selectedNodes: Node[]) => {
+      if (selectedNodes.length === 0) return
+
+      const { domNode } = getState()
+      if (!domNode) return
+
+      const rect = domNode.getBoundingClientRect()
+      const topLeft = screenToFlowPosition({ x: rect.left, y: rect.top })
+      const bottomRight = screenToFlowPosition({ x: rect.right, y: rect.bottom })
+      const viewportBounds = {
+        x: Math.min(topLeft.x, bottomRight.x),
+        y: Math.min(topLeft.y, bottomRight.y),
+        width: Math.abs(bottomRight.x - topLeft.x),
+        height: Math.abs(bottomRight.y - topLeft.y),
+      }
+      // Small buffer so nodes at viewport edge aren't filtered
+      const buffer = 20
+      const paddedViewport = {
+        ...viewportBounds,
+        x: viewportBounds.x - buffer,
+        y: viewportBounds.y - buffer,
+        width: viewportBounds.width + buffer * 2,
+        height: viewportBounds.height + buffer * 2,
+      }
+
+      const nodesToDeselect = selectedNodes.filter((node) => {
+        const nodeRect = getNodeRect(node)
+        return !rectsOverlap(nodeRect, paddedViewport, 0)
+      })
+
+      if (nodesToDeselect.length > 0) {
+        setNodes((nds) =>
+          nds.map((n) =>
+            nodesToDeselect.some((r) => r.id === n.id) ? { ...n, selected: false } : n
+          )
+        )
+      }
+    },
+    [setNodes, getState, screenToFlowPosition]
+  )
+
+  const onChange = useCallback(
+    ({ nodes: selectedNodes }: { nodes: Node[]; edges: Edge[] }) => {
+      if (selectedNodes.length === 0) return
+
+      // Clear any pending filter from a previous selection change
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current)
+        filterTimeoutRef.current = null
+      }
+
+      // Defer so we run after selection is finalized (catches viewport-coordinate bugs on release)
+      const FILTER_DELAY_MS = 50
+      filterTimeoutRef.current = setTimeout(() => {
+        filterTimeoutRef.current = null
+        const { nodes } = getState()
+        const currentSelected = nodes.filter((n) => n.selected)
+        runFilter(currentSelected)
+      }, FILTER_DELAY_MS)
+    },
+    [getState, runFilter]
+  )
+
+  useOnSelectionChange({ onChange })
+
+  // Clear pending timeout on unmount
+  useEffect(() => () => {
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current)
+    }
+  }, [])
+
+  return null
 }
 
 // Keyboard zoom handler component
@@ -4990,6 +5102,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
             bgColor="#e5e7eb"
           />
           <KeyboardZoomHandler />
+          <SelectionGuard setNodes={setNodes} />
           <Panel position="top-right">
             <div className="flex flex-col gap-2 items-end">
               <div className="flex gap-2">

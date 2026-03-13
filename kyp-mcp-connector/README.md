@@ -58,11 +58,16 @@ The server runs on port 3100 by default. The MCP endpoint is at `http://localhos
 
 ## Adding to Claude Cowork
 
-1. Go to **Claude** → **Settings** → **Connectors**
-2. Click **Add connector**
-3. Enter your MCP server URL: `https://your-deployed-url/mcp` (must be HTTPS for production)
-4. For **Authorization token**, enter your `KYP_MCP_API_KEY` value
-5. Save and connect
+**Important:** Your MCP server must be publicly accessible over HTTPS. localhost will not work — deploy the connector or use [ngrok](https://ngrok.com) for local testing.
+
+See **[CLAUDE_COWORK_SETUP.md](./CLAUDE_COWORK_SETUP.md)** for step-by-step instructions.
+
+**Quick steps:**
+1. Deploy the connector (or run locally + ngrok) so you have an HTTPS URL
+2. Go to **Claude** → **Settings** → **Connectors** → **Add** → **Add custom connector**
+3. Enter your MCP URL: `https://your-url/mcp`
+4. Enter your `KYP_MCP_API_KEY` as the authorization token when prompted
+5. Click **Connect**
 
 ## Deployment
 
