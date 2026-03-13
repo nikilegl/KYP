@@ -3633,16 +3633,7 @@ export function UserJourneyCreator({ userRoles = [], projectId, journeyId, third
       }
     }
 
-    const handleMouseUp = (e: MouseEvent) => {
-      // When releasing after a selection box drag: prevent the node under cursor
-      // from being added to selection (Shift+click on mouse up)
-      if (mouseDownOnPane && isShiftPressedRef.current) {
-        const target = e.target as HTMLElement
-        if (target.closest('.react-flow__node')) {
-          e.stopPropagation()
-          e.preventDefault()
-        }
-      }
+    const handleMouseUp = () => {
       // Stop auto-panning when mouse is released
       isSelecting = false
       mouseDownOnPane = false
