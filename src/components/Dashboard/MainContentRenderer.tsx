@@ -377,7 +377,7 @@ export function MainContentRenderer({
       )
     case 'user-journeys':
       return (
-        <UserJourneysManager />
+        <UserJourneysManager workspaceId={workspaceId} />
       )
     case 'user-journey-creator':
       return (

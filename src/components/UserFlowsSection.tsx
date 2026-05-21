@@ -4,6 +4,7 @@ import type { Stakeholder, UserRole, LawFirm, UserPermission } from '../lib/supa
 
 interface UserFlowsSectionProps {
   projectId: string
+  workspaceId: string
   assignedStakeholders: Stakeholder[]
   userRoles: UserRole[]
   userPermissions: UserPermission[]
@@ -11,13 +12,14 @@ interface UserFlowsSectionProps {
 }
 
 export function UserFlowsSection({ 
-  projectId, 
+  projectId,
+  workspaceId,
   assignedStakeholders, 
   userRoles, 
   userPermissions,
   lawFirms 
 }: UserFlowsSectionProps) {
   return (
-    <UserJourneysManager projectId={projectId} />
+    <UserJourneysManager projectId={projectId} workspaceId={workspaceId} />
   )
 }

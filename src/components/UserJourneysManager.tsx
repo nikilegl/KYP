@@ -44,9 +44,11 @@ type TableItem =
 
 interface UserJourneysManagerProps {
   projectId?: string // Optional - if provided, filters journeys to this project
+  /** When set (e.g. from Dashboard), folder queries skip workspace_users lookup */
+  workspaceId?: string
 }
 
-export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
+export function UserJourneysManager({ projectId, workspaceId }: UserJourneysManagerProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const params = useParams<{ folderSlug?: string }>()
@@ -111,10 +113,10 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
   })
   const [creatingLawFirm, setCreatingLawFirm] = useState(false)
 
-  // Load projects and journeys on mount and when folder slug changes
+  // Load projects and journeys on mount and when workspace context is available
   useEffect(() => {
     loadData()
-  }, [])
+  }, [workspaceId, projectId])
 
   // Update current folder when URL slug changes
   useEffect(() => {
@@ -190,7 +192,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       }
     }
     getCurrentUser()
-  }, [])
+  }, [workspaceId])
 
   const loadData = async () => {
     try {
@@ -199,9 +201,9 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
       // Parallelize independent operations
       const [projectsData, foldersData, lawFirmsData, allJourneys] = await Promise.all([
         getProjects(),
-        getUserJourneyFolders(),
+        getUserJourneyFolders(workspaceId),
         getLawFirms(),
-        getUserJourneys()
+        getUserJourneys(projectId ?? null, workspaceId)
       ])
       
       setProjects(projectsData)
@@ -854,7 +856,7 @@ export function UserJourneysManager({ projectId }: UserJourneysManagerProps) {
         })
       } else {
         // Create new folder - nest it in current folder if we're inside one
-        await createUserJourneyFolder(editFolderName.trim(), folderColor, currentFolderId)
+        await createUserJourneyFolder(editFolderName.trim(), folderColor, currentFolderId, workspaceId)
       }
       
       await loadData()

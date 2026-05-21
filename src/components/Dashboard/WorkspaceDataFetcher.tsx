@@ -930,8 +930,15 @@ export function WorkspaceDataFetcher({
     }
   }
 
-  // Get workspace ID (assuming first workspace)
-  const workspaceId = workspaces[0]?.id || ''
+  // Workspace list only includes rows where created_by = auth.uid() (see RLS). Team members
+  // who did not create the workspace still have a workspace_users row — use that for workspaceId.
+  const workspaceId =
+    workspaces[0]?.id ||
+    (user?.id
+      ? workspaceUsers.find((wu) => wu.user_id === user.id)?.workspace_id
+      : undefined) ||
+    workspaceUsers[0]?.workspace_id ||
+    ''
 
   return (
     <MainContentRenderer

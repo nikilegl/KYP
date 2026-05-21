@@ -1,5 +1,31 @@
 import { supabase } from '../../supabase'
 
+/**
+ * When `explicitWorkspaceId` is set (e.g. from Dashboard), skip querying
+ * workspace_users — avoids broken RLS policies that reference auth.users.
+ */
+async function getWorkspaceIdForCurrentUser(explicitWorkspaceId?: string): Promise<string> {
+  if (explicitWorkspaceId) {
+    return explicitWorkspaceId
+  }
+  if (!supabase) {
+    throw new Error('Supabase client not initialized')
+  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('User not authenticated')
+  }
+  const { data: workspaceUser, error: workspaceError } = await supabase
+    .from('workspace_users')
+    .select('workspace_id')
+    .eq('user_id', user.id)
+    .single()
+  if (workspaceError) {
+    throw new Error(`Failed to get workspace: ${workspaceError.message}`)
+  }
+  return workspaceUser.workspace_id
+}
+
 export interface UserJourneyFolder {
   id: string
   workspace_id: string
@@ -14,34 +40,20 @@ export interface UserJourneyFolder {
 
 /**
  * Get all user journey folders for the current user's workspace
+ * @param explicitWorkspaceId - If provided, skips workspace_users lookup (preferred when UI already knows the workspace).
  */
-export async function getUserJourneyFolders(): Promise<UserJourneyFolder[]> {
+export async function getUserJourneyFolders(explicitWorkspaceId?: string): Promise<UserJourneyFolder[]> {
   if (!supabase) {
     throw new Error('Supabase client not initialized')
   }
 
-  // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    throw new Error('User not authenticated')
-  }
-
-  // Get user's workspace
-  const { data: workspaceUser, error: workspaceError } = await supabase
-    .from('workspace_users')
-    .select('workspace_id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (workspaceError) {
-    throw new Error(`Failed to get workspace: ${workspaceError.message}`)
-  }
+  const workspaceId = await getWorkspaceIdForCurrentUser(explicitWorkspaceId)
 
   // Get folders for the workspace
   const { data, error } = await supabase
     .from('user_journey_folders')
     .select('*')
-    .eq('workspace_id', workspaceUser.workspace_id)
+    .eq('workspace_id', workspaceId)
     .order('name')
 
   if (error) {
@@ -82,34 +94,25 @@ export async function getUserJourneyFolderById(folderId: string): Promise<UserJo
 export async function createUserJourneyFolder(
   name: string,
   color: string = '#3B82F6',
-  parentFolderId: string | null = null
+  parentFolderId: string | null = null,
+  explicitWorkspaceId?: string
 ): Promise<UserJourneyFolder> {
   if (!supabase) {
     throw new Error('Supabase client not initialized')
   }
 
-  // Get current user
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  // Get user's workspace
-  const { data: workspaceUser, error: workspaceError } = await supabase
-    .from('workspace_users')
-    .select('workspace_id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (workspaceError) {
-    throw new Error(`Failed to get workspace: ${workspaceError.message}`)
-  }
+  const workspaceId = await getWorkspaceIdForCurrentUser(explicitWorkspaceId)
 
   // Create the folder
   const { data, error } = await supabase
     .from('user_journey_folders')
     .insert({
-      workspace_id: workspaceUser.workspace_id,
+      workspace_id: workspaceId,
       name,
       color,
       status: 'personal', // Default to personal

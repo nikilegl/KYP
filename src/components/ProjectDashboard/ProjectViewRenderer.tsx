@@ -592,12 +592,13 @@ export function ProjectViewRenderer({
         )
       case 'user-journeys':
         return (
-          <UserJourneysManager projectId={project.id} />
+          <UserJourneysManager projectId={project.id} workspaceId={project.workspace_id} />
         )
       case 'user-flows':
         return (
           <UserFlowsSection 
             projectId={project.id}
+            workspaceId={project.workspace_id}
             assignedStakeholders={memoizedAssignedStakeholders}
             userRoles={userRoles}
             userPermissions={userPermissions}

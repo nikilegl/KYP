@@ -25,7 +25,10 @@ export interface UserJourney {
   short_id?: number
 }
 
-export const getUserJourneys = async (projectId?: string | null): Promise<UserJourney[]> => {
+export const getUserJourneys = async (
+  projectId?: string | null,
+  workspaceIdForFolders?: string
+): Promise<UserJourney[]> => {
   if (!isSupabaseConfigured || !supabase) {
     // Local storage fallback
     try {
@@ -80,7 +83,7 @@ export const getUserJourneys = async (projectId?: string | null): Promise<UserJo
 
     const [journeysResult, foldersResult] = await Promise.all([
       query,
-      getUserJourneyFolders().catch(() => [])
+      getUserJourneyFolders(workspaceIdForFolders).catch(() => [])
     ])
 
     const { data, error } = journeysResult
